@@ -1,0 +1,5 @@
+(sym_lib_table
+  (lib (name freetronics_schematic)(type Legacy)(uri /home/sean/schematics/libraries/freetronics_kicad_library/freetronics_schematic.lib)(options "")(descr ""))
+  (lib (name arduino)(type Legacy)(uri /home/sean/schematics/libraries/arduino.lib)(options "")(descr ""))
+  (lib (name pypilot_mfd-rescue)(type Legacy)(uri ${KIPRJMOD}/pypilot_mfd-rescue.lib)(options "")(descr ""))
+)

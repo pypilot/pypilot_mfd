@@ -1,0 +1,70 @@
+<!DOCTYPE html> <html>
+<head><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Wind Display</title>
+<script type='text/javascript' src='wind.js'></script>
+</head>
+<body>
+<h1>Wireless Network Configuration</h1>
+<form action='network' method='post'>
+<input type='text' name='ssid' value='%SSID%' autofocus />
+<br><input type='text' name='psk' value='%PSK%' />
+<br><div name='channel'>%CHANNEL%</div>
+<input type="submit" value="Submit" />
+</form>
+<p><h2>Wind Sensors</h2>
+<p><canvas width='64' height='64' id='canvas'></canvas>
+<p><div id='wind_direction'>N/A</div>
+<p><div id='wind_knots'>N/A</div>Knots
+<p><table id='wind_sensors_table'><tr><th>mac</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
+<br><input type='button' name='scan' onclick='scanSensors()'>Scan</input>
+<br>
+<p><h2>Data Configuration</h2>
+  <form action='data' method='post'>
+    <br><h3>USB data (NMEA0183)</h3>
+    <br><input type='checkbox' name='input_usb' value=%INPUTUSB%>Input</input>
+    <input type='checkbox' name='output_usb' value=%OUTPUTUSB%>Output</input>
+    <select id='usb_baud_rate' value='%USB_BAUD_RATE%'>
+      <option value='38400'>38400</option>
+      <option value='115200'>115200</option>
+    </select>
+    <br><h3>RS422 data (NMEA0183)</h3>
+    <select id='rs422_baud_rate' value='%RS422_BAUD_RATE%'>
+      <option value='4800'>4800</option>
+      <option value='38400'>38400</option>
+    </select>
+    <br>
+    <br><h3>WIFI data</h3>
+    <br><input type='checkbox' name='input_wifi' value=%INPUTWIFI%>Input</input>
+    <input type='checkbox' name='output_wifi' value=%OUTPUTWIFI%>Output</input>
+    <fieldset>
+      <br><input type='radio' name='nmea_pypilot'>pypilot NMEA0183 port 20220</input> (<div name='pypilot_detected'>not detected</div>)
+      <br><input type='radio' name='nmea_signalk'>signalk-server NMEA0183 port 10110</input> (<div name='signalk_nmea_detected'>not detected</div>)
+      <br><input type='radio' name='nmea_client'>act as tcp client <input><input type='text' name='nmea_tcp_host' value=%NMEACLIENTADDR% /> <input type='number' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% />
+      <br><input type='radio' name='nmea_server'>act as tcp server</input> (host "wind.local") listening port: <input type='text' name='nmea_tcp_server port' value=%NMEASERVERPORT% />
+      <br><input type='radio' name='signalk'>signalk-server SignalK</input> (<div name='signalk_detected'>not detected</div>)  To output to signalk you may have to <a href='signalk.local:3000'>grant access</a>
+    </fieldset>
+    <input type="submit" value="Submit" />
+  </form>
+  <script type='text/javascript'>
+    var wifi_data = document.getElementById('%WIFIDATA%');
+    // Set the checked attribute to true
+    if (wifi_data)
+        wifi_data.checked = true;
+  </script>
+  <br>
+<p><h2>Display</h2>
+  <form action='display' method='post'>
+    <input type='checkbox' name='usefahrenheit' value=%USEFAHRENHEIT%>Use Fahrenheit (default celcius)</input>
+    <input type='checkbox' name='usedepthft' value=%USEDEPTHFT%>Use depth ft (default meters)</input>
+    <select name='latlonformat' value=%LATLONFORMAT%>
+      <option value='DECIMAL_DEGREES'>Decimal Degrees</option>
+      <option value='DECIMAL_MINUTES'>Decimal Minutes</option>
+      <option value='DECIMAL_SECONDS'>Decimal Seconds</option>
+    </select>
+    <input type='number' name='contrast' value=%Contrast%>LCD contrast</input>
+    %DISPLAYPAGES%
+    <input type="submit" value="Submit" />
+    </form>
+  <p><h5>Wind display %VERSION% written by Sean D'Epagnier</h5>
+</body>
+</html>

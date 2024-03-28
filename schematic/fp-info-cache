@@ -1,0 +1,218 @@
+52634129718992
+pypilot_footprints
+433mhzreceiver
+
+
+0
+8
+8
+pypilot_footprints
+Bosch_LGA-8_2x2.5mm_P0.65mm_ClockwisePinNumbering_270
+LGA-8, https://ae-bst.resource.bosch.com/media/_tech/media/datasheets/BST-BMP280-DS001-18.pdf
+lga land grid array
+0
+8
+8
+pypilot_footprints
+DO-214AA
+DO214AC PACKAGE. MONODIRECTIONAL.
+DO214AC PACKAGE. MONODIRECTIONAL.
+0
+2
+2
+pypilot_footprints
+DS8606
+SOT-89-3
+SOT-89-3
+0
+6
+3
+pypilot_footprints
+HSOP-8-1EP_3.9x4.9mm_P1.27mm_EP2.41x3.1mm
+HSOP, 8 Pin (https://www.st.com/resource/en/datasheet/l5973d.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
+HSOP SO
+0
+13
+9
+pypilot_footprints
+ISP
+surface-mounted straight pin header, 2x03, 2.54mm pitch, double rows
+Surface mounted pin header SMD 2x03 2.54mm double row
+0
+6
+6
+pypilot_footprints
+LGA-12_2x2mm_P0.5mm_90
+LGA12
+lga land grid array
+0
+12
+12
+pypilot_footprints
+LM321
+5-pin SOT23 package
+SOT-23-5
+0
+5
+5
+pypilot_footprints
+MCP1416
+5-pin SOT23 package
+SOT-23-5
+0
+5
+5
+pypilot_footprints
+PUIAudio_SMT_0825_S_4_R
+SMD 8540, http://www.puiaudio.com/product-detail.aspx?partnumber=SMT-0825-S-4-R
+SMD 8540
+0
+4
+4
+pypilot_footprints
+PinHeader_2x03_P2.54mm_Vertical_SMD
+surface-mounted straight pin header, 2x03, 2.54mm pitch, double rows
+Surface mounted pin header SMD 2x03 2.54mm double row
+0
+6
+6
+pypilot_footprints
+PinHeader_2x20_P2.54mm_Vertical
+Through hole straight pin header, 2x20, 2.54mm pitch, double rows
+Through hole pin header THT 2x20 2.54mm double row
+0
+40
+40
+pypilot_footprints
+PinHeader_2x20_P2.54mm_Vertical_mirror
+Through hole straight pin header, 2x20, 2.54mm pitch, double rows
+Through hole pin header THT 2x20 2.54mm double row
+0
+40
+40
+pypilot_footprints
+R_LDR_4.9x4.2mm_P2.54mm_Vertical
+Resistor, LDR 4.9x4.2mm
+Resistor LDR4.9x4.2
+0
+2
+2
+pypilot_footprints
+SE8550X2
+SOT-23, Standard
+SOT-23
+0
+3
+3
+pypilot_footprints
+SOIC-8_3.9x4.9mm_P1.27mm
+SOIC, 8 Pin (JEDEC MS-012AA, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_8.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
+SOIC SO
+0
+8
+8
+pypilot_footprints
+SOIC-8_3.9x4.9mm_P1.27mm_90
+SOIC, 8 Pin (JEDEC MS-012AA, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_8.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
+SOIC SO
+0
+8
+8
+pypilot_footprints
+SOIC-16_3.9x9.9mm_P1.27mm_90
+SOIC, 16 Pin (JEDEC MS-012AC, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_16.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
+SOIC SO
+0
+16
+16
+pypilot_footprints
+SOIC-16_3.9x9.9mm_P1.27mm_270
+SOIC, 16 Pin (JEDEC MS-012AC, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_16.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
+SOIC SO
+0
+16
+16
+pypilot_footprints
+SOIC-20W_7.5x12.8mm_P1.27mm
+SOIC, 20 Pin (JEDEC MS-013AC, https://www.analog.com/media/en/package-pcb-resources/package/233848rw_20.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
+SOIC SO
+0
+20
+20
+pypilot_footprints
+SOT-23-5
+5-pin SOT23 package
+SOT-23-5
+0
+5
+5
+pypilot_footprints
+SOT-23-6_180
+6-pin SOT-23 package
+SOT-23-6
+0
+6
+6
+pypilot_footprints
+SOT-23_180
+SOT-23, Standard
+SOT-23
+0
+3
+3
+pypilot_footprints
+SOT-223-3_TabPin2_180
+module CMS SOT223 4 pins
+CMS SOT
+0
+4
+3
+pypilot_footprints
+TDSON-8-1
+Power MOSFET package, TDSON-8-1, 5.15x5.9mm (https://www.infineon.com/cms/en/product/packages/PG-TDSON/PG-TDSON-8-1/)
+tdson 
+0
+14
+3
+pypilot_footprints
+TQFP-32_7x7mm_P0.8mm
+32-Lead Plastic Thin Quad Flatpack (PT) - 7x7x1.0 mm Body, 2.00 mm [TQFP] (see Microchip Packaging Specification 00000049BS.pdf)
+QFP 0.8
+0
+32
+32
+pypilot_footprints
+UCC27201
+SOIC, 8 Pin (JEDEC MS-012AA, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_8.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
+SOIC SO
+0
+8
+8
+pypilot_footprints
+ina180
+5-pin SOT23 package
+SOT-23-5 hand-soldering
+0
+5
+5
+pypilot_footprints
+jlx12864
+
+
+0
+12
+12
+pypilot_footprints
+uart
+
+
+0
+4
+4
+pypilot_footprints
+uart_host
+
+
+0
+4
+4

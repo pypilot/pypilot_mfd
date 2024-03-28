@@ -1,0 +1,6 @@
+(fp_lib_table
+  (lib (name arduino)(type Legacy)(uri /home/sean/pypilot_schematics/controller_shield/arduino.mod)(options "")(descr "")(disabled))
+  (lib (name freetronics_footprints)(type KiCad)(uri /home/sean/schematics/libraries/freetronics_kicad_library/freetronics_footprints.pretty)(options "")(descr ""))
+  (lib (name pypilot_mfd_footprints)(type KiCad)(uri ${KIPRJMOD}/pypilot_mfd_footprints.pretty)(options "")(descr ""))
+  (lib (name Espressif)(type KiCad)(uri /home/sean/schematics/libraries/espressif/footprints/Espressif.pretty)(options "")(descr ""))
+)
