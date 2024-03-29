@@ -18,6 +18,7 @@
 #include "display.h"
 #include "nmea.h"
 #include "signalk.h"
+#include "pypilot_client.h"
 
 #include "settings.h"
 
@@ -90,7 +91,7 @@ void setup_wifi()
         WiFi.mode(WIFI_AP_STA);
         WiFi.onEvent(WiFiStationGotIP, SYSTEM_EVENT_STA_GOT_IP);
 
-        if(settings.wifi_client) {
+        if(*settings.ssid) {
             Serial.printf("connecting to SSID: %s  psk: %s\n", settings.ssid, settings.psk);
         
             WiFi.begin(settings.ssid, settings.psk);
@@ -267,7 +268,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 
         nmea_send(buf);
 
-        if(settings.output_wifi == SIGNALK) {
+        if(settings.wifi_data == SIGNALK) {
             signalk_send("environment.wind.angleApparent", M_PI/180.0f * lpdir);
             signalk_send("environment.wind.speedApparent", knots*.514444);
 
@@ -389,13 +390,13 @@ struct SerialLinebuffer
     data_source_e source;
 };
 
-SerialLineBuffer SerialBuffer(Serial, USB_DATA);
-SerialLineBuffer Serial2Buffer(Serial2, RS422_DATA);
+SerialLinebuffer SerialBuffer(Serial, USB_DATA);
+SerialLinebuffer Serial2Buffer(Serial2, RS422_DATA);
 
 static void read_serials()
 {
-    SerialBuffer.read(setting.usb_input);
-    SerialBuffer2.read(setting.usb_input);
+    SerialBuffer.read(settings.input_usb);
+    Serial2Buffer.read();
 }
 
 void write_settings()
@@ -477,14 +478,24 @@ void setup()
     chip.encrypt = 0; 
     settings.show_status=false;
     settings.landscape = true;
-    
+
+
+        strcpy(settings.ssid, "openplotter");
+        strcpy(settings.psk, "12345678");
+    settings.usb_baud_rate = 115200;
+
+    settings.input_wifi = true;
+    settings.output_wifi = true;
+    settings.wifi_data = SIGNALK;
+
     Serial.begin(settings.usb_baud_rate == 38400 ? 38400 : 115200);
     Serial.setTimeout(0);
+    /*
     Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
                   SERIAL_8N1, 16, 17);    //Hardware Serial of ESP32
 
-    Serial2.setTimeout(0);
-    Serial.println("wind display");
+    Serial2.setTimeout(0);*/
+    Serial.println("pypilot_mfd");
 
    // bmX280_setup();
 
@@ -519,7 +530,12 @@ static void toggle_wifi_mode()
 void loop()
 {
     uint32_t t0 = millis();
-    Serial.printf("loop %d %d %d\n", t0, ESP.getFreeHeap(), ESP.getHeapSize());
+
+    static uint32_t tl;
+    if(t0-tl > 10000) {
+        Serial.printf("loop %d %d %d\n", t0, ESP.getFreeHeap(), ESP.getHeapSize());
+        tl = t0;
+    }
 
     // read keys
     static uint32_t wifi_toggle_hold;
@@ -549,7 +565,8 @@ void loop()
     //read_serials();
     //read_pressure_temperature();
     nmea_poll();
-    //signalk_poll();
+    signalk_poll();
+    //pypilot_client_poll();
 
     display_render();
     web_poll();

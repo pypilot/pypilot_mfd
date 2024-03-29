@@ -17,6 +17,7 @@
 #include "settings.h"   
 #include "display.h"
 #include "ais.h"
+#include "pypilot_client.h"
 #include "utils.h"
 
 #if 1
@@ -30,7 +31,7 @@
 
 U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/12, /* dc=*/5, /* reset=*/14);
 
-String getLabel(display_item_e item) {
+String getItemLabel(display_item_e item) {
     switch (item) {
     case WIND_SPEED: return "Wind Speed";
     case WIND_DIRECTION: return "Wind Dir";
@@ -48,8 +49,6 @@ String getLabel(display_item_e item) {
     case DEPTH:        return "Depth";
     case RATE_OF_TURN: return "Rate of Turn";
     case RUDDER_ANGLE: return "Rudder Angle";
-    case TRACK_BEARING: return "Track Bearing";
-    case WAYPOINT_BEARING: return "Wpt Bearing";
     case TIME:         return "Time";
     }
     return "";
@@ -134,7 +133,7 @@ uint32_t data_source_time[DATA_SOURCE_COUNT];
 
 void display_data_update(display_item_e item, float value, data_source_e source) {
     uint32_t time = millis();
-    //Serial.printf("data_update %d %f\n", item, value);
+    //Serial.printf("data_update %d %s %f\n", item, getItemLabel(item).c_str(), value);
 
     if(source > display_data[item].source) {
         // ignore if higher priority data source updated in last 5 seconds
@@ -166,25 +165,24 @@ struct display {
   bool expanding;
 };
 
-struct display_item : public display {
+struct display_item {
     display_item(display_item_e _item)
-    : display(), item(_item) {}
+    : item(_item) {}
 
     uint32_t age() { return millis() - display_data[item].time; }
 
     enum display_item_e item;
 };
 
-struct text_display : public display_item {
-    text_display(display_item_e _i)
-    : display_item(_i) {
+struct text_display : public display {
+    text_display() {
         expanding = false;
     }
 
     void fit() {
         ht = h;
 
-        String str = getLabel(item);
+        String str = getLabel();
         label_font = u8g2_font_helvB08_tf;
         u8g2.setFont(label_font);
         label_w = u8g2.getStrWidth(str.c_str());
@@ -236,11 +234,7 @@ struct text_display : public display_item {
 
     void render() {
         // determine font size to use from text needed
-        String str;
-        if(age() > 5000)
-            str= "N/A";
-        else
-            str = getText();
+        String str = getText();
 
         // try to fit text along side label
         int wt = w;
@@ -259,20 +253,37 @@ struct text_display : public display_item {
         u8g2.drawUTF8(xp, yp, str.c_str());
         if(label) {
             u8g2.setFont(label_font);
-            u8g2.drawUTF8(x, y, getLabel(item).c_str());
+            u8g2.drawUTF8(x, y, getLabel().c_str());
         }
     }
 
+    virtual String getLabel() = 0;
     virtual String getText() = 0;
     const uint8_t *label_font;
     int ht;
     int label_w, label_h;
 };
 
-struct speed_text_display : public text_display {
-    speed_text_display(display_item_e _i) : text_display(_i) {}
+struct text_display_item : public text_display, public display_item {
+    text_display_item(display_item_e _i) : display_item(_i) {}
 
     String getText() {
+        if(age() > 5000)
+            return "N/A";
+        return getTextItem();
+    }
+
+    virtual String getTextItem() = 0;
+
+    String getLabel() {
+        return getItemLabel(item);
+    }
+};
+
+struct speed_text_display : public text_display_item  {
+    speed_text_display(display_item_e _i) : text_display_item(_i) {}
+
+    String getTextItem() {
         if(w < 20)
             return String(display_data[item].value, 0);
         String s = String(display_data[item].value, 1);
@@ -282,10 +293,10 @@ struct speed_text_display : public text_display {
     }
 };
 
-struct heading_text_display : public text_display {
-    heading_text_display(display_item_e _i) : text_display(_i) {}
+struct heading_text_display : public text_display_item {
+    heading_text_display(display_item_e _i) : text_display_item(_i) {}
 
-    String getText() {
+    String getTextItem() {
         String s = String(display_data[item].value, 0);
         if(w < 30)
             return s;
@@ -293,10 +304,10 @@ struct heading_text_display : public text_display {
     }
 };
 
-struct temperature_text_display : public text_display {
-     temperature_text_display(display_item_e _i) : text_display(_i) {}
+struct temperature_text_display : public text_display_item {
+     temperature_text_display(display_item_e _i) : text_display_item(_i) {}
 
-    String getText() {
+    String getTextItem() {
         String s, u;
         if (settings.use_fahrenheit) {
             s = String(display_data[item].value * 9 / 5 + 32, 1);
@@ -311,10 +322,10 @@ struct temperature_text_display : public text_display {
     }
 };
 
-struct depth_text_display : public text_display {
-    depth_text_display() : text_display(DEPTH) {}
+struct depth_text_display : public text_display_item {
+    depth_text_display() : text_display_item(DEPTH) {}
 
-    String getText() {
+    String getTextItem() {
         String s, u;
         if (settings.use_depth_ft) {
             s = String(display_data[item].value * 3.28, 1);
@@ -329,10 +340,10 @@ struct depth_text_display : public text_display {
     }
 };
 
-struct pressure_text_display : public text_display {
-    pressure_text_display() : text_display(BAROMETRIC_PRESSURE) {}
+struct pressure_text_display : public text_display_item {
+    pressure_text_display() : text_display_item(BAROMETRIC_PRESSURE) {}
 
-    String getText() {
+    String getTextItem() {
         float cur = display_data[item].value;
         String s;
         if(w > 80)
@@ -367,10 +378,10 @@ struct pressure_text_display : public text_display {
     uint32_t prev_time;
 };
 
-struct position_text_display : public text_display {
-    position_text_display(display_item_e _i) : text_display(_i) {}
+struct position_text_display : public text_display_item {
+    position_text_display(display_item_e _i) : text_display_item(_i) {}
 
-    String getText() {
+    String getTextItem() {
         float v = display_data[item].value;
 
         char s;
@@ -398,10 +409,10 @@ struct position_text_display : public text_display {
     }
 };
 
-struct time_text_display : public text_display {
-    time_text_display() : text_display(TIME) {}
+struct time_text_display : public text_display_item {
+    time_text_display() : text_display_item(TIME) {}
 
-    String getText() {
+    String getTextItem() {
         float t = display_data[item].value;
         float hours, minutes;
         float seconds = modff(t/60, &minutes)*60;
@@ -413,7 +424,52 @@ struct time_text_display : public text_display {
     }
 };
 
-struct gauge : public display_item {
+struct label_text_display : public text_display  {
+    label_text_display(String label_)
+        : label(label_) {}
+
+    String getLabel() {
+        return label;
+    }
+    
+    String label;
+};
+
+struct float_text_display : public label_text_display  {
+    float_text_display(String label_, float &value_, int digits_)
+        : label_text_display(label_), value(value_), digits(digits_) { }
+
+    String getText() {
+        return String(value, digits);
+    }
+
+    float &value;
+    int digits;
+};
+
+struct string_text_display : public label_text_display  {
+    string_text_display(String label_, String &value_)
+        : label_text_display(label_), value(value_) { }
+
+    String getText() {
+        return value;
+    }
+
+    String &value;
+};
+
+struct pypilot_text_display : public label_text_display  {
+    pypilot_text_display(String label_, String key_, bool expanding_=false)
+        : label_text_display(label_), key(key_) { expanding = expanding_; pypilot_watch(key); }
+
+    String getText() {
+        return pypilot_client_value(key);
+    }
+
+    String key;
+};
+
+struct gauge : public display, public display_item {
     gauge(display_item_e _i, int _min_v, int _max_v, int _min_ang, int _max_ang, float _ang_step)
         : display_item(_i),
         min_v(_min_v), max_v(_max_v),
@@ -517,7 +573,7 @@ struct gauge : public display_item {
         u8g2.drawStr(xp, yp, dialText().c_str());
 
         u8g2.setFont(u8g2_font_5x7_tf);
-        String label = getLabel(item);
+        String label = getItemLabel(item);
         int lw = u8g2.getStrWidth(label.c_str());
         if(lw < w/2)
             u8g2.drawStr(x, y, label.c_str());
@@ -586,7 +642,6 @@ struct wind_direction_gauge : public gauge {
     }
 };
 
-
 float boat_coords[] = {0, -.6, .15, -.4, .2, -.25, .15, .5, -.15, .5, -.2, -.25, -.15, -.4, 0, -.6};
 
 void drawThickLine(int x1, int y1, int x2, int y2, int w)
@@ -615,7 +670,7 @@ struct heading_gauge : public gauge {
         int lx, ly;
         float rad = deg2rad(v);
         float s = sin(rad), c = cos(rad);
-        int w = r/25w;
+        int w = r/25;
         for(int i=0; i<(sizeof boat_coords)/(sizeof *boat_coords); i+=2) {
             float x = boat_coords[i], y = boat_coords[i+1];
             int x1 = (c*x - s*y)*r + xc;
@@ -671,8 +726,8 @@ struct rate_of_turn_gauge : public gauge {
     rate_of_turn_gauge() : gauge(RATE_OF_TURN, -20, 20, -90, 90, 30) { dialfmt = "%2.1f"; }
 };
 
-struct history_display : public display_item {
-    history_display(display_item_e _i, text_display* _label, bool _min_zero=true, bool _inverted=false)
+struct history_display : public display, public display_item {
+    history_display(display_item_e _i, text_display_item* _label, bool _min_zero=true, bool _inverted=false)
         : display_item(_i), label(*_label), min_zero(_min_zero), inverted(_inverted)
     {
         for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
@@ -743,17 +798,18 @@ struct history_display : public display_item {
     }
 
     int history_item;
-    text_display &label;
+    text_display_item &label;
     bool min_zero, inverted;
 };
 
 struct route_display : public display {
     void render() {
-        float course_error = resolv(display_data[GPS_HEADING].value - display_data[TRACK_BEARING].value);
+        float scog = display_data[GPS_HEADING].value;
+        float course_error = resolv(route_info.target_bearing - scog);
         int p = course_error/(w/20);
-        u8g2.drawLine(x+w/2+p-w/4, y, x+w/2, y+h);
-        u8g2.drawLine(x+w/2+p+w/4, y, x+w/2, y+h);
-        u8g2.drawLine(x+w/2+p, y, x+w/2, y+h);
+        u8g2.drawLine(x+w/2+p-w/8, y, x+w/2-w/4, y+h);
+        u8g2.drawLine(x+w/2+p+w/8, y, x+w/2+w/4, y+h);
+        u8g2.drawLine(x+w/2+p,     y, x+w/2,     y+h);
     }
 };
 
@@ -794,7 +850,7 @@ struct ais_ships_display : public display {
 
     void drawRightText(String text) {
         int textw = u8g2.getStrWidth(text.c_str());
-        u8g2.drawStr(tx+tw-textw, ty+ty0, label);
+        u8g2.drawStr(tx+tw-textw, ty+ty0, text.c_str());
     }
 
     void drawItem(const char *label, String text) {
@@ -802,32 +858,38 @@ struct ais_ships_display : public display {
             return;
         u8g2.drawStr(tx, ty0, label);
         ty0 += tdyl;
-        drawRightText(tx + tw, y0, text);
+        drawRightText(text);
         ty0 += tdy;
     }
 
     void render_text(ship *closest) {
-        u8g2.SetFont(u8g2_font_helvB10_tf);
+        u8g2.setFont(u8g2_font_helvB10_tf);
         // draw range in upper left corner
-        u8g2.drawStr(x, y, String(ships_range_table[ships_range], 2) + "NMi");
+        String str = String(ships_range_table[ships_range], 2) + "NMi";
+        u8g2.drawStr(x, y, str.c_str());
         
         ty0 = 0;
         tdy = 12;
-        tdyl = tw > th ? 0 : dy;
+        tdyl = tw > th ? 0 : tdy;
 
         if(!closest) {
             u8g2.drawStr(tx, ty, "no target");
             return;
         }
 
-        String str;
         if(closest->name)
             str = closest->name;
         else
             str = closest->mmsi;
-        
+
+        float slat = display_data[LATITUDE].value;
+        float slon = display_data[LONGITUDE].value;
+        float ssog = display_data[GPS_SPEED].value;
+        float scog = display_data[GPS_HEADING].value;
+        uint32_t gps_time = display_data[GPS_HEADING].time;
+
         drawItem("Closest Target", str);
-        closest->compute(slat, slon, ssog, scog, gpstime);
+        closest->compute(slat, slon, ssog, scog, gps_time);
 
         drawItem("CPA", String(closest->cpa, 2));
 
@@ -844,22 +906,18 @@ struct ais_ships_display : public display {
         render_ring(1);
         render_ring(0.5);
 
-        float slat = display_data[LATITUDE].value;
-        float slon = display_data[LONGITUDE].value;
-        float ssog = display_data[GPS_SPEED].value;
-        float scog = display_data[GPS_HEADING].value;
-        uint32_t gps_time = display_data[GPS_HEADING].time;
-
         float sr = 1+w/60, rp = w/20;
 
         ship *closest = NULL;
         float closest_dist = INFINITY;
+        float slat = display_data[LATITUDE].value;
+        float slon = display_data[LONGITUDE].value;
         float rng = ships_range_table[ships_range];
-        for(std::map<int>::iterator it = ships.begin(); it != ships.end(); it++) {
+        for(std::map<int, ship>::iterator it = ships.begin(); it != ships.end(); it++) {
             ship &ship = it->second;
 
-            float x = s.simple_x(slon);
-            float y = s.simple_y(slat);
+            float x = ship.simple_x(slon);
+            float y = ship.simple_y(slat);
             
             float dist = hypot(x, y);
             if(dist > rng)
@@ -874,7 +932,7 @@ struct ais_ships_display : public display {
             y *= r / rng;
 
             int x0 = xc + x, y0 = yc + y;
-            u8g2.drawCircle(x0, yp0, sr);
+            u8g2.drawCircle(x0, y0, sr);
             
             float rad = deg2rad(ship.cog);
             float s = sin(rad), c = cos(rad);
@@ -888,7 +946,6 @@ struct ais_ships_display : public display {
 
     int xc, yc, r;
     int tx, ty, tw, th;
-
     int ty0, tdyl, tdy;
 
     float range;
@@ -1144,9 +1201,6 @@ struct page : public grid_display {
 #define WATER_SPEED_H  new history_display(WATER_SPEED, WATER_SPEED_T)
 #define WATER_TEMP_T   new temperature_text_display(WATER_TEMPERATURE)
 
-#define ROUTE_DISPLAY  new route_display()
-#define TRACK_BEARING_T new heading_text_display(TRACK_BEARING)
-
 #define AIS_SHIPS_DISPLAY new ais_ships_display()
 
 struct pageA : public page {
@@ -1279,7 +1333,7 @@ struct pageJ : public page {
 struct pageK : public page {
   pageK() : page("GPS speed gauge and history") {
     add(GPS_SPEED_G);
-    display_item *gps_speed_history = GPS_SPEED_H;
+    display *gps_speed_history = GPS_SPEED_H;
     gps_speed_history->expanding = false;
     
     add(gps_speed_history);
@@ -1418,23 +1472,81 @@ struct pageT : public page {
   }
 };
 
-
 struct pageU : public page {
-  pageU() : page("route display") {
-    add(ROUTE_DISPLAY);
-    add(TRACK_BEARING_T);
-  }
+    pageU() : page("route display"), vmg(NAN) {
+        add(new route_display());
+        add(new float_text_display("XTE", route_info.xte, 1));
+        add(new float_text_display("BRG", route_info.brg, 0));
+        add(new float_text_display("VMG", vmg, 0));
+        add(new string_text_display("RNG", srng));
+        add(new string_text_display("TTG", sttg));
+    }
+
+    void render() {
+        // update vmg
+        float tbrg = route_info.target_bearing;
+        float sog = display_data[GPS_SPEED].value;
+        float cog = display_data[GPS_HEADING].value;
+        vmg = sog * cos( deg2rad( tbrg - cog ) );
+
+        // update rng
+        float lat = display_data[LATITUDE].value;
+        float lon = display_data[LONGITUDE].value;
+        float wpt_lat = route_info.wpt_lat;
+        float wpt_lon = route_info.wpt_lon;
+        float rbrg, rng;
+        distance_bearing(lat, lon, wpt_lat, wpt_lon, &rng, &rbrg);
+        float nrng = rng * cosf(deg2rad(rbrg - cog));
+
+        srng = String(rng, 2) + "/" + String(nrng, 2);
+
+        // update ttg
+        if( vmg > 0. ) {
+            float ttg_hr;
+            float ttg_min = 60 * modff(rng / vmg, &ttg_hr);
+            float ttg_sec = 60 * modff(ttg_min, &ttg_min);
+            sttg = String(ttg_hr, 0) + ":" + String(ttg_min, 0) + ":" + String(ttg_sec, 0);
+        } else
+            sttg = "---";
+
+        page::render();
+    }
+
+    String srng, sttg;
+    float vmg;
 };
 
 struct pageV : public page {
-  pageV() : page("ais display") {
-    add(AIS_SHIPS_DISPLAY);
-  }
+    pageV() : page("ais display") {
+        add(AIS_SHIPS_DISPLAY);
+    }
 };
 
+struct pageW : public page {
+    pageW() : page("pypilot statistics") {
+        add(new pypilot_text_display("heading", "ap.heading", true));
+        add(new pypilot_text_display("command", "ap.heading_command", true));
+        add(new pypilot_text_display("mode", "ap.mode"));
+        add(new pypilot_text_display("profile", "profile"));
+        add(new pypilot_text_display("uptime", "imu.uptime"));
+        add(new pypilot_text_display("runtime", "imu.uptime"));
+        add(new pypilot_text_display("watts", "servo.watts"));
+        add(new pypilot_text_display("amp hours", "servo.amp_hours"));
+        add(new pypilot_text_display("rudder", "rudder.angle"));
+        add(new pypilot_text_display("voltage", "servo.voltage"));
+        add(new pypilot_text_display("motor T", "servo.motor_temp"));
+        add(new pypilot_text_display("controller T", "servo.controller_temp"));
+    }
+
+    void render() {
+        page::render();
+        pypilot_client_strobe(); // indicate we need pypilot data
+    }            
+};
 
 static std::vector<page*> pages;
 static int cur_page = 0;
+route_info_t route_info;
 std::vector<page_info> display_pages;
 
 String ps = "page";
@@ -1509,6 +1621,7 @@ void display_setup()
     add(new pageT);
     add(new pageU);
     add(new pageV);
+    add(new pageW);
 
     setup_analog_pins();
 }

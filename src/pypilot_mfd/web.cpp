@@ -43,12 +43,12 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
             wind_transmitter_t &t = i->second;
             if(input[mac]) {
                 JSONVar s = input[mac];
-                if(s["offset"]) {
+                if(s.hasOwnProperty("offset")) {
                     float offset = (double)s["offset"];
                     offset=fminf(fmaxf(offset, -180), 180);
                     t.offset = offset;
                 }
-                if(s["position"])
+                if(s.hasOwnProperty("position"))
                     t.position = str2position(s["position"]);
                 break;
             }

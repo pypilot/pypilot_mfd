@@ -11,13 +11,11 @@
 
 #include <HTTPClient.h>
 
-#if 1
 #include "esp_websocket_client.h"
 #include "esp_transport.h"
 #include "esp_transport_tcp.h"
 #include "esp_transport_ssl.h"
 #include "esp_transport_ws.h"
-#endif
 
 
 #include "signalk.h"
@@ -26,7 +24,7 @@
 #include "utils.h"
 #include "settings.h"
 
-String token;
+String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2UiOiJweXBpbG90X21mZC0wMzgyMjQ2OTg4MCIsImlhdCI6MTcxMTY5MDA0MCwiZXhwIjoxNzQzMjQ3NjQwfQ.T-g3vkQMz5e6lbp9UGNEZgo6mEJex0i8eOeOUGUCGOI";
 String access_url;
 String uid;
 String ws_url;
@@ -36,17 +34,43 @@ float to_knots(float m_s) { return m_s * 1.94384; }
 
 static void signalk_parse_value(JSONVar value)
 {
+    if(!value.hasOwnProperty("path") || !value.hasOwnProperty("value"))
+        return;
+
     String path = value["path"];
     JSONVar val = value["value"];
 
-    if(!path || !val)
+    if(val == null)
         return;
 
-    float v = (double)val;
+    //const String x = val;
+    //printf("SIGNALK GOT PATH %s %s\n", path.c_str(), x.c_str());
+
 
     data_source_e s = WIFI_DATA;
+    
+    if(path == "navigation.attitude") {
+        double pitch = val["pitch"];
+        double roll = val["roll"];
+        double yaw = val["yaw"];
+
+        display_data_update(PITCH, rad2deg(pitch), s);
+        display_data_update(HEEL, rad2deg(roll), s);
+        return;
+    }
+
+    if(path == "navigation.position") {
+        double lat = val["latitude"], lon = val["longitude"];
+        if(lat && lon) {
+            display_data_update(LATITUDE, lat, s);
+            display_data_update(LONGITUDE, lon, s);
+        }
+        return;
+    }
+    
+    float v = (double)val;
         
-    if(path == "environment.wind.speedApparent") display_data_update(WIND_SPEED, to_knots(v), s);       else
+    if(path == "environment.wind.speedApparent") display_data_update(WIND_SPEED, to_knots(v), s); else
     if(path == "environment.wind.angleApparent") display_data_update(WIND_DIRECTION, rad2deg(v), s); else
 //    if(path == "environment.wind.speedTrue") display_data_update(WIND_SPEED, v, s);     else
 //    if(path == "environment.wind.angleTrue") display_data_update(WIND_DIRECTION, v, s); else
@@ -55,45 +79,34 @@ static void signalk_parse_value(JSONVar value)
     if(path == "environment.depth.belowSurface") display_data_update(DEPTH, v, s); else
     if(path == "navigation.courseOverGroundTrue") display_data_update(GPS_HEADING, rad2deg(v), s); else
     if(path == "navigation.speedOverGroundTrue") display_data_update(GPS_SPEED, to_knots(v), s); else
-    if(path == "navigation.position") {
-        double lat = val["latitude"], lon = val["longitude"];
-        if(lat && lon) {
-            display_data_update(LATITUDE, lat, s);
-            display_data_update(LONGITUDE, lon, s);
-        }
-    } else
     if(path == "steering.rudderAngle") display_data_update(RUDDER_ANGLE, rad2deg(v), s); else
-    if(path == "steering.autopilot.target.headingTrue") display_data_update(TRACK_BEARING, rad2deg(v), s); else
+    if(path == "steering.autopilot.target.headingTrue") route_info.target_bearing = rad2deg(v); else
     if(path == "navigation.headingMagnetic") display_data_update(COMPASS_HEADING, rad2deg(v), s); else
-    if(path == "navigation.attitude") {
-//       navigation.attitude  {'pitch': 'pitch', 'roll': 'roll', 'yaw': 'heading_lowpass'},
-
-    } else
     if(path == "navigation.rateOfTurn") display_data_update(RATE_OF_TURN, rad2deg(v), s); else
     if(path == "navigation.speedThroughWater") display_data_update(WATER_SPEED, to_knots(v), s); else
    // if(path == "navigation.leewayAngle") display_data_update(LEEWAY, rad2deg(v), s); else
-
+        ;
+    
     return;
 }
 
 
-static bool signalk_parse_line(String line)
+static bool signalk_parse(String line)
 {
+    //printf("signalk line %s\n", line.c_str());
     JSONVar input = JSON.parse(line);
-
-    if(!input["updates"])
+    if(!input.hasOwnProperty("updates"))
         return false;
 
     JSONVar updates = input["updates"];
     for(int i=0; i<updates.length(); i++) {
         JSONVar update = updates[i], values;
-        if(update["values"])
+        if(update.hasOwnProperty("values"))
             values = update["values"];
-        else if(update["meta"])
+        else if(update.hasOwnProperty("meta"))
             values = update["meta"];
-
         for(int j=0; j<values.length(); j++)
-            signalk_parse_value(values[i]);
+            signalk_parse_value(values[j]);
     }
     return true;
 }
@@ -113,19 +126,16 @@ static void subscribe()
     JSONVar msg;
     msg["context"] = "vessels.self";
     msg["subscribe"] = subscriptions;
-
-
 }
 
-bool ws_active = false;
 esp_websocket_client_handle_t ws_h;
 static void signalk_disconnect()
 {
-    if(!ws_active)
+    if(!ws_h)
         return;
     esp_websocket_client_stop(ws_h);
     esp_websocket_client_destroy(ws_h);
-    ws_active = false;
+    ws_h = 0;
 }
 
 String random_number_string(int n)
@@ -138,61 +148,74 @@ String random_number_string(int n)
 
 static void request_access()
 {
-    /*
     // avoid requesting access too often
     uint32_t t0 = millis();
     static uint32_t request_time;
-    if(t0 - request_time < 8000)
+    if(t0 - request_time < 5000)
         return;
     request_time = t0;
 
+    //printf("signalk request access\n");
+
     if(!access_url.length()) {
-        WiFiClient wifi;
-        HttpClient client = HttpClient(wifi, signalk_addr, signalk_port);
+        HTTPClient client;
+        client.begin(signalk_addr, signalk_port, "/signalk/v1/access/requests");
+        client.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
         uid = "pypilot_mfd-" + random_number_string(11);
-        JSONVar data;
-        data["clientId"] = uid;
-        data["description"] = "pypilot_mfd";
-        requests.post("/signalk/v1/access/requests", String(data))
-
-        // read the status code and body of the response
-        int statusCode = client.responseStatusCode();
-        String response = client.responseBody();
-
-        Serial.print("SIGNALK Status code: ");
-        Serial.println(statusCode);
-        Serial.print("SIGNALK Response: ");
-        Serial.println(response);
-        JSONVar = JSON.parse(response);
-        int code = JSONVar["statusCode"];
-        if(code == 202 || code == 400) {
-           access_url = contents['href'];
+        int code = client.POST("clientId="+uid+"&description=pypilot_mfd");
+        if(code != 202 && code != 400) {
+            printf("signalk http request failed to post %s:%d %d\n", signalk_addr, signalk_port, code);
+            settings.output_wifi = false;
+        } else {
+            String response = client.getString();
+            //printf("signalk http response %s\n", response.c_str());
+            JSONVar contents = JSON.parse(response);
+            int code = contents["statusCode"];
+            if((code == 202 || code == 400) && contents.hasOwnProperty("href")) {
+                String url = contents["href"];
+                access_url = url;
+            }
         }
+        client.end();
         return;
     }
 
-    WiFiClient wifi;
-    HttpClient client = HttpClient(wifi, signalk_addr, signalk_port);
-    client.get(access_url);
-    String response = client.responseBody();
+    HTTPClient client;
+    client.begin(signalk_addr, signalk_port, access_url);
+    int code = client.GET();
+    if(code != 200) {
+        printf("signalk http get access url failed %d\n", code);
+        settings.output_wifi = false;
+    } else {
+        String response = client.getString();
+        //printf("HTTP GET response %s %d\n", response.c_str(), code);
 
-    JSONVar contents = JSON.parse(response);
-    if(contents["state"] == "COMPLETED") {
-        JSONVar access = contents["accessRequest"];
-        if(access) {
-            JSONVar permission = access["permission"];
-            if(permission == "APPROVED") {
-                token = access["token"];
-                //store token
-                signalk_close();
+        JSONVar contents = JSON.parse(response);
+        if(contents.hasOwnProperty("state")) {
+            String state = contents["state"];
+            if(state == "COMPLETED") {
+                if(contents.hasOwnProperty("accessRequest")) {
+                    JSONVar access = contents["accessRequest"];
+                    String permission = access["permission"];
+                    if(permission == "APPROVED") {
+                        printf("signalk got new token!");
+                        //store token, close signalk (to reconnect with token)
+                        token = JSON.stringify(access["token"]);
+                        signalk_disconnect();
+                    }
+                } else {
+                    //printf("FAILED REQUEST, tryihng agin\n");
+                    access_url = "";
+                }
+            }
         } else
             uid = "";           
     }
-    */
+    client.end();
 }
 
-
-
+String websocket_buffer;
 static void websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
@@ -206,15 +229,32 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
         break;
     case WEBSOCKET_EVENT_DATA:
     {
+        if(!settings.input_wifi)
+            break;
+        /*
         Serial.println("WEBSOCKET_EVENT_DATA");
         Serial.printf("Received opcode=%d", data->op_code);
         Serial.printf("Received=%.*s", data->data_len, (char *)data->data_ptr);
         Serial.printf("Total payload length=%d, data_len=%d, current payload offset=%d\r\n", data->payload_len, data->data_len, data->payload_offset);
+        */
         char d[data->data_len+1];
         memcpy(d, data->data_ptr, data->data_len);
         d[data->data_len] = '\0';
-        String line(d);
-        signalk_parse_line(line);
+        websocket_buffer += d;
+        int c = 0;
+        for(int i=0; i<websocket_buffer.length(); i++) {
+            if(websocket_buffer[i] == '{')
+                c++;
+            else if(websocket_buffer[i] == '}')
+                c--;
+        }
+        if(c == 0) {
+            signalk_parse(websocket_buffer);
+            websocket_buffer = "";
+        } else if(websocket_buffer.length() > 4096)
+            websocket_buffer = "";
+        else if((websocket_buffer.length() == 0) == (d[0] == '{'))
+            websocket_buffer += d;
     } break;
     case WEBSOCKET_EVENT_ERROR:
         Serial.println("WEBSOCKET_EVENT_ERROR");
@@ -223,6 +263,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
 }
 
 uint32_t signalk_connect_time;
+    String headerstring;
 static void signalk_connect()
 {
     uint32_t t0 = millis();
@@ -230,72 +271,73 @@ static void signalk_connect()
         return;
     signalk_connect_time = t0;
 
-
-    #if 0
-
-    HTTPClient http;
-    String serverPath = signalk_addr + ":" + signalk_port "/signalk";
+    HTTPClient client;
     // Your Domain name with URL path or IP address with path
-    http.begin(serverPath.c_str());
+    client.begin(signalk_addr, signalk_port, "/signalk");
 
-    int httpResponseCode = http.GET();
+    int httpResponseCode = client.GET();
     String payload;
     if (httpResponseCode>0) {
         Serial.print("signalk HTTP Response code: ");
-        Serial.println(httpResponseCode);
-        payload = http.getString();
+        Serial.print(httpResponseCode);
+        payload = client.getString();
+        Serial.print(" :");
         Serial.println(payload);
+        client.end();
     } else {
         Serial.print("signalk Error code: ");
         Serial.println(httpResponseCode);
-        http.end();
+        client.end();
         return;
     }
-    // Free resources
-    http.end();
 
     JSONVar contents = JSON.parse(payload);
-    ws_url = contents["endpoints"]["v1"]["signalk-ws"];
-    #endif
+    const String jsonurl = contents["endpoints"]["v1"]["signalk-ws"];
+    ws_url = jsonurl;
 
     if(!ws_url)
         return;
 
     //ws_url += "?subscribe=none";
+    esp_websocket_client_config_t ws_cfg = {0};
+        ws_cfg.uri = ws_url.c_str();
+    //ws_cfg.uri = "ws://10.10.10.1:3000/signalk/v1/stream";
+    //ws_cfg.uri = "ws://10.10.10.66:12345/signalk/v1/stream";
 
-    String headerstring = "Authorization: JWT   " + token + "\r\n";
-
-    esp_websocket_client_config_t ws_cfg;
-    ws_cfg.uri = ws_url.c_str();
-    //ws_cfg.headers = headerstring.c_str();
+    if(token) {
+        headerstring = "Authorization: JWT ";
+        headerstring += token;
+        headerstring += "\r\n";
+        ws_cfg.headers = (char*)headerstring.c_str();
+    }
+    
     // connect
-
-    Serial.printf("Connecting to %s...\n", ws_cfg.uri);
+    printf("Connecting to %s...\n", ws_cfg.uri);
 
     ws_h = esp_websocket_client_init(&ws_cfg);
+    if(!ws_h) {
+        printf("signalk websock failed to connect\n");
+        return;
+    }
     esp_websocket_register_events(ws_h, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)ws_h);
-
     esp_websocket_client_start(ws_h);
+    printf("signalk web sock complete\n");
 }
 
-JSONVar updates;
-
+std::map<String, float> skupdates;
 void signalk_send(String key, float value)
 {
-    JSONVar update;
-    update["path"] = key;
-    update["value"] = value;
-    updates[updates.length()] = update;
+    skupdates[key] = value;
 }
 
 void signalk_poll()
 {
-    if(settings.wifi_data != SIGNALK) {
+    if(settings.wifi_data != SIGNALK || !(settings.input_wifi || settings.output_wifi)) {
         signalk_disconnect();
         return;
     }
 
-    if(!ws_active) {
+    if(!ws_h) {
         signalk_connect();
         return;
     }
@@ -303,12 +345,29 @@ void signalk_poll()
     if (!esp_websocket_client_is_connected(ws_h))
         return;
 
-    if(!token && settings.output_wifi)
-        request_access();
-
-    if(updates.length()) {
-        String payload = JSON.stringify(updates);
-        esp_websocket_client_send_text(ws_h, payload.c_str(), payload.length(), portMAX_DELAY);
-        updates = JSONVar();
-    }
+    if(settings.output_wifi)
+        if(token.length()) {
+            JSONVar upd;
+            int i=0;
+            for(std::map<String, float>::iterator it = skupdates.begin(); it != skupdates.end(); it++) {
+                JSONVar update;
+                update["path"] = it->first;
+                update["value"] = it->second;
+                upd[i++] = update;
+            }
+            if(i) {
+                JSONVar upd2;
+                upd2["$source"] = "pypilot_mfd";
+                upd2["values"] = upd;
+                JSONVar upd1;
+                upd1[0] = upd2;
+                JSONVar updates;
+                updates["updates"] = upd1;
+                String payload = JSON.stringify(updates);
+                //printf("SIGNALK try SEND?! %s\n", payload.c_str());
+                esp_websocket_client_send_text(ws_h, payload.c_str(), payload.length(), portMAX_DELAY);
+                skupdates.clear();
+            }
+        } else if(settings.output_wifi)
+            request_access();
 }

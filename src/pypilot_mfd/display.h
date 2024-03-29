@@ -24,8 +24,6 @@ enum display_item_e { WIND_SPEED,
                       DEPTH,
                       RATE_OF_TURN,
                       RUDDER_ANGLE,
-                      TRACK_BEARING,
-                      WAYPOINT_BEARING,
                       TIME,
                       DISPLAY_COUNT };
 
@@ -43,5 +41,14 @@ struct page_info {
     String &description;
     bool enabled;
 };
+
+struct route_info_t {
+    String from_wpt, to_wpt;
+    float target_bearing;
+    float wpt_lat, wpt_lon;
+    float xte, brg;
+};
+
+extern route_info_t route_info;
 
 extern std::vector<page_info> display_pages;

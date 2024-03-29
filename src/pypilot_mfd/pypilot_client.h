@@ -6,8 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-float deg2rad(float degrees);
-float rad2deg(float radians);
-float nice_number(float v, int dir = 1);
-float resolv(float angle);
-void distance_bearing(float lat1, float lon1, float lat2, float lon2, float *dist, float *brg);
+void pypilot_client_strobe();
+void pypilot_client_poll();
+String pypilot_watch(String key);
+String pypilot_client_value(String key);

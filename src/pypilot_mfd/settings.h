@@ -16,7 +16,6 @@ enum lat_lon_format_e {DECIMAL_DEGREES, DECIMAL_MINUTES, DECIMAL_SECONDS};
 struct settings_t {
     uint32_t magic;
 
-    bool wifi_client;
     char ssid[32];
     char psk[32];
 

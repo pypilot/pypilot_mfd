@@ -5,6 +5,7 @@
  * License as published by the Free Software Foundation; either
  * version 3 of the License, or (at your option) any later version.
  */
+#include <map>
 
 struct ship
 {
@@ -25,8 +26,8 @@ struct ship
 
     float simple_x(float slon);
     float simple_y(float slat);
-    void compute(float slat, float slon);
+    void compute(float slat, float slon, float ssog, float scog, uint32_t t0);
 };
 
-std::map<int, ship> ships;
-bool ais_parse_line(line, source);
+extern std::map<int, ship> ships;
+bool ais_parse_line(const char *line, data_source_e source);

@@ -52,3 +52,18 @@ float resolv(float angle)
         angle -= 360;
     return angle;
 }
+
+void distance_bearing(float lat1, float lon1, float lat2, float lon2, float *dist, float *brg)
+{
+    float latd = lat2-lat1;
+    float lond = resolv(lon2-lon1);
+
+    float x = cosf(deg2rad(lat1)) * lond * 60;
+    float y = latd * 60;
+
+    if(dist)
+        *dist = hypotf(x, y);
+
+    if(brg)
+        *brg = rad2deg(atan2(y, x));
+}

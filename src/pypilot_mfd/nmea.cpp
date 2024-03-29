@@ -131,6 +131,38 @@ bool nmea_parse_line(const char *line, data_source_e source)
         display_data_update(AIR_TEMPERATURE, air_temp, source);
     } else
 
+    if(prefix(line, "RMB")) {
+        float xte;
+        char xte_dir;
+        char from_wpt[16], to_wpt[16];
+        float wpt_lat, wpt_lon;
+        char wpt_lat_sign, wpt_lon_sign;
+        float rng, brg, vel;
+        char status;
+        int ret = sscanf(c1, ",A,%f,%c,%s,%s,%f,%c,%f,%c,%f,%f,%f,%c,A,",
+                         &xte, &xte_dir, from_wpt, to_wpt,
+                         &wpt_lat, &wpt_lat_sign, &wpt_lon, &wpt_lon_sign, &rng, &brg, &vel, &status);
+        if(ret >= 2) {
+            if(xte_dir == 'L')
+                xte = -xte;
+            route_info.xte = xte;
+        }
+            
+        if(ret >= 4) {
+            route_info.from_wpt = from_wpt;
+            route_info.to_wpt = to_wpt;
+        }
+
+        if(ret >= 8) {
+            if(wpt_lat_sign == 'S')
+                wpt_lat = -wpt_lat;
+            if(wpt_lon_sign == 'W')
+                wpt_lon = -wpt_lon;
+            route_info.wpt_lat = wpt_lat;
+            route_info.wpt_lon = wpt_lon;
+        }
+    } else
+
     if(prefix(line, "RMC")) {
         int hour, minute;
         float second;
@@ -220,12 +252,13 @@ bool nmea_parse_line(const char *line, data_source_e source)
             xte = -xte;
         else if(dir != 'R')
             return false;
-        //display_data_update(XTE, xte, source);
+
+        route_info.xte = xte;
 
         const char *c8 = comma(c3, 5);
-        float bearing_orig;
+        float bearing_origin_destination;
         char unit;
-        if(sscanf(c8, ",%f,%c,", &bearing_orig, &unit) != 2)
+        if(sscanf(c8, ",%f,%c,", &bearing_origin_destination, &unit) != 2)
             return false;
 
         const char *c10 = comma(c8, 9);
@@ -237,22 +270,18 @@ bool nmea_parse_line(const char *line, data_source_e source)
         memcpy(wptid, c10+1, wptlen);
         wptid[wptlen] = '\0';
 
-        float track_bearing;
+        float bearing_position_destination;
         char unit_pres;
-        if(sscanf(c11, ",%f,%c,", &track_bearing, &unit_pres) != 2 || unit_pres != 'T')
+        if(sscanf(c11, ",%f,%c,", &bearing_position_destination, &unit_pres) != 2 || unit_pres != 'T')
             return false;
 
         const char *c13 = comma(c10, 1);
-        float waypoint_bearing;
+        float heading_to_steer_destination;
         char unit_hdg;
-        if(sscanf(c13, ",%f,%c,", &waypoint_bearing, &unit_hdg) != 2 || unit_hdg != 'T')
+        if(sscanf(c13, ",%f,%c,", &heading_to_steer_destination, &unit_hdg) != 2 || unit_hdg != 'T')
             return false;
 
-        display_data_update(TRACK_BEARING, track_bearing, source);
-        display_data_update(WAYPOINT_BEARING, waypoint_bearing, source);
-
-        // todo implement display for route following
-        //display_data_update(??, xte, source);
+        route_info.target_bearing = heading_to_steer_destination;
 
 
     } else
@@ -342,7 +371,7 @@ static bool connect_client()
         client.close();
     }
 
-    Serial.printf("Client connected to %s:%d %d %d\n", addr, port, err, errno);
+    Serial.printf("nmea client connected to %s:%d %d %d\n", addr, port, err, errno);
     client.time = t0;
     return true;
 }
@@ -466,7 +495,7 @@ static void accept_server()
     if (source_addr.ss_family == PF_INET)
         inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
 
-    Serial.printf("Socket accepted %d %d ip address: %s\n", i, sock, addr_str);
+    Serial.printf("nmea socket accepted %d %d ip address: %s\n", i, sock, addr_str);
 
     clients[i].sock = sock;
     clients[i].time = millis();
@@ -503,10 +532,10 @@ void nmea_poll()
 
     const char *addr = cur_addr;
 
-    settings.wifi_data = NMEA_PYPILOT;
+    //settings.wifi_data = NMEA_PYPILOT;
 
-    settings.input_wifi =true;
-    settings.output_wifi =true;
+    //settings.input_wifi =true;
+    //settings.output_wifi =true;
 
     switch(settings.wifi_data) {
         case NMEA_PYPILOT:
@@ -525,7 +554,7 @@ void nmea_poll()
             port = settings.nmea_server_port;
             break;
         default:
-            Serial.println("no nmea data set\n");
+            //Serial.println("no nmea data set");
             client.close();
             close_server();
             return;
@@ -562,7 +591,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
 
     int ret = send(c.sock, buf, strlen(buf), 0);
     if(ret < 0) {
-        Serial.printf("erno %d\n", errno);
+        Serial.printf("errno %d\n", errno);
 
         if(errno == EAGAIN) {
             // timeout

@@ -6,23 +6,27 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include "Arduino.h"
+
+#include "display.h"
 #include "ais.h"
 #include "utils.h"
 
+std::map<int, ship> ships;
 
 float ship::simple_x(float slon)
 {
-    return cos(deg2rad(lat))*resolv(slon-lon) * 60;
+    return cosf(deg2rad(lat))*resolv(slon-lon) * 60;
 }
 
 float ship::simple_y(float slat)
 {
-    return (lat1-lat)*60;
+    return (slat-lat)*60;
 }
 
 void ship::compute(float slat, float slon, float ssog, float scog, uint32_t t0)
 {
-    float (dt = t0 - timestamp) / 1000.0f;
+    float dt = (t0 - timestamp) / 1000.0f;
     
     // now compute cpa and tcpa
     //if 'rot' in ais_data:
@@ -33,8 +37,8 @@ void ship::compute(float slat, float slon, float ssog, float scog, uint32_t t0)
 
     // velocity vectors in x, y
     float rcog = deg2rad(cog), rscog = deg2rad(scog);
-    float bvx = ssog*sin(rscog), bvy = ssog*cos(rscog);
-    float avx = sog*sin(rcog), avy = sog*cos(rcog);
+    float bvx = ssog*sinf(rscog), bvy = ssog*cosf(rscog);
+    float avx = sog*sinf(rcog), avy = sog*cosf(rcog);
 
     // update from now to time difference since last ais fix
     x += avx*dt;
@@ -53,7 +57,7 @@ void ship::compute(float slat, float slon, float ssog, float scog, uint32_t t0)
         t = (vx*x + vy*y)/v2;
 
     // closest point of approach distance in nautical miles
-    cpa = hypot(t*vx - x, t*vy - y);
+    cpa = hypotf(t*vx - x, t*vy - y);
     
     // time till closest point of approach is in hours, convert to seconds
     tcpa = t * 3600;
@@ -84,7 +88,7 @@ static int ais_n(std::vector<bool> &data, int start, int len, bool sign=false)
     }
             
     int result = 0;
-    int count = len();
+    int count = len;
     for(int i=0; i<len; i++)
         if(data[start+i] != negative)
             result |= (1<<(len-i-1));
@@ -97,7 +101,7 @@ static int ais_n(std::vector<bool> &data, int start, int len, bool sign=false)
 
 String ais_t(std::vector<bool> &data, int start, int len) {
     String result = "";
-    for(let i=0; i<len; i+=6) {
+    for(int i=0; i<len; i+=6) {
         char d = ais_n(data, start+i, 6);
         if( d == 0 )
             break;
@@ -197,7 +201,8 @@ String ais_e(int type) {
     return "Unknown";
 }
     
-function decode_ais_data(data) {
+static bool decode_ais_data(std::vector<bool> &data)
+{
     int message_type = ais_n(data, 0, 6);
     int mmsi = ais_n(data, 8, 30);
 
@@ -234,13 +239,13 @@ function decode_ais_data(data) {
         s.hdg = ais_hdg(ais_n(data, 124, 9));
         s.timestamp = millis();
     } else if(message_type == 19) {
-        s.sog = ais_sog(ais_n(46, 10));
+        s.sog = ais_sog(ais_n(data, 46, 10));
         s.lon = ais_ll(ais_n(data, 57, 28, true));
         s.lat = ais_ll(ais_n(data, 85, 27, true));
         s.cog = ais_cog(ais_n(data, 112, 12));
         s.hdg = ais_hdg(ais_n(data, 124, 9));
         s.name = ais_t(data, 143, 120);
-        s.ship_type = ais_e(ais_n(data, 263, 8));
+        s.shiptype = ais_e(ais_n(data, 263, 8));
         s.to_bow = ais_n(data, 271, 9);
         s.to_stern = ais_n(data, 80, 9);
         s.to_port = ais_n(data, 289, 6);
@@ -253,15 +258,14 @@ function decode_ais_data(data) {
         else if(part_num == 1) {
             s.shiptype = ais_e(ais_n(data, 40, 8));
             s.callsign = ais_t(data, 90, 42);
-            s.to_bow = ais_n(ais_n(data, 132, 9));
-            s.to_stern = ais_n(ais_n(data, 141, 9));
-            s.to_port = ais_n(ais_n(data, 150, 6));
-            s.to_starboard = ais_n(ais_n(data, 156, 6));
+            s.to_bow = ais_n(data, 132, 9);
+            s.to_stern = ais_n(data, 141, 9);
+            s.to_port = ais_n(data, 150, 6);
+            s.to_starboard = ais_n(data, 156, 6);
         }
     } else
         return false;
 
-    s.need_compute = true;
     return true;
 }
 
@@ -271,8 +275,6 @@ bool ais_parse_line(const char *line, data_source_e source)
     int len = strlen(line);
     if(len < 10 || line[3] != 'V' || line[4] != 'D' || line[5] != 'D')
         return false;
-
-    String data;
 
     int fragcount, fragindex;
     if(sscanf(line+6, ",%d,%d,", &fragcount, &fragindex) != 2)
@@ -291,15 +293,13 @@ bool ais_parse_line(const char *line, data_source_e source)
     if(!e)
         return false;
 
-    int len = l-e-1;
+    len = l-e-1;
     if(len > 77)
         return false;
-    char payload[80];
-    memcpy(payload, l, len);
 
-    std::vector<bool> data& = ais_data[channel == 'B'];
-    for(int i=0; i < payload.length; i++) {
-        int d = payload[i] - 48;
+    std::vector<bool> &data = ais_data[channel == 'B'];
+    for(int i=0; i < len; i++) {
+        int d = l[i] - 48;
         if(d > 40)
             d -= 8;
         for(int b=5; b>=0; b--)
