@@ -63,7 +63,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
         return false;
 
     // ensure line starts with $ or !
-    if(line[0] != '$' || line[0] != '!')
+    if(line[0] != '$' && line[0] != '!')
         return false;
 
     // find the '*' that separates data from checksum
@@ -297,7 +297,7 @@ struct ClientSock
     void close() {
         if(!sock)
             return;
-        Serial.println("Close client");
+        Serial.println("nmea close client");
         ::close(sock);
         sock = 0;
         data = "";
@@ -333,7 +333,7 @@ static bool connect_client()
     if(t0 - client.time < 10000)
         return false;
 
-    const char *addr = 0;
+    String addr;
     int port;
     if(settings.wifi_data == NMEA_PYPILOT) {
         addr = pypilot_addr;
@@ -346,11 +346,12 @@ static bool connect_client()
         port = settings.nmea_client_port;
     }
 
-    if(!addr || !*addr)
+    if(!addr)
         return false;
+
     sockaddr_in dest_addr;
-    Serial.printf("try connect %d %s\n", port, addr);
-    dest_addr.sin_addr.s_addr = inet_addr(addr);
+    Serial.printf("try connect %d %s\n", port, addr.c_str());
+    dest_addr.sin_addr.s_addr = inet_addr(addr.c_str());
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(port);
     //inet_ntoa_r(dest_addr.sin_addr, addr_str, sizeof(addr_str) - 1);
@@ -371,7 +372,7 @@ static bool connect_client()
         client.close();
     }
 
-    Serial.printf("nmea client connected to %s:%d %d %d\n", addr, port, err, errno);
+    Serial.printf("nmea client connected to %s:%d %d %d\n", addr.c_str(), port, err, errno);
     client.time = t0;
     return true;
 }
@@ -526,16 +527,11 @@ void nmea_poll()
     last_poll_time = t0;
 
 
-    static char cur_addr[32];
+    static String cur_addr;
     static int cur_port;
+
+    String addr = cur_addr;
     int port;
-
-    const char *addr = cur_addr;
-
-    //settings.wifi_data = NMEA_PYPILOT;
-
-    //settings.input_wifi =true;
-    //settings.output_wifi =true;
 
     switch(settings.wifi_data) {
         case NMEA_PYPILOT:
@@ -560,12 +556,12 @@ void nmea_poll()
             return;
     }
 
-    if(settings.wifi_data != mode || strncmp(cur_addr, addr, 32) || cur_port != port) {
+    if(settings.wifi_data != mode || cur_addr != addr || cur_port != port) {
         //Serial.printf("settings wifi %d %d\n", settings.wifi_data, settings.nmea_server_port);
         client.close();
         close_server();
         mode = settings.wifi_data;
-        strncpy(cur_addr, addr, 32);
+        cur_addr = addr;
         cur_port = port;
     }
 

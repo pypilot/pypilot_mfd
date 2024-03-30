@@ -90,6 +90,16 @@ static void signalk_parse_value(JSONVar value)
     return;
 }
 
+static void signalk_load_token()
+{
+
+}
+
+static void signalk_store_token()
+{
+    listDir(SPIFFS, "/", 0);
+
+}
 
 static bool signalk_parse(String line)
 {
@@ -202,6 +212,7 @@ static void request_access()
                         printf("signalk got new token!");
                         //store token, close signalk (to reconnect with token)
                         token = JSON.stringify(access["token"]);
+                        signalk_store_token();
                         signalk_disconnect();
                     }
                 } else {
@@ -263,7 +274,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
 }
 
 uint32_t signalk_connect_time;
-    String headerstring;
+String headerstring;
 static void signalk_connect()
 {
     uint32_t t0 = millis();
@@ -297,6 +308,8 @@ static void signalk_connect()
 
     if(!ws_url)
         return;
+
+    signalk_load_token();
 
     //ws_url += "?subscribe=none";
     esp_websocket_client_config_t ws_cfg = {0};

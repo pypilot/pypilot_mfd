@@ -6,8 +6,15 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <SPIFFS.h>
+
 float deg2rad(float degrees);
 float rad2deg(float radians);
 float nice_number(float v, int dir = 1);
 float resolv(float angle);
 void distance_bearing(float lat1, float lon1, float lat2, float lon2, float *dist, float *brg);
+
+uint64_t mac_str_to_int(String mac);
+String mac_int_to_str(uint64_t i);
+
+void listDir(fs::FS &fs, const char * dirname, uint8_t levels);

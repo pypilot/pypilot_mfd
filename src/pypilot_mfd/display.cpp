@@ -20,7 +20,7 @@
 #include "pypilot_client.h"
 #include "utils.h"
 
-#if 1
+
 
 // autocompensate contrast based on light and temperature
 #define BACKLIGHT_PIN 14
@@ -29,7 +29,14 @@
 
 #include <U8g2lib.h>
 
-U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/12, /* dc=*/5, /* reset=*/14);
+
+//#include <TFT_eSPI.h>  // Hardware-specific library
+//#include <SPI.h>
+
+#if 1
+//U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/5, /* dc=*/12, /* reset=*/14);
+//U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/18, /* data=*/23, /* cs=*/5, /* dc=*/12, /* reset=*/14);
+U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/14);
 
 String getItemLabel(display_item_e item) {
     switch (item) {
@@ -391,18 +398,17 @@ struct position_text_display : public text_display_item {
             s = (v < 0) ? 'W' : 'E';
         v = fabsf(v);
         String str;
-        if (settings.lat_lon_format == DECIMAL_DEGREES)
+        if (settings.lat_lon_format == "degrees")
             str = String(v, 6);
         else {
             float i;
             float f = modff(v, &i) * 60;
             str = String(i) + ", ";
-            if (settings.lat_lon_format == DECIMAL_MINUTES)
-                str += String(f, 4);
-            else {
+            if (settings.lat_lon_format == "seconds") {
                 f = modff(f, &i) * 60;
                 str += String(i) + ", " + String(f, 2);
-            }
+            } else
+                str += String(f, 4);
         }
 
         return str + ' ' + "°" + s;
@@ -540,7 +546,7 @@ struct gauge : public display, public display_item {
     void render_dial() {
         // draw actual arrow toward wind direction
         float val = display_data[item].value;
-        if (age() > 5000)
+        if (age() > 5000  || isnan(val))
             return;
 
         // map over range from 0 - 1
@@ -1578,7 +1584,7 @@ static void read_analog_pins()
     int val = analogRead(PHOTO_RESISTOR_PIN);
     //    printf("val %d %d\n", val, millis() - t);
     // set backlight level to 50%
-    //ledcWrite(0, 512);
+    //ledcWrite(0, 1024*settings.backlight/1000);
 }
 
 void display_setup()
@@ -1587,7 +1593,7 @@ void display_setup()
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    cur_page='F'-'A';
+    cur_page='A'-'A';
 
     if(settings.landscape) {
         page_width = 256;
@@ -1622,6 +1628,10 @@ void display_setup()
     add(new pageU);
     add(new pageV);
     add(new pageW);
+
+    for(int i=0; i<settings.enabled_pages.length(); i++)
+        if(settings.enabled_pages[i] != 'f')
+            display_pages[i].enabled = true;
 
     setup_analog_pins();
 }
@@ -1712,12 +1722,11 @@ void display_render()
         return;
     }
 
-    if(settings.show_status)
-        render_status();
-
     uint32_t t2 = millis();
 
     pages[cur_page]->render();
+    if(settings.show_status)
+        render_status();
 
     uint32_t t3 = millis();
 
@@ -1728,9 +1737,6 @@ void display_render()
 }
 
 #else
-
-#include <TFT_eSPI.h>  // Hardware-specific library
-#include <SPI.h>
 
 
 TFT_eSPI tft = TFT_eSPI();

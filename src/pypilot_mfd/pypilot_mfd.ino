@@ -9,7 +9,6 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <WiFi.h>
-#include <EEPROM.h>
 #include <lwip/sockets.h>
 
 #include "bmp280.h"
@@ -28,8 +27,6 @@ settings_t settings;
 // Global copy of chip
 esp_now_peer_info_t chip;
 
-#define DEFAULT_CHANNEL 1
-#define MAGIC 0x3A61CF00
 
 #define ID  0xf179
 #define CHANNEL_ID 0x0a21
@@ -91,10 +88,10 @@ void setup_wifi()
         WiFi.mode(WIFI_AP_STA);
         WiFi.onEvent(WiFiStationGotIP, SYSTEM_EVENT_STA_GOT_IP);
 
-        if(*settings.ssid) {
-            Serial.printf("connecting to SSID: %s  psk: %s\n", settings.ssid, settings.psk);
+        if(settings.ssid) {
+            Serial.printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
         
-            WiFi.begin(settings.ssid, settings.psk);
+            WiFi.begin(settings.ssid.c_str(), settings.psk.c_str());
         } else
             WiFi.disconnect();
     }
@@ -144,7 +141,7 @@ uint16_t crc16(const uint8_t* data_p, int length)
     return crc;
 }
 
-float lpdir = -1, knots = 0;
+float lpdir = NAN, knots = 0;
 
 void lowpass_direction(float dir)
 {
@@ -162,7 +159,9 @@ void lowpass_direction(float dir)
           //  Serial.printf("%x %f %f\n", packet->id, ldir, lpdir);
 
         const float lp = .2;
-        if(fabs(lpdir - ldir) < 180) // another test which should never fail                                                                                                                  
+        if(isnan(lpdir))
+            lpdir = dir;
+        else if(fabs(lpdir - ldir) < 180) // another test which should never fail                                                                                                                  
             lpdir = lp*ldir + (1-lp)*lpdir;
 
         if(lpdir >= 360)
@@ -170,24 +169,24 @@ void lowpass_direction(float dir)
         else if(lpdir < 0)
             lpdir += 360;
     } else
-      lpdir = -1;
+        lpdir = NAN;
 }
+
+uint64_t cur_primary;
+uint32_t cur_primary_time;
 
 uint64_t mac_as_int(const uint8_t *mac_addr)
 {
     return ((*(uint32_t*)mac_addr) << 16) + (*(uint16_t*)(mac_addr+4));
 }
 
-uint64_t cur_primary;
-uint32_t cur_primary_time;
-
 // callback when data is recv from Master
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 #if 0
-    char macStr[18];
-    snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+    char macStrt[18];
+    snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    Serial.print("Last Packet Recv from: "); Serial.print (macStr);
+    Serial.print("Last Packet Recv from: "); Serial.print (macStrt);
     //Serial.print(" Last Packet Recv Data: "); Serial.print(*data);
     Serial.print(" Last Packet Recv Data Len: "); Serial.print(data_len);
     Serial.println("");
@@ -212,12 +211,12 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
     if(packet->angle == 0xffff)
         dir = -1; // invalid
     else
-        dir = packet->angle*360.0/16384.0;
+        dir = 360 - packet->angle*360.0f/16384.0f;
 
     if(packet->period > 100) // period of 100uS cups is about 193 knots
         knots = 19350.0 / packet->period;
     else
-      knots = 0;
+        knots = 0;
 
 #if 0
     if(settings.compensate_accelerometer && dir >= 0) {
@@ -227,8 +226,8 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
         lastt = t;
 
         // TODO: combine inertial sensors from autopilot somehow
-        float accel_x = packet->accelx*4.0/16384 * 9.8 * 1.944;
-        float accel_y = packet->accely*4.0/16384 * 9.8 * 1.944;
+        float accel_x = packet->accelx*4.0f/16384 * 9.8f * 1.944f;
+        float accel_y = packet->accely*4.0f/16384 * 9.8f * 1.944f;
 
         static float vx, vy;
         vx += accel_x*dt;
@@ -255,23 +254,22 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
     }
 #endif
     uint64_t mac_int = mac_as_int(mac_addr);
-
     uint32_t t = millis();
     if(mac_int == cur_primary) {
         lowpass_direction(dir);
 
         char buf[128];
-        if(dir >= 0) 
-            snprintf(buf, sizeof buf, PSTR("MWV,%d.%02d,R,%d.%02d,N,A"), (int)lpdir, (uint16_t)(lpdir*100.0)%100U, (int)knots, (int)(knots*100)%100);
+        if(!isnan(lpdir)) 
+            snprintf(buf, sizeof buf, PSTR("MWV,%d.%02d,R,%d.%02d,N,A"), (int)lpdir, (uint16_t)(lpdir*100.0f)%100U, (int)knots, (int)(knots*100)%100);
         else // invalid wind direction (no magnet?)
             snprintf(buf, sizeof buf, PSTR("MWV,,R,%d.%02d,N,A"), (int)knots, (int)(knots*100)%100);
 
         nmea_send(buf);
 
         if(settings.wifi_data == SIGNALK) {
-            signalk_send("environment.wind.angleApparent", M_PI/180.0f * lpdir);
-            signalk_send("environment.wind.speedApparent", knots*.514444);
-
+            if(!isnan(lpdir))
+                signalk_send("environment.wind.angleApparent", M_PI/180.0f * lpdir);
+            signalk_send("environment.wind.speedApparent", knots*.514444f);
         }
 
         display_data_update(WIND_SPEED, knots, LOCAL_DATA);
@@ -285,16 +283,15 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
         wt.t = t;
         if(dir >= 0) {
             if((wt.position == PRIMARY) ||
-               (wt.position == SECONDARY && cur_primary == 0) ||
+               (wt.position == SECONDARY && !cur_primary) ||
                (wt.position == PORT && (dir > 200 && dir < 340)) ||
                (wt.position == STARBOARD && (dir > 20 && dir < 160)))
-                    cur_primary = mac_int;
+                cur_primary = mac_int;
             if(cur_primary == mac_int)
                 cur_primary_time = t;
         }
     } else {
         wind_transmitter_t wt;
-        memcpy(wt.mac, mac_addr, sizeof wt.mac);
         wt.dir = dir;
         wt.knots = knots;
         wt.offset = 0;
@@ -399,74 +396,8 @@ static void read_serials()
     Serial2Buffer.read();
 }
 
-void write_settings()
-{
-    EEPROM.begin(512);
-    EEPROM.put(0, settings);
-    EEPROM.commit();
-}
-
-
 void setup()
 {
-    EEPROM.begin(512);
-    EEPROM.get(0, settings);
-
-    int offset = sizeof settings;
-    uint16_t count = settings.transmitter_count;
-    if(count > 3)  // do not allow more than 3 wind sensors for now
-        count = 3;
-    for(int i=0; i<count; i++) {
-      wind_transmitter_t transmitter;
-        EEPROM.get(offset, transmitter);
-        if(transmitter.magic == MAGIC) {
-            transmitter.t = 0;
-            uint64_t maci = mac_as_int(transmitter.mac);
-            wind_transmitters[maci] = transmitter;
-        }
-        offset += sizeof(wind_transmitter_t);
-    }
-    EEPROM.end();
-       // no encryption
-
-    if(settings.magic != MAGIC) {
-        settings.magic = MAGIC;
-        strcpy(settings.ssid, "pypilot");
-        strcpy(settings.psk, "");
-
-        settings.channel = DEFAULT_CHANNEL;
-
-        settings.input_usb = true;
-        settings.output_usb = true;
-
-        settings.usb_baud_rate = 38400;
-        settings.rs422_baud_rate = 38400;
-
-        settings.input_wifi = false;
-        settings.output_wifi = false;
-        settings.wifi_data = NMEA_PYPILOT;
-
-        settings.nmea_client_port = 0;
-        settings.nmea_client_addr[0] = '\0';
-        settings.nmea_server_port = 3600;
-
-        settings.transmitter_count = 0;
-        wind_transmitters.clear();
-
-        settings.compensate_accelerometer = false;
-        settings.use_fahrenheit = false;
-        settings.use_depth_ft = false;
-
-        settings.lat_lon_format = DECIMAL_DEGREES;
-        settings.contrast = 20;
-        
-        for(int i=0; i<(sizeof settings.enabled_pages) / (sizeof *settings.enabled_pages); i++)
-            settings.enabled_pages[i] = true;
-
-        settings.show_status = true;
-        settings.landscape = false;
-    }
-
     memset(&chip, 0, sizeof(chip));
     for (int ii = 0; ii < 6; ++ii)
         chip.peer_addr[ii] = (uint8_t)0xff;
@@ -476,25 +407,30 @@ void setup()
 
     chip.channel = 6;
     chip.encrypt = 0; 
-    settings.show_status=false;
-    settings.landscape = true;
 
-
-        strcpy(settings.ssid, "openplotter");
-        strcpy(settings.psk, "12345678");
     settings.usb_baud_rate = 115200;
-
-    settings.input_wifi = true;
-    settings.output_wifi = true;
-    settings.wifi_data = SIGNALK;
-
     Serial.begin(settings.usb_baud_rate == 38400 ? 38400 : 115200);
     Serial.setTimeout(0);
-    /*
+
     Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
                   SERIAL_8N1, 16, 17);    //Hardware Serial of ESP32
 
-    Serial2.setTimeout(0);*/
+    Serial2.setTimeout(0);
+
+
+    if(settings_load())
+        settings_store(".bak");
+    else
+        settings_load(".bak");
+    settings.show_status=true;
+    settings.landscape = false;
+
+    settings.input_wifi = true;
+    //settings.output_wifi = true;
+    settings.wifi_data = NMEA_PYPILOT;
+    settings.channel = 6;
+
+
     Serial.println("pypilot_mfd");
 
    // bmX280_setup();
@@ -573,7 +509,9 @@ void loop()
 
     // sleep remainder of second
     int dt = millis() - t0;
-    const int period = 200;
-    if(dt < period)
+    const int period = 100;
+    if(dt < period) {
+        //printf("delay %d\n", dt);  
         delay(period-dt);
+    }
 }

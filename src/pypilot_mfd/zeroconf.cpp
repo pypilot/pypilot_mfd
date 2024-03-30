@@ -72,7 +72,7 @@ void mdns_analyze_results(String service_name, mdns_result_t * results)
 
 void find_mdns_service(const char * service_name, const char * proto)
 {
-    Serial.printf("Query PTR: %s.%s.local", service_name, proto);
+    Serial.printf("Query PTR: %s.%s.local\n", service_name, proto);
 
     mdns_result_t * results = NULL;
     esp_err_t err = mdns_query_ptr(service_name, proto, 3000, 20,  &results);

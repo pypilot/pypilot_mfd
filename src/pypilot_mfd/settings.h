@@ -11,24 +11,22 @@
 #define VERSION 0.1
 
 enum wireless_data_e {NMEA_PYPILOT, NMEA_SIGNALK, NMEA_CLIENT, NMEA_SERVER, SIGNALK};
-enum lat_lon_format_e {DECIMAL_DEGREES, DECIMAL_MINUTES, DECIMAL_SECONDS};
 
 struct settings_t {
-    uint32_t magic;
+    String magic;
 
-    char ssid[32];
-    char psk[32];
+    String ssid;
+    String psk;
 
     uint16_t channel;
 
     bool input_usb, output_usb;
     int usb_baud_rate;
-
     int rs422_baud_rate;
 
     bool input_wifi, output_wifi;
     wireless_data_e wifi_data;
-    char nmea_client_addr[32];
+    String nmea_client_addr;
     int nmea_client_port, nmea_server_port;
 
     uint16_t transmitter_count;
@@ -37,31 +35,28 @@ struct settings_t {
 
     //display
     bool use_fahrenheit, use_depth_ft;
-    lat_lon_format_e lat_lon_format;
-    int contrast;
-    bool enabled_pages[20];
+    String lat_lon_format;
+    int contrast, backlight;
     bool show_status;
     bool landscape;
 
-} __attribute__((packed));
-
-void write_settings();
-
+    String enabled_pages;
+};
 
 enum wind_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
 struct wind_transmitter_t {
-    uint32_t magic;
-    uint8_t mac[6];
-
     float dir, knots;
     uint32_t t;  // last received message
 
+    // settings
     wind_position position;
     float offset;
-} __attribute__((packed));
+};
+
+bool settings_load(String suffix="");
+bool settings_store(String suffix="");
 
 extern std::map<uint64_t, wind_transmitter_t> wind_transmitters;
-
 
 extern settings_t settings;
 extern bool wifi_ap_mode;

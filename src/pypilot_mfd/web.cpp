@@ -14,6 +14,7 @@
 
 #include "settings.h"
 #include "display.h"
+#include "utils.h"
 #include "web.h"
 
 AsyncWebServer server(80);
@@ -39,9 +40,9 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
     else {
         JSONVar input = JSON.parse(message);
         for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
-            uint64_t mac = i->first;
+            String mac = mac_int_to_str(i->first);
             wind_transmitter_t &t = i->second;
-            if(input[mac]) {
+            if(input.hasOwnProperty(mac)) {
                 JSONVar s = input[mac];
                 if(s.hasOwnProperty("offset")) {
                     float offset = (double)s["offset"];
@@ -76,17 +77,13 @@ String jsonSensors() {
         JSONVar jwt;
         wind_transmitter_t &wt = i->second;
 
-        char macStr[18];
-        snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-                 wt.mac[0], wt.mac[1], wt.mac[2], wt.mac[3], wt.mac[4], wt.mac[5]);
-        jwt["mac"] = JSONVar(macStr);
         jwt["position"] = position_str(wt.position);
         jwt["offset"] = wt.offset;
         jwt["dir"] = wt.dir;
         jwt["knots"] = wt.knots;
         jwt["dt"] = t - wt.t;
 
-        sensors[i->first] = jwt;
+        sensors[mac_int_to_str(i->first)] = jwt;
     }
     return JSON.stringify(sensors);
 }
@@ -163,74 +160,14 @@ String processor(const String& var){
     if(var == "NMEASERVERPORT") return String(settings.nmea_server_port);
     if(var == "USEFAHRENHEIT")  return String(settings.use_fahrenheit);
     if(var == "USEDEPTHFT")  return String(settings.use_depth_ft);
-    if(var == "LATLONFORMAT")  return String(settings.lat_lon_format);
+    if(var == "LATLONFORMAT")  return settings.lat_lon_format;
     if(var == "CONTRAST")  return String(settings.contrast);
     if(var == "DISPLAYPAGES") return get_display_pages();
     if(var == "VERSION")    return String(VERSION);
     return String();
 }
 
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
-    Serial.printf("Listing directory: %s\r\n", dirname);
-
-    File root = fs.open(dirname);
-    if(!root){
-        Serial.println("- failed to open directory");
-        return;
-    }
-    if(!root.isDirectory()){
-        Serial.println(" - not a directory");
-        return;
-    }
-
-    File file = root.openNextFile();
-    while(file){
-        if(file.isDirectory()){
-            Serial.print("  DIR : ");
-            Serial.println(file.name());
-            if(levels){
-                listDir(fs, file.name(), levels -1);
-            }
-        } else {
-            Serial.print("  FILE: ");
-            Serial.print(file.name());
-            Serial.print("\tSIZE: ");
-            Serial.println(file.size());
-        }
-        file = root.openNextFile();
-    }
-}
-void readFile(fs::FS &fs, const char * path){
-    Serial.printf("Reading file: %s\r\n", path);
-
-    File file = fs.open(path);
-    if(!file || file.isDirectory()){
-        Serial.println("- failed to open file for reading");
-        return;
-    }
-
-    Serial.println("- read from file:");
-    while(file.available()){
-        Serial.write(file.read());
-    }
-    file.close();
-}
-
-lat_lon_format_e decode_lat_lon_format(String v)
-{
-    if(v == "DECIMAL_DEGREES")
-        return DECIMAL_DEGREES;
-    if(v == "DECIMAL_MINUTES")
-        return DECIMAL_MINUTES;
-    return DECIMAL_SECONDS;
-}
-
 void web_setup() {
-    if(!SPIFFS.begin(true)){
-        Serial.println("SPIFFS Mount Failed");
-        return;
-    }
-    listDir(SPIFFS, "/", 0);
 
     ws.onEvent(onEvent);
     server.addHandler(&ws);
@@ -247,7 +184,7 @@ void web_setup() {
             Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
         }
         request->send(SPIFFS, "/index.html", String(), 0, processor);
-        //write_settings();
+        settings_store();
     });
 
     server.on("/data", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -257,7 +194,7 @@ void web_setup() {
             Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
         }
         request->send(SPIFFS, "/index.html", String(), 0, processor);
-        //write_settings();
+        settings_store();
     });
 
     server.on("/display", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -270,16 +207,22 @@ void web_setup() {
             else if(p->name() =="usedepthft")
                 settings.use_depth_ft = p->value();
             else if(p->name() =="latlonformat")
-                settings.lat_lon_format = decode_lat_lon_format(p->value());
-            else for(int i=0; i < display_pages.size(); i++) {
-                page_info &page = display_pages[i];
-                if(page.name == p->name())
-                    page.enabled = p->value() == "true";
+                settings.lat_lon_format = p->value();
+
+            else {
+                String enabled_pages = "";
+                for(int i=0; i < display_pages.size(); i++) {
+                    page_info &page = display_pages[i];
+                    if(page.name == p->name())
+                        page.enabled = p->value() == "true";
+                    enabled_pages += p->value() ? "t" : "f";
+                }
+                settings.enabled_pages = enabled_pages;
             }
         }
         display_change_page(0);
         request->send(SPIFFS, "/index.html", String(), 0, processor);
-        write_settings();
+        settings_store();
     });
 
     server.on("/wind.js", HTTP_GET, [](AsyncWebServerRequest *request) {
