@@ -12,6 +12,8 @@
 
 #include "zeroconf.h"
 #include "pypilot_client.h"
+#include "settings.h"
+
 
 #include <map>
 #include <list>
@@ -20,7 +22,7 @@ struct pypilotClient
 {
     pypilotClient();
 
-    bool connect(String host, int port=23322);
+    bool connect(String, int port=23322);
     void disconnect();
     bool connected() { return !!sock; }
     //bool receive(String &name, JSONVar &value);
@@ -33,11 +35,12 @@ struct pypilotClient
     
     //JSONVar list;
 
+    String host;
+
     int      sock;
     String   sock_buffer;
 
     std::map<String, JSONVar> map;
-
     std::map<String, double> watchlist;
     bool connecting;
 };
@@ -47,8 +50,9 @@ pypilotClient::pypilotClient()
     sock = 0;
 }
 
-bool pypilotClient::connect(String host, int port)
+bool pypilotClient::connect(String h, int port)
 {
+    host = h;
     const char *addr = host.c_str();
 
     sockaddr_in dest_addr;
@@ -225,13 +229,13 @@ void pypilot_client_strobe() {
 }
 
 void pypilot_client_poll() {
-    if(millis() - strobe_time > 5000) {
+    if(millis() - strobe_time > 5000 || settings.pypilot_addr != pypilot_client.host) {
         if(pypilot_client.connected())
             pypilot_client.disconnect();
     } else if(pypilot_client.connected())
         pypilot_client.poll();
     else
-        pypilot_client.connect(pypilot_addr);
+        pypilot_client.connect(settings.pypilot_addr);
 }
 
 String pypilot_watch(String key)

@@ -17,9 +17,8 @@
 static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
 static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
 
-char pypilot_addr[40] = "";
-char signalk_addr[40] = "";
-int signalk_port;
+bool signalk_discovered;
+bool pypilot_discovered;
 
 void mdns_analyze_results(String service_name, mdns_result_t * results)
 {
@@ -42,14 +41,25 @@ void mdns_analyze_results(String service_name, mdns_result_t * results)
                // Serial.printf("%s=%s; ", key.c_str(), val.c_str());
                 if(service_name == "_http" && key == "swname" && val == "signalk-server") {
                     if(r->addr) {
-                        snprintf(signalk_addr, 32, IPSTR, IP2STR(&(r->addr->addr.u_addr.ip4)));
-                        signalk_port = r->port;
-                        printf("Found signalk server %s:%d\n", signalk_addr, signalk_port);
+                        char addr[64];
+                        snprintf(addr, sizeof addr, IPSTR, IP2STR(&(r->addr->addr.u_addr.ip4)));
+                        if(settings.signalk_addr != addr || settings.signalk_port != r->port) {
+                            settings.signalk_addr = addr;
+                            settings.signalk_port = r->port;
+                            settings_store();
+                            printf("Found signalk server %s:%d\n", addr, r->port);
+                        }
+                        signalk_discovered = true;
                     }
                 } else if(service_name == "_pypilot") {
-                        snprintf(pypilot_addr, 32, IPSTR, IP2STR(&(r->addr->addr.u_addr.ip4)));
-                        signalk_port = r->port;
-                        printf("Found pypilot %s\n", pypilot_addr);
+                    char addr[64];
+                    snprintf(addr, sizeof addr, IPSTR, IP2STR(&(r->addr->addr.u_addr.ip4)));
+                    if(settings.pypilot_addr != addr) {
+                        settings.pypilot_addr = addr;
+                        settings_store();
+                        printf("Found pypilot %s\n", addr);
+                    }
+                    pypilot_discovered = true;
                 }
             }
 
@@ -88,15 +98,15 @@ void find_mdns_service(const char * service_name, const char * proto)
 // look for pypilot/signalk to push data to
 void query_mdns_task(void *)
 {
-  for(;;) {
-    if(WiFi.status() == WL_CONNECTED) {  
-      if(!pypilot_addr[0] && settings.wifi_data == NMEA_PYPILOT)
-            find_mdns_service("_pypilot", "_tcp");
-      if(!signalk_addr[0] && (settings.wifi_data == NMEA_SIGNALK || settings.wifi_data == SIGNALK))
-          find_mdns_service("_http", "_tcp");
+    for(;;) {
+        if(WiFi.status() == WL_CONNECTED) {  
+            if(!pypilot_discovered && (settings.wifi_data == NMEA_PYPILOT))
+                find_mdns_service("_pypilot", "_tcp");
+            if(!signalk_discovered && (settings.wifi_data == SIGNALK || settings.wifi_data == NMEA_SIGNALK))
+                find_mdns_service("_http", "_tcp");
+        }
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
     }
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
-  }
 }
 
 void mdns_setup()

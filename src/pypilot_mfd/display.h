@@ -27,7 +27,7 @@ enum display_item_e { WIND_SPEED,
                       TIME,
                       DISPLAY_COUNT };
 
-enum data_source_e {LOCAL_DATA, USB_DATA, RS422_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
+enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
 
 void display_setup();
 void display_change_page(int dir);

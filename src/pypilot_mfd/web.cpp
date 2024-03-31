@@ -6,7 +6,6 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-//#include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 
@@ -29,33 +28,34 @@ wind_position str2position(String p) {
 }
 
 
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
-  AwsFrameInfo *info = (AwsFrameInfo*)arg;
-  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-    data[len] = 0;
-    String message = (char*)data;
-    Serial.printf("websocket got %s", data);
-    if(message == "scan") ; // do scan put all sensors on same channel
+void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
+{
+    AwsFrameInfo *info = (AwsFrameInfo*)arg;
+    if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+        data[len] = 0;
+        String message = (char*)data;
+        Serial.printf("websocket got %s", data);
+        if(message == "scan") ; // do scan put all sensors on same channel
 
-    else {
-        JSONVar input = JSON.parse(message);
-        for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
-            String mac = mac_int_to_str(i->first);
-            wind_transmitter_t &t = i->second;
-            if(input.hasOwnProperty(mac)) {
-                JSONVar s = input[mac];
-                if(s.hasOwnProperty("offset")) {
-                    float offset = (double)s["offset"];
-                    offset=fminf(fmaxf(offset, -180), 180);
-                    t.offset = offset;
+        else {
+            JSONVar input = JSON.parse(message);
+            for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
+                String mac = mac_int_to_str(i->first);
+                wind_transmitter_t &t = i->second;
+                if(input.hasOwnProperty(mac)) {
+                    JSONVar s = input[mac];
+                    if(s.hasOwnProperty("offset")) {
+                        float offset = (double)s["offset"];
+                        offset=fminf(fmaxf(offset, -180), 180);
+                        t.offset = offset;
+                    }
+                    if(s.hasOwnProperty("position"))
+                        t.position = str2position(s["position"]);
+                    break;
                 }
-                if(s.hasOwnProperty("position"))
-                    t.position = str2position(s["position"]);
-                break;
             }
         }
     }
-  }
 }
 
 String position_str(wind_position p)
@@ -97,35 +97,23 @@ String jsonCurrent()
     return output;
 }
 
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-  switch (type) {
-    case WS_EVT_CONNECT:
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-
-      ws.textAll(jsonSensors());
-      break;
-    case WS_EVT_DISCONNECT:
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
-      break;
-    case WS_EVT_DATA:
-      handleWebSocketMessage(arg, data, len);
-      break;
-    case WS_EVT_PONG:
-    case WS_EVT_ERROR:
-      break;
-  }
-}
-
-String get_wifi_data_str()
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
 {
-    switch(settings.wifi_data) {
-        case NMEA_PYPILOT: return "nmea_pypilot";
-        case NMEA_SIGNALK: return "nmea_signalk";
-        case NMEA_CLIENT:  return "nmea_client";
-        case NMEA_SERVER:  return "nmea_server";
-        case SIGNALK:      return "signalk";
+    switch (type) {
+        case WS_EVT_CONNECT:
+            Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+            ws.textAll(jsonSensors());
+            break;
+        case WS_EVT_DISCONNECT:
+            Serial.printf("WebSocket client #%u disconnected\n", client->id());
+            break;
+        case WS_EVT_DATA:
+            handleWebSocketMessage(arg, data, len);
+            break;
+        case WS_EVT_PONG:
+        case WS_EVT_ERROR:
+            break;
     }
-    return "";
 }
 
 String get_display_pages()
@@ -143,8 +131,9 @@ String get_display_pages()
     }
 }
 
-String processor(const String& var){
-    Serial.println(var);
+String processor(const String& var)
+{
+    //Serial.println(var);
     if(var == "SSID")       return settings.ssid;
     if(var == "PSK")        return settings.psk;
     if(var == "CHANNEL")    return String(settings.channel);
@@ -167,8 +156,8 @@ String processor(const String& var){
     return String();
 }
 
-void web_setup() {
-
+void web_setup()
+{
     ws.onEvent(onEvent);
     server.addHandler(&ws);
 
@@ -240,10 +229,10 @@ void web_setup() {
 static uint32_t last_sock_update;
 void web_poll()
 {
-  return;
-String s =jsonCurrent();
-Serial.println(s);
-return;
+    return;
+
+    String s = jsonCurrent();
+    Serial.println(s);
     ws.textAll(s);
 return;
     uint32_t t = millis();

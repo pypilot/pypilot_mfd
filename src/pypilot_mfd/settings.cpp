@@ -18,54 +18,24 @@
 
 String settings_filename = "settings.json";
 
-
+String get_wifi_data_str()
+{
+    switch(settings.wifi_data) {
+        case NMEA_PYPILOT: return "nmea_pypilot";
+        case NMEA_SIGNALK: return "nmea_signalk";
+        case NMEA_CLIENT:  return "nmea_client";
+        case NMEA_SERVER:  return "nmea_server";
+        case SIGNALK:      return "signalk";
+    }
+    return "";
+}
 
 bool settings_load(String suffix)
 {
     printf("settings load\n");
-    if(!SPIFFS.begin(true)){
-        Serial.println("SPIFFS Mount Failed");
-        return false;
-    }
-    listDir(SPIFFS, "/", 0);
 
     // start with default settings
     settings.magic = MAGIC;
-    settings.ssid = "pypilot";
-    settings.psk = "";
-
-    settings.channel = DEFAULT_CHANNEL;
-
-    settings.input_usb = true;
-    settings.output_usb = true;
-
-    settings.usb_baud_rate = 38400;
-    settings.rs422_baud_rate = 38400;
-
-    settings.input_wifi = false;
-    settings.output_wifi = false;
-    settings.wifi_data = NMEA_PYPILOT;
-
-    settings.nmea_client_port = 0;
-    settings.nmea_client_addr = "";
-    settings.nmea_server_port = 3600;
-
-    settings.transmitter_count = 0;
-    wind_transmitters.clear();
-
-    settings.compensate_accelerometer = false;
-    settings.use_fahrenheit = false;
-    settings.use_depth_ft = false;
-
-    settings.lat_lon_format = "minutes";
-    settings.contrast = 20;
-        
-    settings.enabled_pages = "ABCD";
-
-    settings.show_status = true;
-    settings.landscape = false;
-
-return true;
 
     /*
     EEPROM.begin(512);
@@ -88,55 +58,72 @@ return true;
     EEPROM.end();
     */
     File file = SPIFFS.open(settings_filename + suffix);
-    if(!file || file.isDirectory()){
+    JSONVar s;
+    bool ret = true;
+    if(file && !file.isDirectory()) {
+        String data;
+        while(file.available())
+            data += file.read();
+        file.close();
+
+        printf("READ SETTINGS %s\n", data.c_str());
+
+        s = JSON.parse(data);
+        if(!s.hasOwnProperty("magic") || s["magic"] != MAGIC) {
+            printf("settings file invalid/corrupted, will ignore data");
+            s = JSONVar();
+            ret = false;
+        }
+    } else {
         printf("failed to open '%s' for reading\n", settings_filename.c_str());
-        return false;
+        ret = false;
     }
 
-    String data;
-    while(file.available())
-        data += file.read();
-    file.close();
 
-    JSONVar s = JSON.parse(data);
-    if(!s.hasOwnProperty("magic") || s["magic"] != MAGIC) {
-        printf("settings file invalid/corrupted, will ignore data");
-        return false;
-    }
+#define LOAD_SETTING(NAME, DEFAULT)   if(s.hasOwnProperty(#NAME)) settings.NAME = s[#NAME]; else settings.NAME = DEFAULT;
+#define LOAD_SETTING_S(NAME, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = JSON.stringify(s[#NAME]); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = (TYPE)(int)s[#NAME]; else settings.NAME = DEFAULT;
 
-#define LOAD_SETTING_S(NAME)    if(s.hasOwnProperty(#NAME)) settings.NAME = JSON.stringify(s[#NAME]);
-#define LOAD_SETTING(NAME)    if(s.hasOwnProperty(#NAME)) settings.NAME = s[#NAME];
-
-#define LOAD_SETTING_BOUND(NAME, MIN, MAX) \
-    LOAD_SETTING(NAME) \
+#define LOAD_SETTING_BOUND(NAME, MIN, MAX, DEFAULT) \
+    LOAD_SETTING(NAME, DEFAULT) \
     if(settings.NAME < MIN) settings.NAME = MIN; \
-    if(settings.NAME < MAX) settings.NAME = MAX; \
+    if(settings.NAME > MAX) settings.NAME = MAX; \
 
-    LOAD_SETTING_S(ssid)
-    LOAD_SETTING_S(psk)
-    LOAD_SETTING(input_usb)
-    LOAD_SETTING(output_usb)
-    LOAD_SETTING(usb_baud_rate)
-    LOAD_SETTING(rs422_baud_rate)
-    LOAD_SETTING(input_wifi)
-    LOAD_SETTING(output_wifi)
-    LOAD_SETTING_S(nmea_client_addr)
-    LOAD_SETTING(nmea_client_port);
-    LOAD_SETTING(nmea_server_port);
+    LOAD_SETTING_S(ssid, "pypilot")
+    LOAD_SETTING_S(psk, "")
+    LOAD_SETTING(channel, DEFAULT_CHANNEL);
 
-    LOAD_SETTING(compensate_accelerometer)
+    LOAD_SETTING(input_usb, true)
+    LOAD_SETTING(output_usb, true)
+    LOAD_SETTING(usb_baud_rate, 115200)
+    LOAD_SETTING(rs422_baud_rate, 38400)
+
+    LOAD_SETTING(input_wifi, false)
+    LOAD_SETTING(output_wifi, false)
+    LOAD_SETTING_E(wifi_data, wireless_data_e, NMEA_PYPILOT)
+
+    LOAD_SETTING_S(nmea_client_addr, "")
+    LOAD_SETTING(nmea_client_port, 0);
+    LOAD_SETTING(nmea_server_port, 3600);
+
+    LOAD_SETTING(compensate_accelerometer, false)
 
     //display
-    LOAD_SETTING(use_fahrenheit)
-    LOAD_SETTING(use_depth_ft)
-    LOAD_SETTING_S(lat_lon_format)
-    LOAD_SETTING_BOUND(contrast, 50, 100)
-    LOAD_SETTING_BOUND(backlight, 30, 100)
+    LOAD_SETTING(use_fahrenheit, false)
+    LOAD_SETTING(use_depth_ft, false)
+    LOAD_SETTING_S(lat_lon_format, "minutes")
+    LOAD_SETTING_BOUND(contrast, 0, 40, 20)
+    LOAD_SETTING_BOUND(backlight, 0, 100, 50)
     
-    LOAD_SETTING(show_status)
-    LOAD_SETTING(landscape)
+    LOAD_SETTING(show_status, true)
+    LOAD_SETTING(landscape, false)
 
-    LOAD_SETTING_S(enabled_pages)
+    LOAD_SETTING_S(enabled_pages, "ABCD")
+
+    // mdns
+    LOAD_SETTING_S(pypilot_addr, "192.168.14.1")
+    LOAD_SETTING_S(signalk_addr, "10.10.10.1")
+    LOAD_SETTING(signalk_port, 3000)
 
     // transmitters
     if(s.hasOwnProperty("transmitters")) {
@@ -151,7 +138,7 @@ return true;
             wind_transmitters[maci] = tr;
         }
     }
-    return true;
+    return ret;
 }
 
 bool settings_store(String suffix)
@@ -168,15 +155,20 @@ bool settings_store(String suffix)
 
     STORE_SETTING(ssid)
     STORE_SETTING(psk)
+    STORE_SETTING(channel)
+
     STORE_SETTING(input_usb)
     STORE_SETTING(output_usb)
     STORE_SETTING(usb_baud_rate)
     STORE_SETTING(rs422_baud_rate)
+
     STORE_SETTING(input_wifi)
     STORE_SETTING(output_wifi)
+    STORE_SETTING(wifi_data)
+
     STORE_SETTING(nmea_client_addr)
-        STORE_SETTING(nmea_client_port);
-    STORE_SETTING(nmea_server_port);
+    STORE_SETTING(nmea_client_port)
+    STORE_SETTING(nmea_server_port)
 
     STORE_SETTING(compensate_accelerometer)
 
@@ -191,6 +183,11 @@ bool settings_store(String suffix)
     STORE_SETTING(landscape)
 
     STORE_SETTING(enabled_pages)
+
+    // mdns
+    STORE_SETTING(pypilot_addr)
+    STORE_SETTING(signalk_addr)
+    STORE_SETTING(signalk_port)
 
     // transmitters
     JSONVar transmitters;
@@ -215,4 +212,5 @@ bool settings_store(String suffix)
     int len = data.length();
     file.write(cdata, len);
     file.close();
+    return true;
 }

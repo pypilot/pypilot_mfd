@@ -210,7 +210,7 @@ void read_pressure_temperature()
         nmea_send(buf);
 
         float pressuref = pressure_comp/1.e5;
-        display_data_update(BAROMETRIC_PRESSURE, pressuref, LOCAL_DATA);
+        display_data_update(BAROMETRIC_PRESSURE, pressuref, ESP_DATA);
 
 
         int32_t temperature = temperature_comp;
@@ -219,7 +219,7 @@ void read_pressure_temperature()
         snprintf(buf, sizeof buf, "MTA,%d.%02d,C", a, abs(r));
         nmea_send(buf);
         float temperaturef = temperature / 100.0f;
-        display_data_update(AIR_TEMPERATURE, temperaturef, LOCAL_DATA);
+        display_data_update(AIR_TEMPERATURE, temperaturef, ESP_DATA);
 
         if(settings.wifi_data == SIGNALK) {
             signalk_send("environment.outside.temperature", temperaturef+273.15);

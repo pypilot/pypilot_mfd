@@ -6,9 +6,9 @@
 <body>
 <h1>Wireless Network Configuration</h1>
 <form action='network' method='post'>
-<input type='text' name='ssid' value='%SSID%' autofocus />
-<br><input type='text' name='psk' value='%PSK%' />
-<br><div name='channel'>%CHANNEL%</div>
+<br>SSID<input type='text' name='ssid' value='%SSID%' autofocus />
+<br>PSK<input type='text' name='psk' value='%PSK%' />
+<br>Wireless Channel<span name='channel'>%CHANNEL%</span>
 <input type="submit" value="Submit" />
 </form>
 <p><h2>Wind Sensors</h2>
@@ -36,13 +36,11 @@
     <br><h3>WIFI data</h3>
     <br><input type='checkbox' name='input_wifi' value=%INPUTWIFI%>Input</input>
     <input type='checkbox' name='output_wifi' value=%OUTPUTWIFI%>Output</input>
-    <fieldset>
-      <br><input type='radio' name='nmea_pypilot'>pypilot NMEA0183 port 20220</input> (<div name='pypilot_detected'>not detected</div>)
-      <br><input type='radio' name='nmea_signalk'>signalk-server NMEA0183 port 10110</input> (<div name='signalk_nmea_detected'>not detected</div>)
-      <br><input type='radio' name='nmea_client'>act as tcp client <input><input type='text' name='nmea_tcp_host' value=%NMEACLIENTADDR% /> <input type='number' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% />
-      <br><input type='radio' name='nmea_server'>act as tcp server</input> (host "wind.local") listening port: <input type='text' name='nmea_tcp_server port' value=%NMEASERVERPORT% />
-      <br><input type='radio' name='signalk'>signalk-server SignalK</input> (<div name='signalk_detected'>not detected</div>)  To output to signalk you may have to <a href='signalk.local:3000'>grant access</a>
-    </fieldset>
+      <br><input type='radio' name='wifidata' id='nmea_pypilot'>pypilot NMEA0183 port 20220</input> (<span name='pypilot_detected'>not detected</span>)
+      <br><input type='radio' name='wifidata' id='nmea_signalk'>signalk-server NMEA0183 port 10110</input> (<span name='signalk_detected'>not detected</span>)
+      <br><input type='radio' name='wifidata' id='nmea_client'>act as tcp client </input><input type='text' name='nmea_tcp_host' value=%NMEACLIENTADDR% /> <input type='number' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% />
+      <br><input type='radio' name='wifidata' id='nmea_server'>act as tcp server</input> (host "wind.local") listening port: <input type='text' name='nmea_tcp_server port' value=%NMEASERVERPORT% />
+      <br><input type='radio' name='wifidata' id='signalk'>signalk-server SignalK</input> (<span name='signalk_detected'>not detected</span>)  To output to signalk you may have to <a href='signalk.local:3000'>grant access</a>
     <input type="submit" value="Submit" />
   </form>
   <script type='text/javascript'>
@@ -55,15 +53,15 @@
 <p><h2>Display</h2>
   <form action='display' method='post'>
     <input type='checkbox' name='usefahrenheit' value=%USEFAHRENHEIT%>Use Fahrenheit (default celcius)</input>
-    <input type='checkbox' name='usedepthft' value=%USEDEPTHFT%>Use depth ft (default meters)</input>
-    <select name='latlonformat' value=%LATLONFORMAT%>
+    <br><input type='checkbox' name='usedepthft' value=%USEDEPTHFT%>Use depth ft (default meters)</input>
+    <br><select name='latlonformat' value=%LATLONFORMAT%>
       <option value='DECIMAL_DEGREES'>Decimal Degrees</option>
       <option value='DECIMAL_MINUTES'>Decimal Minutes</option>
       <option value='DECIMAL_SECONDS'>Decimal Seconds</option>
     </select>
-    <input type='number' name='contrast' value=%Contrast%>LCD contrast</input>
+    <br><input type='number' name='contrast' value=%Contrast%>LCD contrast</input>
     %DISPLAYPAGES%
-    <input type="submit" value="Submit" />
+    <br><input type="submit" value="Submit" />
     </form>
   <p><h5>Wind display %VERSION% written by Sean D'Epagnier</h5>
 </body>

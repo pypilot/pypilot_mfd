@@ -41,6 +41,10 @@ struct settings_t {
     bool landscape;
 
     String enabled_pages;
+
+    // cache mdns 
+    String pypilot_addr, signalk_addr;
+    int signalk_port;
 };
 
 enum wind_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
@@ -52,6 +56,8 @@ struct wind_transmitter_t {
     wind_position position;
     float offset;
 };
+
+String get_wifi_data_str();
 
 bool settings_load(String suffix="");
 bool settings_store(String suffix="");

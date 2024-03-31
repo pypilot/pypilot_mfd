@@ -49,8 +49,8 @@ String getItemLabel(display_item_e item) {
     case GPS_HEADING: return "GPS Heading";
     case LATITUDE: return "Lat";
     case LONGITUDE: return "Lon";
-    case WATER_SPEED: return "Water Spd";
-    case COMPASS_HEADING: return "Compass Hdg";
+    case WATER_SPEED: return "Water Speed";
+    case COMPASS_HEADING: return "Compass Heading";
     case PITCH:        return "Pitch";
     case HEEL:         return "Heel";
     case DEPTH:        return "Depth";
@@ -200,7 +200,6 @@ struct text_display : public display {
             u8g2.setFont(label_font);
             label_w = u8g2.getStrWidth(str.c_str());
             label_h = 7;
-
         }
     }
 
@@ -231,7 +230,7 @@ struct text_display : public display {
             u8g2.setFont(font);
 
             int width = u8g2.getUTF8Width(str.c_str());
-            if(width < wt) {
+            if(width+label_w < wt || ht+label_h<h) {
                 wt = width;
                 break;
             }
@@ -248,8 +247,8 @@ struct text_display : public display {
         selectFont(wt, str);
 
         bool label = true;
-        if(ht + label_h > h && wt + label_w > w)
-            label = false;
+        //if(ht + label_h > h && wt + label_w > w)
+        //    label = false;
 
         int yp = y;
         if(label_h) yp += label_h/2;
@@ -259,8 +258,13 @@ struct text_display : public display {
         //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", getLabel(item).c_str(), x, y, w, h, wt, ht, label_w, label_h);
         u8g2.drawUTF8(xp, yp, str.c_str());
         if(label) {
+            int lx = x, ly = y;
+            if(ht + label_h < h)
+                lx += w/2 - label_w/2;
+            else if(wt + label_w < w)
+                ly += h/2 - label_h/2;
             u8g2.setFont(label_font);
-            u8g2.drawUTF8(x, y, getLabel().c_str());
+            u8g2.drawUTF8(lx, ly, getLabel().c_str());
         }
     }
 
@@ -543,7 +547,7 @@ struct gauge : public display, public display_item {
         }
     }
 
-    void render_dial() {
+    virtual void render_dial() {
         // draw actual arrow toward wind direction
         float val = display_data[item].value;
         if (age() > 5000  || isnan(val))
@@ -569,20 +573,45 @@ struct gauge : public display, public display_item {
 
         nxp = (xp + 15 * nxp) / 16;
         nyp = (yp + 15 * nyp) / 16;
-        xp = xc + nxp - 31, yp = yc + nyp - 20;
+        xp = xc + nxp, yp = yc + nyp;
 
         if (w > 100)
             u8g2.setFont(u8g2_font_helvB24_tf);
         else
             u8g2.setFont(u8g2_font_helvB14_tf);
 
-        u8g2.drawStr(xp, yp, dialText().c_str());
+        int tw = u8g2.getStrWidth(dialText().c_str());
+        xp -= tw/2; // center text
 
-        u8g2.setFont(u8g2_font_5x7_tf);
+        u8g2.drawStr(xp, yp, dialText().c_str());
+    }
+
+    void render_label() {
         String label = getItemLabel(item);
-        int lw = u8g2.getStrWidth(label.c_str());
-        if(lw < w/2)
-            u8g2.drawStr(x, y, label.c_str());
+        int space1 = label.indexOf(' '), space2 = label.lastIndexOf(' ');
+        String label1 = space1 > 0 ? label.substring(0, space1) : label;
+        String label2 = space2 > 0 ? label.substring(space2) : "";
+
+        const uint8_t *fonts[] = {u8g2_font_helvB08_tf, u8g2_font_5x7_tf, 0};
+        int fth[] = {10, 8, 0};
+        int lw1, lw2;
+        for(int i=0; i<(sizeof fonts)/(sizeof *fonts); i++) {
+            if(!fonts[i])
+                return;
+            u8g2.setFont(fonts[i]);
+            lw1 = u8g2.getStrWidth(label1.c_str());
+            lw2 = u8g2.getStrWidth(label2.c_str());
+
+            int x1 = -w/2+lw1, y12 = -h/2+fth[i];
+            int x2 = w/2-lw2;
+            int r1_2 = x1*x1 + y12*y12, r2_2 = x2*x2 + y12*y12;
+            int mr = r*r*9/10;
+            //printf("%s   %d %d %d   %d %d %d\n", label1.c_str(), x1, x2, y12, r1_2, r2_2, mr);
+            if(r1_2 > mr || r2_2 > mr)
+                break;
+        }
+        u8g2.drawStr(x, y, label1.c_str());
+        u8g2.drawStr(x+w-lw2, y, label2.c_str());
     }
 
     String dialText()
@@ -596,6 +625,7 @@ struct gauge : public display, public display_item {
         render_ring();
         render_ticks();
         render_dial();
+        render_label();
     }
 
     int xc, yc, r;
@@ -648,7 +678,7 @@ struct wind_direction_gauge : public gauge {
     }
 };
 
-float boat_coords[] = {0, -.6, .15, -.4, .2, -.25, .15, .5, -.15, .5, -.2, -.25, -.15, -.4, 0, -.6};
+float boat_coords[] = {0, -.5, .15, -.35, .2, -.25, .15, .45, -.15, .45, -.2, -.25, -.15, -.35, 0, -.5};
 
 void drawThickLine(int x1, int y1, int x2, int y2, int w)
 {
@@ -666,9 +696,7 @@ void drawThickLine(int x1, int y1, int x2, int y2, int w)
 struct heading_gauge : public gauge {
     heading_gauge(display_item_e _i) : gauge(_i, -180, 180, -180, 180, 45) {}
 
-    void render() {
-        render_ring();
-        render_ticks();
+    void render_dial() {
         if (age() > 5000)
             return;
         float v = display_data[item].value;
@@ -676,17 +704,28 @@ struct heading_gauge : public gauge {
         int lx, ly;
         float rad = deg2rad(v);
         float s = sin(rad), c = cos(rad);
-        int w = r/25;
+        int lw = r/25;
         for(int i=0; i<(sizeof boat_coords)/(sizeof *boat_coords); i+=2) {
             float x = boat_coords[i], y = boat_coords[i+1];
             int x1 = (c*x - s*y)*r + xc;
             int y1 = (c*y + s*x)*r + yc;
             if(i>0)
-                drawThickLine(x1, y1, lx, ly, w);
+                drawThickLine(x1, y1, lx, ly, lw);
 
             lx = x1;
             ly = y1;
         }
+
+        if (w > 100)
+            u8g2.setFont(u8g2_font_helvB24_tf);
+        else
+            u8g2.setFont(u8g2_font_helvB14_tf);
+
+        String str = dialText();
+        int tw = u8g2.getStrWidth(str.c_str());
+        int xp = xc - tw/2;
+        int yp = yc + h*.22;
+        u8g2.drawStr(xp, yp, str.c_str());
     }
 };
 
@@ -1593,7 +1632,7 @@ void display_setup()
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    cur_page='A'-'A';
+    cur_page='F'-'A';
 
     if(settings.landscape) {
         page_width = 256;
@@ -1677,22 +1716,31 @@ static void render_status()
 {
     u8g2.setFont(u8g2_font_helvB08_tf);
     int y = page_height;
+    char wifi[] = "WIFI";
     if (WiFi.status() == WL_CONNECTED)
-        u8g2.drawStr(0, y, "WIFI");
+        u8g2.drawStr(0, y, wifi);
 
+    int x = u8g2.getStrWidth(wifi) + 15;
     // show data source
-    const char *source[] = {"E", "U", "R", "W"};
+    const char *source[] = {"ESP", "USB", "RS422", "W"};
     uint32_t t0 = millis();
+    
     for(int i = 0; i<DATA_SOURCE_COUNT; i++) {
         uint32_t dt = t0 - data_source_time[i];
-        if(dt < 5000)
-            u8g2.drawStr(60+i*15, y, source[i]);
+        if(dt < 5000) {
+            u8g2.drawStr(x, y, source[i]);
+            x += u8g2.getStrWidth(source[i]) + 5;
+            if(i==WIFI_DATA)
+                u8g2.drawStr(x, y, get_wifi_data_str().c_str());
+        }
     }
 
     // show page letter
     char letter[] = "A";
     letter[0] += cur_page;
-    u8g2.drawStr(page_width - 20, y, letter);
+    int w = u8g2.getStrWidth(letter);
+
+    u8g2.drawStr(page_width - w, y, letter);
 }
 
 
@@ -1700,7 +1748,7 @@ void display_render()
 {
     read_analog_pins();
 
-    u8g2.setContrast(settings.contrast + 160);
+    u8g2.setContrast(160 + settings.contrast);
     uint32_t t0 = millis();
     u8g2.clearBuffer();
     u8g2.setDrawColor(1);

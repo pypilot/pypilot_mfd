@@ -26,8 +26,8 @@
 
 String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2UiOiJweXBpbG90X21mZC0wMzgyMjQ2OTg4MCIsImlhdCI6MTcxMTY5MDA0MCwiZXhwIjoxNzQzMjQ3NjQwfQ.T-g3vkQMz5e6lbp9UGNEZgo6mEJex0i8eOeOUGUCGOI";
 String access_url;
-String uid;
 String ws_url;
+String uid;
 
 float to_knots(float m_s) { return m_s * 1.94384; }
         float celcius(float kelvin) { kelvin - 273.15; }
@@ -169,13 +169,13 @@ static void request_access()
 
     if(!access_url.length()) {
         HTTPClient client;
-        client.begin(signalk_addr, signalk_port, "/signalk/v1/access/requests");
+        client.begin(settings.signalk_addr, settings.signalk_port, "/signalk/v1/access/requests");
         client.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
         uid = "pypilot_mfd-" + random_number_string(11);
         int code = client.POST("clientId="+uid+"&description=pypilot_mfd");
         if(code != 202 && code != 400) {
-            printf("signalk http request failed to post %s:%d %d\n", signalk_addr, signalk_port, code);
+            printf("signalk http request failed to post %s:%d %d\n", settings.signalk_addr.c_str(), settings.signalk_port, code);
             settings.output_wifi = false;
         } else {
             String response = client.getString();
@@ -192,7 +192,7 @@ static void request_access()
     }
 
     HTTPClient client;
-    client.begin(signalk_addr, signalk_port, access_url);
+    client.begin(settings.signalk_addr, settings.signalk_port, access_url);
     int code = client.GET();
     if(code != 200) {
         printf("signalk http get access url failed %d\n", code);
@@ -283,8 +283,7 @@ static void signalk_connect()
     signalk_connect_time = t0;
 
     HTTPClient client;
-    // Your Domain name with URL path or IP address with path
-    client.begin(signalk_addr, signalk_port, "/signalk");
+    client.begin(settings.signalk_addr, settings.signalk_port, "/signalk");
 
     int httpResponseCode = client.GET();
     String payload;
@@ -313,7 +312,7 @@ static void signalk_connect()
 
     //ws_url += "?subscribe=none";
     esp_websocket_client_config_t ws_cfg = {0};
-        ws_cfg.uri = ws_url.c_str();
+    ws_cfg.uri = ws_url.c_str();
     //ws_cfg.uri = "ws://10.10.10.1:3000/signalk/v1/stream";
     //ws_cfg.uri = "ws://10.10.10.66:12345/signalk/v1/stream";
 

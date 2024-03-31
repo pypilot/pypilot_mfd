@@ -324,7 +324,7 @@ static void close_server() {
     server_sock = 0;
 }
 
-static bool connect_client()
+static bool connect_client(String addr, int port)
 {
     uint32_t t0 = millis();
     if(client.sock)
@@ -333,20 +333,7 @@ static bool connect_client()
     if(t0 - client.time < 10000)
         return false;
 
-    String addr;
-    int port;
-    if(settings.wifi_data == NMEA_PYPILOT) {
-        addr = pypilot_addr;
-        port = 20220;
-    } else if(settings.wifi_data == NMEA_SIGNALK) {
-        addr = signalk_addr;
-        port = 10110;
-    } else if(settings.wifi_data == NMEA_CLIENT) {
-        addr = settings.nmea_client_addr;
-        port = settings.nmea_client_port;
-    }
-
-    if(!addr)
+    if(!addr || !port)
         return false;
 
     sockaddr_in dest_addr;
@@ -429,10 +416,14 @@ static void poll_client(ClientSock &c)
         if(ret < 0) {
             if(errno != EAGAIN) {
                 Serial.printf("client recv error %d %d\n", c.sock, errno);
+                if(errno == 113) {
+                    printf("ERROR 113, restart\n");
+                    ESP.restart();
+                }
                 if(settings.wifi_data == NMEA_PYPILOT) // find pypilot address again with mdns
-                    *pypilot_addr=0;
+                    pypilot_discovered=0;
                 else if(settings.wifi_data == NMEA_SIGNALK) // find address again with mdns
-                    *signalk_addr=0;
+                    signalk_discovered=0;
                 c.close();
             } break;
         } else if(ret > 0) {
@@ -526,20 +517,18 @@ void nmea_poll()
         return;
     last_poll_time = t0;
 
-
     static String cur_addr;
     static int cur_port;
 
     String addr = cur_addr;
     int port;
-
     switch(settings.wifi_data) {
         case NMEA_PYPILOT:
-            addr = pypilot_addr;
+            addr = settings.pypilot_addr;
             port = 20220;
             break;
         case NMEA_SIGNALK:
-            addr = signalk_addr;
+            addr = settings.signalk_addr;
             port = 10110;
             break;
         case NMEA_CLIENT:
@@ -573,7 +562,7 @@ void nmea_poll()
         poll_server();
     } else {
         if(!client.sock) {
-            if(!connect_client())
+            if(!connect_client(cur_addr, cur_port))
                 return;
         }
         poll_client(client);

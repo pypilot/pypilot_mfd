@@ -18,6 +18,7 @@
 #include "nmea.h"
 #include "signalk.h"
 #include "pypilot_client.h"
+#include "utils.h"
 
 #include "settings.h"
 
@@ -94,6 +95,9 @@ void setup_wifi()
             WiFi.begin(settings.ssid.c_str(), settings.psk.c_str());
         } else
             WiFi.disconnect();
+
+        signalk_discovered = false;
+        pypilot_discovered = false;
     }
 }
 
@@ -272,8 +276,8 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
             signalk_send("environment.wind.speedApparent", knots*.514444f);
         }
 
-        display_data_update(WIND_SPEED, knots, LOCAL_DATA);
-        display_data_update(WIND_DIRECTION, lpdir, LOCAL_DATA);
+        display_data_update(WIND_SPEED, knots, ESP_DATA);
+        display_data_update(WIND_DIRECTION, lpdir, ESP_DATA);
     }
 
     if(wind_transmitters.find(mac_int) != wind_transmitters.end()) {
@@ -417,6 +421,10 @@ void setup()
 
     Serial2.setTimeout(0);
 
+    if(!SPIFFS.begin(true))
+        Serial.println("SPIFFS Mount Failed");
+    else
+        listDir(SPIFFS, "/", 0);
 
     if(settings_load())
         settings_store(".bak");
