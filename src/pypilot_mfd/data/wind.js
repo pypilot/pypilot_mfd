@@ -23,6 +23,7 @@ function getReadings(){
     websocket.send('getReadings');
 }
 
+var init_timeout = 1;
 function initWebSocket() {
     console.log('Trying to open a WebSocket connection…');
     websocket = new WebSocket(gateway);
@@ -34,12 +35,16 @@ function initWebSocket() {
 // When websocket is established, call the getReadings() function
 function onOpen(event) {
     console.log('Connection opened');
+    init_timeout = 1;
     getReadings();
 }
 
 function onClose(event) {
     console.log('Connection closed');
-    setTimeout(initWebSocket, 2000);
+    setTimeout(initWebSocket, init_timeout*1000);
+    init_timeout*=2;
+    if(init_timeout > 10)
+        init_timeout = 10;
 }
 
 function scanSensors(event) {
@@ -80,14 +85,16 @@ function render(direction, knots)
     circle(w/2, h/2, r);
     ctx.stroke();
 
-    let x = Math.sin(rad(direction));
-    let y = Math.cos(rad(direction));
+    if(direction != null) {
+        let x = Math.sin(rad(direction));
+        let y = Math.cos(rad(direction));
 
-    ctx.beginPath();
-    ctx.moveTo(w/2-u*y, h/2-u*x);
-    ctx.lineTo(w/2+x*r, h/2-y*r);
-    ctx.lineTo(w/2+u*y, h/2+u*x);
-    ctx.fill(); // Render the arrow
+        ctx.beginPath();
+        ctx.moveTo(w/2-u*y, h/2-u*x);
+        ctx.lineTo(w/2+x*r, h/2-y*r);
+        ctx.lineTo(w/2+u*y, h/2+u*x);
+        ctx.fill(); // Render the arrow
+    }
 
     ctx.font = Math.round(w/4) + 'px serif';
     ctx.fillText(Math.round(knots)+' kt', w*.4, h*.7);    
@@ -96,22 +103,23 @@ function render(direction, knots)
 var wind_sensors = {};
 // Function that receives the message from the ESP32 with the readings
 function onMessage(event) {
-    console.log(event.data);
+    //console.log(event.data);
     var msg = JSON.parse(event.data);
 
     // message just updates active display
     if('direction' in msg) {
-        document.getElementById('wind_direction').innerText = Math.round(msg['direction']);
-        document.getElementById('wind_knots').innerText = Math.round(msg['knots']*10)/10;
+        let dirt = msg['direction'] === null ? '---' : msg['direction'].toFixed(1);
+        document.getElementById('wind_direction').innerText = dirt;
+        document.getElementById('wind_knots').innerText = msg['knots'].toFixed(2);
         render(msg['direction'], msg['knots']);
         return;
     }
     
     function inp(mac, v) {
         var options = '';
-        for(o in ['Primary', 'Secondary', 'Port', 'Starboard', 'Ignored'])
-            options += '<option value="' + o + '">' + o + '</options>';
-        return '<select data-mac="' + mac + '" oninput="handlePositionChange(this)">' + options + '</select>';
+        for(o of ['Primary', 'Secondary', 'Port', 'Starboard', 'Ignored'])
+            options += '<option value="' + o + '"' + (v == o ? ' selected' : '') + '>' + o + '</options>';
+        return '<select data-mac="' + mac + '"style="width: 100%;" oninput="handlePositionChange(this)">' + options + '</select>';
     }
 
     function dir(mac, v) {
@@ -121,8 +129,8 @@ function onMessage(event) {
     
     var table = document.getElementById('wind_sensors_table');
     //mac Position Offset Direction Speed Latency
-    for (var v in msg) {
-        let mac = v['mac'];
+    for (var mac in msg) {
+        let v = msg[mac];
         if(!(mac in wind_sensors)) {
             let row = table.insertRow(1);
             row.insertCell(-1).innerText = mac;
@@ -134,9 +142,9 @@ function onMessage(event) {
             wind_sensors[mac] = row;
         }
         let row = wind_sensors[mac];
-        row[3].innerText = v['dir'] + 'deg';
-        row[4].innerText = v['knots'] + 'kt';
-        row[5].innerText = v['dt'] + 'ms';
+        row.cells[3].innerText = (v['dir'] === null) ? '---' : v['dir'].toFixed(1) + ' deg';
+        row.cells[4].innerText = v['knots'].toFixed(2) + 'kt';
+        row.cells[5].innerText = v['dt'] + 'ms';
     }
 
     // remove any sensors we no longer receive

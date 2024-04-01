@@ -70,7 +70,7 @@ String position_str(wind_position p)
     return "Invalid";
 }
 
-String jsonSensors() {
+static String jsonSensors() {
     uint32_t t = millis();
     JSONVar sensors;
     for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) {
@@ -88,15 +88,12 @@ String jsonSensors() {
     return JSON.stringify(sensors);
 }
 
-String jsonCurrent()
+static String jsonCurrent()
 {
-    if(lpdir < 0)
-        return String();
     JSONVar j;
     j["direction"] = lpdir;
     j["knots"] = knots;
-    String output = JSON.stringify(j);
-    return output;
+    return JSON.stringify(j);
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -237,18 +234,19 @@ void web_setup()
 static uint32_t last_sock_update;
 void web_poll()
 {
-    uint32_t t = millis();
-    if(t - last_sock_update < 200)
-        return;
-    last_sock_update = t;
-
     String s = jsonCurrent();
     if(s) {
         //Serial.println("ws: " + s);
         ws.textAll(s);
     }
 
+    uint32_t t = millis();
+    if(t - last_sock_update < 1000)
+        return;
+    last_sock_update = t;
+
+
     ws.cleanupClients();
 
-//    ws.textAll(jsonSensors());
+    ws.textAll(jsonSensors());
 }

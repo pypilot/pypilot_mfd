@@ -32,9 +32,8 @@ esp_now_peer_info_t chip;
 #define ID  0xf179
 #define CHANNEL_ID 0x0a21
 
-enum keys {KEY_PAGE_UP, KEY_SCALE, KEY_PAGE_DOWN, KEY_COUNT};
-int key_pin[KEY_COUNT] = {25, 26, 27};
-
+enum keys {KEY_PAGE_UP, KEY_SCALE, KEY_PAGE_DOWN, KEY_0, KEY_COUNT};
+int key_pin[KEY_COUNT] = {25, 26, 270, };
 
 std::map<uint64_t, wind_transmitter_t> wind_transmitters;
 
@@ -148,31 +147,28 @@ float lpdir = NAN, knots = 0;
 
 void lowpass_direction(float dir)
 {
-    if(dir >= 0) {
-        float ldir = dir;
-        //ldir += settings.wind_offset;
-        if(ldir > 360)
-            ldir -= 360;
-        // lowpass wind direction                                                                                                                                                                
-        if(lpdir - ldir > 180)
-            ldir += 360;
-        else if(ldir - lpdir > 180)
-            ldir -= 360;
+    if(isnan(dir)) {
+        lpdir = dir;
+        return;
+    }
 
-          //  Serial.printf("%x %f %f\n", packet->id, ldir, lpdir);
+    float ldir = dir;
+    if(ldir > 360)
+        ldir -= 360;
+    // lowpass wind direction                                                                                                                                                                
+    if(lpdir - ldir > 180)
+        ldir += 360;
+    else if(ldir - lpdir > 180)
+        ldir -= 360;
+      //  Serial.printf("%x %f %f\n", packet->id, ldir, lpdir);
 
-        const float lp = .2;
-        if(isnan(lpdir))
-            lpdir = dir;
-        else if(fabs(lpdir - ldir) < 180) // another test which should never fail                                                                                                                  
-            lpdir = lp*ldir + (1-lp)*lpdir;
+    const float lp = .2;
+    if(isnan(lpdir))
+        lpdir = dir;
+    else if(fabs(lpdir - ldir) < 180) // another test which should never fail                                                                                                                  
+        lpdir = lp*ldir + (1-lp)*lpdir;
 
-        if(lpdir >= 360)
-            lpdir -= 360;
-        else if(lpdir < 0)
-            lpdir += 360;
-    } else
-        lpdir = NAN;
+    lpdir = resolv(lpdir);
 }
 
 uint64_t cur_primary;
@@ -212,7 +208,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 
     float dir;  
     if(packet->angle == 0xffff)
-        dir = -1; // invalid
+        dir = NAN; // invalid
     else
         dir = 360 - packet->angle*360.0f/16384.0f;
 
@@ -258,8 +254,34 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 #endif
     uint64_t mac_int = mac_as_int(mac_addr);
     uint32_t t = millis();
+
+    if(wind_transmitters.find(mac_int) != wind_transmitters.end()) {
+        wind_transmitter_t &wt = wind_transmitters[mac_int];
+        wt.dir = resolv(dir + wt.offset);
+        wt.knots = knots;
+        wt.t = t;
+        if(!isnan(dir)) {
+            if((wt.position == PRIMARY) ||
+               (wt.position == SECONDARY && !cur_primary) ||
+               (wt.position == PORT && (dir > 200 && dir < 340)) ||
+               (wt.position == STARBOARD && (dir > 20 && dir < 160)))
+                cur_primary = mac_int;
+            if(cur_primary == mac_int)
+                cur_primary_time = t;
+        }
+    } else {
+        wind_transmitter_t wt;
+        wt.dir = dir;
+        wt.knots = knots;
+        wt.offset = 0;
+        wt.position = SECONDARY;
+        wt.t = t;
+        wind_transmitters[mac_int] = wt;
+    }
+
     if(mac_int == cur_primary) {
-        lowpass_direction(dir);
+        wind_transmitter_t &wt = wind_transmitters[mac_int];
+        lowpass_direction(wt.dir);
 
         char buf[128];
         if(!isnan(lpdir)) 
@@ -277,30 +299,6 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 
         display_data_update(WIND_SPEED, knots, ESP_DATA);
         display_data_update(WIND_DIRECTION, lpdir, ESP_DATA);
-    }
-
-    if(wind_transmitters.find(mac_int) != wind_transmitters.end()) {
-        wind_transmitter_t &wt = wind_transmitters[mac_int];
-        wt.dir = dir + wt.offset;
-        wt.knots = knots;
-        wt.t = t;
-        if(dir >= 0) {
-            if((wt.position == PRIMARY) ||
-               (wt.position == SECONDARY && !cur_primary) ||
-               (wt.position == PORT && (dir > 200 && dir < 340)) ||
-               (wt.position == STARBOARD && (dir > 20 && dir < 160)))
-                cur_primary = mac_int;
-            if(cur_primary == mac_int)
-                cur_primary_time = t;
-        }
-    } else {
-        wind_transmitter_t wt;
-        wt.dir = dir;
-        wt.knots = knots;
-        wt.offset = 0;
-        wt.position = SECONDARY;
-        wt.t = t;
-        wind_transmitters[mac_int] = wt;
     }
 
     if(t - cur_primary_time > 1000)
@@ -441,7 +439,6 @@ void setup()
 
    // bmX280_setup();
 
-    pinMode(0, INPUT_PULLUP);
     pinMode(35, INPUT_PULLUP);
     for(int i=0; i<KEY_COUNT; i++)
         pinMode(key_pin[i], INPUT_PULLUP);
@@ -469,6 +466,39 @@ static void toggle_wifi_mode()
     }
 }
 
+static void read_keys()
+{
+    static uint32_t key_time, timeout = 500;
+    static bool key_pressed;
+    uint32_t t0 = millis();
+    if(key_pressed) {
+        if(t0-key_time < timeout) // allow new presses to process
+            return;  // ignore keys down until timeout
+        key_pressed = false;
+        timeout = 300; // faster repeat timeout
+    }
+
+    if(!digitalRead(key_pin[KEY_PAGE_UP])) {
+        if(!digitalRead(key_pin[KEY_PAGE_DOWN]))
+            toggle_wifi_mode();
+        else
+            display_change_page(-1);
+    } else if(!digitalRead(key_pin[KEY_PAGE_DOWN]))
+        display_change_page(1);
+    else  if(!digitalRead(key_pin[KEY_SCALE]))
+        display_change_scale();
+    else if(!digitalRead(0)) {
+        display_change_page(1);
+     //   toggle_wifi_mode();
+    } else {
+        timeout = 500;
+        return;
+    }
+
+    key_pressed = true;
+    key_time = t0;
+}
+
 void loop()
 {
     uint32_t t0 = millis();
@@ -479,31 +509,7 @@ void loop()
         tl = t0;
     }
 
-    // read keys
-    static uint32_t wifi_toggle_hold;
-    if(!digitalRead(key_pin[KEY_PAGE_UP])) {
-        if(!digitalRead(key_pin[KEY_PAGE_DOWN])) {
-            if(!wifi_toggle_hold) {
-                wifi_toggle_hold = t0;
-            } else if(t0 - wifi_toggle_hold > 1000) {
-                toggle_wifi_mode();
-                wifi_toggle_hold = 0;
-            }
-        } else {
-            display_change_page(-1);
-            wifi_toggle_hold = 0;
-        }
-    } else if(!digitalRead(key_pin[KEY_PAGE_DOWN])) {
-            display_change_page(1);
-            wifi_toggle_hold = 0;
-    } else  if(!digitalRead(key_pin[KEY_SCALE]))
-        display_change_scale();
-
-    if(!digitalRead(0)) {
-        display_change_page(1);
-     //   toggle_wifi_mode();
-    }
-    
+    read_keys();
     //read_serials();
     //read_pressure_temperature();
     nmea_poll();
