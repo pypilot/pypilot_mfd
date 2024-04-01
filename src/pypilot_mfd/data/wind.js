@@ -8,7 +8,7 @@
 */
 
 var canvas = document.getElementById('canvas');
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext('2d');
 
 var gateway = `ws://${window.location.hostname}/ws`;
 var websocket;
@@ -70,21 +70,22 @@ function rad(x) {
 
 function render(direction, knots)
 {
-    ctx.lineWidth=5;
     let w = canvas.width;
     let h = canvas.height;
-    let u = w/10;
+    let u = w/20;
     let r = w/2-u;
-    
+
+    ctx.reset();
+    ctx.lineWidth=5;
     circle(w/2, h/2, r);
     ctx.stroke();
 
     let x = Math.sin(rad(direction));
-    let y = Math.sin(rad(direction));
-    
+    let y = Math.cos(rad(direction));
+
     ctx.beginPath();
     ctx.moveTo(w/2-u*y, h/2-u*x);
-    ctx.lineTo(x*r, y*r);
+    ctx.lineTo(w/2+x*r, h/2-y*r);
     ctx.lineTo(w/2+u*y, h/2+u*x);
     ctx.fill(); // Render the arrow
 
@@ -100,8 +101,8 @@ function onMessage(event) {
 
     // message just updates active display
     if('direction' in msg) {
-        document.getElementById('wind_direction').innerHTML = msg['direction'];
-        document.getElementById('wind_knots').innerHTML = msg['knots'];
+        document.getElementById('wind_direction').innerText = Math.round(msg['direction']);
+        document.getElementById('wind_knots').innerText = Math.round(msg['knots']*10)/10;
         render(msg['direction'], msg['knots']);
         return;
     }

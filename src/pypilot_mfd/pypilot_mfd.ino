@@ -71,7 +71,7 @@ void setup_wifi()
         //Set device in AP mode to begin with
         WiFi.mode(WIFI_AP);
         // configure device AP mode
-        const char *SSID = "windAP";
+        const char *SSID = "pypilot_mfd";
         bool result = WiFi.softAP(SSID, 0, settings.channel);
         if (!result)
             Serial.println("AP Config failed.");
@@ -96,16 +96,15 @@ void setup_wifi()
         } else
             WiFi.disconnect();
 
-        signalk_discovered = false;
-        pypilot_discovered = false;
+        signalk_discovered = 0;
+        pypilot_discovered = 0;
     }
 }
 
 void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    char  ip[20];
-    WiFi.localIP().toString().toCharArray(ip, sizeof ip);
-    Serial.printf("WIFI got IP: %s\n", ip);
+    String ip = WiFi.localIP().toString();
+    printf("WIFI got IP: %s\n", ip.c_str());
     settings.channel = WiFi.channel();
 } 
 
@@ -418,7 +417,6 @@ void setup()
 
     Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
                   SERIAL_8N1, 16, 17);    //Hardware Serial of ESP32
-
     Serial2.setTimeout(0);
 
     if(!SPIFFS.begin(true))
@@ -476,8 +474,8 @@ void loop()
     uint32_t t0 = millis();
 
     static uint32_t tl;
-    if(t0-tl > 10000) {
-        Serial.printf("loop %d %d %d\n", t0, ESP.getFreeHeap(), ESP.getHeapSize());
+    if(t0-tl > 60000) { // report memory statistics every 60 seconds
+        Serial.printf("pypilot_mfd %d %d %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize());
         tl = t0;
     }
 

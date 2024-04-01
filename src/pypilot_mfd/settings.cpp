@@ -9,7 +9,6 @@
 #include "Arduino.h"
 #include <Arduino_JSON.h>
 
-//#include <EEPROM.h>
 #include "utils.h"
 #include "settings.h"
 
@@ -37,26 +36,6 @@ bool settings_load(String suffix)
     // start with default settings
     settings.magic = MAGIC;
 
-    /*
-    EEPROM.begin(512);
-    EEPROM.get(0, settings);
-
-    int offset = sizeof settings;
-    uint16_t count = settings.transmitter_count;
-    if(count > 3)  // do not allow more than 3 wind sensors for now
-        count = 3;
-    for(int i=0; i<count; i++) {
-      wind_transmitter_t transmitter;
-        EEPROM.get(offset, transmitter);
-        if(transmitter.magic == MAGIC) {
-            transmitter.t = 0;
-            uint64_t maci = mac_as_int(transmitter.mac);
-            wind_transmitters[maci] = transmitter;
-        }
-        offset += sizeof(wind_transmitter_t);
-    }
-    EEPROM.end();
-    */
     File file = SPIFFS.open(settings_filename + suffix);
     JSONVar s;
     bool ret = true;
@@ -143,12 +122,6 @@ bool settings_load(String suffix)
 
 bool settings_store(String suffix)
 {
-    /*
-    EEPROM.begin(512);
-    EEPROM.put(0, settings);
-    EEPROM.commit();
-    */
-    
     JSONVar s;
 
 #define STORE_SETTING(NAME)    s[#NAME] = settings.NAME;

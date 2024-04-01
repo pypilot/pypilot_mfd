@@ -14,6 +14,7 @@
 #include "settings.h"
 #include "display.h"
 #include "utils.h"
+#include "zeroconf.h"
 #include "web.h"
 
 AsyncWebServer server(80);
@@ -26,7 +27,6 @@ wind_position str2position(String p) {
     if(p == "Starboard") return STARBOARD;
     return IGNORED;
 }
-
 
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
 {
@@ -90,10 +90,12 @@ String jsonSensors() {
 
 String jsonCurrent()
 {
+    if(lpdir < 0)
+        return String();
     JSONVar j;
     j["direction"] = lpdir;
     j["knots"] = knots;
-    String output = j;
+    String output = JSON.stringify(j);
     return output;
 }
 
@@ -143,9 +145,12 @@ String processor(const String& var)
     if(var == "OUTPUTWIFI") return String(settings.output_wifi);
     if(var == "USB_BAUD_RATE") return String(settings.usb_baud_rate);
     if(var == "RS422_BAUD_RATE") return String(settings.rs422_baud_rate);
+    if(var == "PYPILOT_ADDR") return(pypilot_discovered==2 ? settings.pypilot_addr : "not detected");
+    if(var == "SIGNALK_ADDR") return(signalk_discovered==2 ? (settings.signalk_addr + ":" + String(settings.signalk_port)) : "not detected");
     if(var == "WIFIDATA")   return get_wifi_data_str();
     if(var == "NMEACLIENTADDR") return String(settings.nmea_client_addr);
     if(var == "NMEACLIENTPORT") return String(settings.nmea_client_port);
+    if(var == "IPADDRESS") return WiFi.localIP().toString();    
     if(var == "NMEASERVERPORT") return String(settings.nmea_server_port);
     if(var == "USEFAHRENHEIT")  return String(settings.use_fahrenheit);
     if(var == "USEDEPTHFT")  return String(settings.use_depth_ft);
@@ -218,6 +223,9 @@ void web_setup()
         request->send(SPIFFS, "/wind.js", String(), 0, processor);
     });
 
+    server.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(SPIFFS, "/styles.css");
+    });
     server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(SPIFFS, "/favicon.ico");
     });
@@ -229,18 +237,18 @@ void web_setup()
 static uint32_t last_sock_update;
 void web_poll()
 {
-    return;
-
-    String s = jsonCurrent();
-    Serial.println(s);
-    ws.textAll(s);
-return;
     uint32_t t = millis();
-    if(t - last_sock_update < 1000)
+    if(t - last_sock_update < 200)
         return;
     last_sock_update = t;
 
+    String s = jsonCurrent();
+    if(s) {
+        //Serial.println("ws: " + s);
+        ws.textAll(s);
+    }
+
     ws.cleanupClients();
 
-    ws.textAll(jsonSensors());
+//    ws.textAll(jsonSensors());
 }

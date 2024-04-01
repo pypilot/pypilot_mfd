@@ -184,22 +184,28 @@ struct display_item {
 struct text_display : public display {
     text_display() {
         expanding = false;
+        centered = false;
     }
 
     void fit() {
         ht = h;
 
-        String str = getLabel();
-        label_font = u8g2_font_helvB08_tf;
-        u8g2.setFont(label_font);
-        label_w = u8g2.getStrWidth(str.c_str());
-        label_h = 10;
-
-        if(label_w > w/2 || label_h > h/2) {
-            label_font = u8g2_font_5x7_tf;
+        if(centered) { // if centered do not draw label either for now
+            label_w = 0;
+            label_h = 0;
+        } else {
+            String str = getLabel();
+            label_font = u8g2_font_helvB08_tf;
             u8g2.setFont(label_font);
             label_w = u8g2.getStrWidth(str.c_str());
-            label_h = 7;
+            label_h = 10;
+
+            if(label_w > w/2 || label_h > h/2) {
+                label_font = u8g2_font_5x7_tf;
+                u8g2.setFont(label_font);
+                label_w = u8g2.getStrWidth(str.c_str());
+                label_h = 7;
+            }
         }
     }
 
@@ -230,7 +236,7 @@ struct text_display : public display {
             u8g2.setFont(font);
 
             int width = u8g2.getUTF8Width(str.c_str());
-            if(width+label_w < wt || ht+label_h<h) {
+            if((width+label_w < wt || ht+label_h<h) && width < wt && ht < h) {
                 wt = width;
                 break;
             }
@@ -246,25 +252,32 @@ struct text_display : public display {
         int wt = w;
         selectFont(wt, str);
 
-        bool label = true;
         //if(ht + label_h > h && wt + label_w > w)
         //    label = false;
 
         int yp = y;
         if(label_h) yp += label_h/2;
         yp += (h-ht)/2;
-        int xp = x + w-wt;
+        int xp;
+        if(centered)
+            xp = x - wt/2; // center text over x position
+        else // right justify in bounds
+            xp = x + w-wt;
 
-        //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", getLabel(item).c_str(), x, y, w, h, wt, ht, label_w, label_h);
+        //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", getLabel().c_str(), x, y, w, h, wt, ht, label_w, label_h);
         u8g2.drawUTF8(xp, yp, str.c_str());
-        if(label) {
-            int lx = x, ly = y;
-            if(ht + label_h < h)
-                lx += w/2 - label_w/2;
-            else if(wt + label_w < w)
-                ly += h/2 - label_h/2;
-            u8g2.setFont(label_font);
-            u8g2.drawUTF8(lx, ly, getLabel().c_str());
+
+        if(label_h) {
+            String label = getLabel();
+            if(label) {
+                int lx = x, ly = y;
+                if(ht + label_h < h)
+                    lx += w/2 - label_w/2;
+                else if(wt + label_w < w)
+                    ly += h/2 - label_h/2;
+                u8g2.setFont(label_font);
+                u8g2.drawUTF8(lx, ly, label.c_str());
+            }
         }
     }
 
@@ -273,15 +286,19 @@ struct text_display : public display {
     const uint8_t *label_font;
     int ht;
     int label_w, label_h;
+    bool centered;
 };
 
 struct text_display_item : public text_display, public display_item {
-    text_display_item(display_item_e _i) : display_item(_i) {}
+    text_display_item(display_item_e _i, String _units="") : display_item(_i), units(_units) {}
 
     String getText() {
         if(age() > 5000)
             return "N/A";
-        return getTextItem();
+        String s = getTextItem();
+        if (w < 30 || w/h < 3 || !units)
+            return s;
+        return s + units;
     }
 
     virtual String getTextItem() = 0;
@@ -289,30 +306,28 @@ struct text_display_item : public text_display, public display_item {
     String getLabel() {
         return getItemLabel(item);
     }
+
+    bool use_units;
+    String units;
 };
 
 struct speed_text_display : public text_display_item  {
-    speed_text_display(display_item_e _i) : text_display_item(_i) {}
+    speed_text_display(display_item_e _i) : text_display_item(_i, "kt") {}
 
     String getTextItem() {
         if(w < 20)
             return String(display_data[item].value, 0);
-        String s = String(display_data[item].value, 1);
-        if (w < 30 || w/h < 3)
-            return s;
-        return s + " kt";
+        return String(display_data[item].value, 1);
     }
 };
 
-struct heading_text_display : public text_display_item {
-    heading_text_display(display_item_e _i) : text_display_item(_i) {}
+struct angle_text_display : public text_display_item {
+    angle_text_display(display_item_e _i, int _digits=0) : text_display_item(_i, "°"), digits(_digits) {}
 
     String getTextItem() {
-        String s = String(display_data[item].value, 0);
-        if(w < 30)
-            return s;
-        return s + "°";
+        return String(display_data[item].value, digits);
     }
+    int digits;
 };
 
 struct temperature_text_display : public text_display_item {
@@ -322,14 +337,12 @@ struct temperature_text_display : public text_display_item {
         String s, u;
         if (settings.use_fahrenheit) {
             s = String(display_data[item].value * 9 / 5 + 32, 1);
-            u = " °F";
+            units = "°F";
         } else {
             s = String(display_data[item].value, 1);
-            u = " °C";
+            units = "°C";
         }
-        if(w < 30)
-            return s;
-        return s + u;
+        return s;
     }
 };
 
@@ -340,14 +353,12 @@ struct depth_text_display : public text_display_item {
         String s, u;
         if (settings.use_depth_ft) {
             s = String(display_data[item].value * 3.28, 1);
-            u = "ft";
+            units = "ft";
         } else {
             s = String(display_data[item].value, 1);
-            u = "m";
+            units = "m";
         }
-        if(w < 30)
-            return s;
-        return s + u;
+        return s;
     }
 };
 
@@ -365,11 +376,11 @@ struct pressure_text_display : public text_display_item {
             s = String(cur, 0);
         if(w > 60 && prev.size()>3) {
             if(cur < prev.front() - 1)
-                s += "↓";
+                units = "↓";
             else if(cur > prev.front() + 1)
-                s += "↑";
+                units = "↑";
             else
-                s += "~";
+                units = "~";
         }
 
         if(millis() - prev_time > 60000) {
@@ -380,7 +391,7 @@ struct pressure_text_display : public text_display_item {
         }
 
         if(w > 100)
-            s += " mbar";
+            units += " mbar";
 
         return s;
     }
@@ -414,8 +425,8 @@ struct position_text_display : public text_display_item {
             } else
                 str += String(f, 4);
         }
-
-        return str + ' ' + "°" + s;
+        units =  "°" + s;
+        return str;
     }
 };
 
@@ -479,14 +490,15 @@ struct pypilot_text_display : public label_text_display  {
     String key;
 };
 
+
 struct gauge : public display, public display_item {
-    gauge(display_item_e _i, int _min_v, int _max_v, int _min_ang, int _max_ang, float _ang_step)
-        : display_item(_i),
+    gauge(text_display_item* _text, int _min_v, int _max_v, int _min_ang, int _max_ang, float _ang_step)
+        : display_item(_text->item), text(*_text),
         min_v(_min_v), max_v(_max_v),
         min_ang(_min_ang), max_ang(_max_ang), ang_step(_ang_step) {
 
         nxp = 0, nyp = 0;
-        dialfmt = "%03.0f";
+        text.centered = true;
     }
 
     void fit() {
@@ -494,6 +506,11 @@ struct gauge : public display, public display_item {
             w = h;
         else
             h = w;
+
+        // set text are proportional to the gauge area
+        text.w = w/1.8f;
+        text.h = h/3;
+        text.fit();
     }
 
     void render_ring() {
@@ -575,15 +592,9 @@ struct gauge : public display, public display_item {
         nyp = (yp + 15 * nyp) / 16;
         xp = xc + nxp, yp = yc + nyp;
 
-        if (w > 100)
-            u8g2.setFont(u8g2_font_helvB24_tf);
-        else
-            u8g2.setFont(u8g2_font_helvB14_tf);
-
-        int tw = u8g2.getStrWidth(dialText().c_str());
-        xp -= tw/2; // center text
-
-        u8g2.drawStr(xp, yp, dialText().c_str());
+        text.x = xp;
+        text.y = yp;
+        text.render();
     }
 
     void render_label() {
@@ -614,19 +625,14 @@ struct gauge : public display, public display_item {
         u8g2.drawStr(x+w-lw2, y, label2.c_str());
     }
 
-    String dialText()
-    {
-        char buf[16];
-        snprintf(buf, sizeof buf, dialfmt.c_str(), display_data[item].value);
-        return buf;
-    }
-
     virtual void render() {
+        render_label();
+        render_dial();
         render_ring();
         render_ticks();
-        render_dial();
-        render_label();
     }
+
+    text_display_item &text;
 
     int xc, yc, r;
     int min_v, max_v;
@@ -635,11 +641,10 @@ struct gauge : public display, public display_item {
     float ang_step;
 
     float nxp, nyp;
-    String dialfmt;
 };
 
 struct wind_direction_gauge : public gauge {
-    wind_direction_gauge() : gauge(WIND_DIRECTION, -180, 180, -180, 180, 45) {}
+    wind_direction_gauge(text_display_item* _text) : gauge(_text, -180, 180, -180, 180, 45) {}
 
     void render() {
         gauge::render();
@@ -694,11 +699,16 @@ void drawThickLine(int x1, int y1, int x2, int y2, int w)
 }
 
 struct heading_gauge : public gauge {
-    heading_gauge(display_item_e _i) : gauge(_i, -180, 180, -180, 180, 45) {}
+    heading_gauge(text_display_item* _text) : gauge(_text, -180, 180, -180, 180, 45) {}
 
     void render_dial() {
         if (age() > 5000)
             return;
+
+        text.x = xc;
+        text.y = yc + h*.16;
+        text.render();
+
         float v = display_data[item].value;
 
         int lx, ly;
@@ -715,22 +725,11 @@ struct heading_gauge : public gauge {
             lx = x1;
             ly = y1;
         }
-
-        if (w > 100)
-            u8g2.setFont(u8g2_font_helvB24_tf);
-        else
-            u8g2.setFont(u8g2_font_helvB14_tf);
-
-        String str = dialText();
-        int tw = u8g2.getStrWidth(str.c_str());
-        int xp = xc - tw/2;
-        int yp = yc + h*.22;
-        u8g2.drawStr(xp, yp, str.c_str());
     }
 };
 
 struct speed_gauge : public gauge {
-    speed_gauge(display_item_e _i) : gauge(_i, 0, 5, -135, 135, 22.5), niceminmax(0) { dialfmt = "%2.1f"; }
+    speed_gauge(text_display_item* _text) : gauge(_text, 0, 5, -135, 135, 22.5), niceminmax(0) { }
 
     void render() {
         float v = display_data[item].value;
@@ -764,16 +763,16 @@ struct speed_gauge : public gauge {
 };
 
 struct rudder_angle_gauge : public gauge {
-    rudder_angle_gauge() : gauge(RUDDER_ANGLE, -60, 60, -60, 60, 10) {}
+    rudder_angle_gauge(text_display_item* _text) : gauge(_text, -60, 60, -60, 60, 10) {}
 };
 
 struct rate_of_turn_gauge : public gauge {
-    rate_of_turn_gauge() : gauge(RATE_OF_TURN, -20, 20, -90, 90, 30) { dialfmt = "%2.1f"; }
+    rate_of_turn_gauge(text_display_item* _text) : gauge(_text, -10, 10, -90, 90, 30) {}
 };
 
 struct history_display : public display, public display_item {
-    history_display(display_item_e _i, text_display_item* _label, bool _min_zero=true, bool _inverted=false)
-        : display_item(_i), label(*_label), min_zero(_min_zero), inverted(_inverted)
+    history_display(text_display_item* _text, bool _min_zero=true, bool _inverted=false)
+        : display_item(_text->item), text(*_text ), min_zero(_min_zero), inverted(_inverted)
     {
         for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
             if(history_items[i] == item) {
@@ -784,11 +783,11 @@ struct history_display : public display, public display_item {
     }
 
     void fit() {
-        label.x = x+w/4;
-        label.y = y;
-        label.w = w/2;
-        label.h = 14;
-        label.fit();
+        text.x = x+w/4;
+        text.y = y;
+        text.w = w/2;
+        text.h = 14;
+        text.fit();
     }
 
     void render()
@@ -810,7 +809,7 @@ struct history_display : public display, public display_item {
                 maxv = it->value;
         }
 
-        // todo: match range to nice values, render ticks, and label ticks etc
+        // todo: match range to nice values, render ticks, and text ticks etc
 
         // draw history data
         maxv = nice_number(maxv);
@@ -839,11 +838,11 @@ struct history_display : public display, public display_item {
         String history_label = getHistoryLabel((history_range_e)r);
         int sw = u8g2.getStrWidth(history_label.c_str());
         u8g2.drawStr(x+w-sw, y, history_label.c_str());
-        label.render();
+        text.render();
     }
 
     int history_item;
-    text_display_item &label;
+    text_display_item &text;
     bool min_zero, inverted;
 };
 
@@ -1209,41 +1208,41 @@ struct page : public grid_display {
 };
 
 // mnemonics for all possible displays
-#define WIND_DIR_G     new wind_direction_gauge()
-#define WIND_DIR_T     new heading_text_display(WIND_DIRECTION)
+#define WIND_DIR_T     new angle_text_display(WIND_DIRECTION)
+#define WIND_DIR_G     new wind_direction_gauge(WIND_DIR_T)
 #define WIND_SPEED_T   new speed_text_display(WIND_SPEED)
-#define WIND_SPEED_G   new speed_gauge(WIND_SPEED)
-#define WIND_SPEED_H   new history_display(WIND_SPEED, WIND_SPEED_T)
+#define WIND_SPEED_G   new speed_gauge(WIND_SPEED_T)
+#define WIND_SPEED_H   new history_display(WIND_SPEED_T)
 
 #define PRESSURE_T     new pressure_text_display()
-#define PRESSURE_H     new history_display(BAROMETRIC_PRESSURE, PRESSURE_T)
+#define PRESSURE_H     new history_display(PRESSURE_T)
 #define AIR_TEMP_T     new temperature_text_display(AIR_TEMPERATURE)
 
-#define COMPASS_T      new heading_text_display(COMPASS_HEADING)
-#define COMPASS_G      new heading_gauge(COMPASS_HEADING)
-#define PITCH_T        new heading_text_display(PITCH)
-#define HEEL_T         new heading_text_display(HEEL)
-#define RATE_OF_TURN_T new heading_text_display(RATE_OF_TURN)
-#define RATE_OF_TURN_G new rate_of_turn_gauge()
+#define COMPASS_T      new angle_text_display(COMPASS_HEADING)
+#define COMPASS_G      new heading_gauge(COMPASS_T)
+#define PITCH_T        new angle_text_display(PITCH, 1)
+#define HEEL_T         new angle_text_display(HEEL, 1)
+#define RATE_OF_TURN_T new angle_text_display(RATE_OF_TURN, 1)
+#define RATE_OF_TURN_G new rate_of_turn_gauge(RATE_OF_TURN_T)
 
-#define GPS_HEADING_T  new heading_text_display(GPS_HEADING)
-#define GPS_HEADING_G  new heading_gauge(GPS_HEADING)
+#define GPS_HEADING_T  new angle_text_display(GPS_HEADING)
+#define GPS_HEADING_G  new heading_gauge(GPS_HEADING_T)
 #define GPS_SPEED_T    new speed_text_display(GPS_SPEED)
-#define GPS_SPEED_G    new speed_gauge(GPS_SPEED)
-#define GPS_SPEED_H    new history_display(GPS_SPEED, GPS_SPEED_T)
+#define GPS_SPEED_G    new speed_gauge(GPS_SPEED_T)
+#define GPS_SPEED_H    new history_display(GPS_SPEED_T)
 #define LATITUDE_T     new position_text_display(LATITUDE)
 #define LONGITUDE_T    new position_text_display(LONGITUDE)
 #define TIME_T         new time_text_display()
 
 #define DEPTH_T        new depth_text_display()
-#define DEPTH_H        new history_display(DEPTH, DEPTH_T)
+#define DEPTH_H        new history_display(DEPTH_T)
 
-#define RUDDER_ANGLE_T new heading_text_display(RUDDER_ANGLE)
-#define RUDDER_ANGLE_G new heading_gauge(RUDDER_ANGLE)
+#define RUDDER_ANGLE_T new angle_text_display(RUDDER_ANGLE)
+#define RUDDER_ANGLE_G new rudder_angle_gauge(RUDDER_ANGLE_T)
 
 #define WATER_SPEED_T  new speed_text_display(WATER_SPEED)
-#define WATER_SPEED_G  new speed_gauge(WATER_SPEED)
-#define WATER_SPEED_H  new history_display(WATER_SPEED, WATER_SPEED_T)
+#define WATER_SPEED_G  new speed_gauge(WATER_SPEED_T)
+#define WATER_SPEED_H  new history_display( WATER_SPEED_T)
 #define WATER_TEMP_T   new temperature_text_display(WATER_TEMPERATURE)
 
 #define AIS_SHIPS_DISPLAY new ais_ships_display()

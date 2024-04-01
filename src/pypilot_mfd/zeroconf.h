@@ -12,5 +12,5 @@ void mdns_analyze_results(mdns_result_t * results);
 void find_mdns_service(const char * service_name, const char * proto);
 void mdns_setup();
 
-extern bool signalk_discovered;
-extern bool pypilot_discovered;
+extern int signalk_discovered;
+extern int pypilot_discovered;

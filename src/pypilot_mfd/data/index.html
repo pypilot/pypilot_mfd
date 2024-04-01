@@ -1,68 +1,138 @@
 <!DOCTYPE html> <html>
-<head><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Wind Display</title>
-<script type='text/javascript' src='wind.js'></script>
+<head><meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=no'>
+<title>pypilot mfd</title>
+<link rel='stylesheet' type='text/css' href='styles.css'>
 </head>
 <body>
-<h1>Wireless Network Configuration</h1>
-<form action='network' method='post'>
-<br>SSID<input type='text' name='ssid' value='%SSID%' autofocus />
-<br>PSK<input type='text' name='psk' value='%PSK%' />
-<br>Wireless Channel<span name='channel'>%CHANNEL%</span>
-<input type="submit" value="Submit" />
-</form>
-<p><h2>Wind Sensors</h2>
-<p><canvas width='64' height='64' id='canvas'></canvas>
-<p><div id='wind_direction'>N/A</div>
-<p><div id='wind_knots'>N/A</div>Knots
-<p><table id='wind_sensors_table'><tr><th>mac</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
-<br><input type='button' name='scan' onclick='scanSensors()'>Scan</input>
-<br>
-<p><h2>Data Configuration</h2>
-  <form action='data' method='post'>
-    <br><h3>USB data (NMEA0183)</h3>
-    <br><input type='checkbox' name='input_usb' value=%INPUTUSB%>Input</input>
-    <input type='checkbox' name='output_usb' value=%OUTPUTUSB%>Output</input>
-    <select id='usb_baud_rate' value='%USB_BAUD_RATE%'>
-      <option value='38400'>38400</option>
-      <option value='115200'>115200</option>
-    </select>
-    <br><h3>RS422 data (NMEA0183)</h3>
-    <select id='rs422_baud_rate' value='%RS422_BAUD_RATE%'>
-      <option value='4800'>4800</option>
-      <option value='38400'>38400</option>
-    </select>
-    <br>
-    <br><h3>WIFI data</h3>
-    <br><input type='checkbox' name='input_wifi' value=%INPUTWIFI%>Input</input>
-    <input type='checkbox' name='output_wifi' value=%OUTPUTWIFI%>Output</input>
-      <br><input type='radio' name='wifidata' id='nmea_pypilot'>pypilot NMEA0183 port 20220</input> (<span name='pypilot_detected'>not detected</span>)
-      <br><input type='radio' name='wifidata' id='nmea_signalk'>signalk-server NMEA0183 port 10110</input> (<span name='signalk_detected'>not detected</span>)
-      <br><input type='radio' name='wifidata' id='nmea_client'>act as tcp client </input><input type='text' name='nmea_tcp_host' value=%NMEACLIENTADDR% /> <input type='number' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% />
-      <br><input type='radio' name='wifidata' id='nmea_server'>act as tcp server</input> (host "wind.local") listening port: <input type='text' name='nmea_tcp_server port' value=%NMEASERVERPORT% />
-      <br><input type='radio' name='wifidata' id='signalk'>signalk-server SignalK</input> (<span name='signalk_detected'>not detected</span>)  To output to signalk you may have to <a href='signalk.local:3000'>grant access</a>
-    <input type="submit" value="Submit" />
-  </form>
-  <script type='text/javascript'>
-    var wifi_data = document.getElementById('%WIFIDATA%');
-    // Set the checked attribute to true
-    if (wifi_data)
-        wifi_data.checked = true;
-  </script>
-  <br>
-<p><h2>Display</h2>
-  <form action='display' method='post'>
-    <input type='checkbox' name='usefahrenheit' value=%USEFAHRENHEIT%>Use Fahrenheit (default celcius)</input>
-    <br><input type='checkbox' name='usedepthft' value=%USEDEPTHFT%>Use depth ft (default meters)</input>
-    <br><select name='latlonformat' value=%LATLONFORMAT%>
-      <option value='DECIMAL_DEGREES'>Decimal Degrees</option>
-      <option value='DECIMAL_MINUTES'>Decimal Minutes</option>
-      <option value='DECIMAL_SECONDS'>Decimal Seconds</option>
-    </select>
-    <br><input type='number' name='contrast' value=%Contrast%>LCD contrast</input>
-    %DISPLAYPAGES%
-    <br><input type="submit" value="Submit" />
-    </form>
-  <p><h5>Wind display %VERSION% written by Sean D'Epagnier</h5>
+  <div class='container'>
+    <div class='box'>
+      <h2>WIFI Network Configuration</h2>
+      <form action='network' method='post'>
+        <div class='col2-grid'>
+          <span>SSID</span><input type='text' name='ssid' value='%SSID%' autofocus style='width: 60%%'>
+          <span>PSK</span><input type='text' name='psk' value='%PSK%' style='width: 60%%'>
+        <span>Wireless Channel</span><span name='channel'>%CHANNEL%</span>
+        </div>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='submit' value='Submit'>
+        </div>
+      </form>
+    </div>
+
+    <div class='box'>
+      <h2>Wind Sensors</h2>
+      <div class='col2-grid'>
+        <canvas width='128' height='128' id='canvas'></canvas>
+        <div class='col3-grid'>
+          <span>Wind Direction</span><span id='wind_direction'>N/A</span><span>Degrees</span>
+          <span>Wind Speed</span><span id='wind_knots'>N/A</span><span>Knots</span>
+        </div>
+      </div>
+      <table style='width: 100%%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
+        <div class='col3-grid'>
+          <div> </div>
+          <div ><button class='button' name='scan' onclick='scanSensors()' style='width: 100%%'>Scan</input></div>
+        </div>
+    </div>
+
+    <div class='box'>
+      <h2>Data Configuration</h2>
+      <form action='data' method='post'>
+        <div class='col2-grid'>
+          <span>USB data (NMEA0183)</span>
+          <span>
+            <input type='checkbox' name='input_usb' id='input_usb' value=%INPUTUSB%><label for='input_usb'>Input</label>
+            <input type='checkbox' name='output_usb' id='output_usb' value=%OUTPUTUSB%><label for='output_usb'>Output</label>
+            <select id='usb_baud_rate' value='%USB_BAUD_RATE%'>
+              <option value='38400'>38400</option>
+              <option value='115200'>115200</option>
+            </select>
+          </span>
+          <span>RS422 data (NMEA0183)</span>
+          <div>
+            <select id='rs422_baud_rate' value='%RS422_BAUD_RATE%'>
+              <option value='4800'>4800</option>
+              <option value='38400'>38400</option>
+            </select>
+          </div>
+          <span>WIFI data</span>
+          <span>
+            <input type='checkbox' name='input_wifi' id='input_wifi' value=%INPUTWIFI%><label for='input_wifi'>Input</label>
+            <input type='checkbox' name='output_wifi' id='output_wifi' value=%OUTPUTWIFI%><label for='output_wifi'>Output</output>
+          </span>
+        </div>
+        <div class='data-grid'>
+          <input type='radio' name='wifidata' id='nmea_pypilot'>
+          <label for='nmea_pypilot'>pypilot NMEA0183 port 20220</label>
+          <span></span>
+          <label for='nmea_pypilot'>pypilot server: %PYPILOT_ADDR%</label>
+        </div>
+        <div class='data-grid'>
+          <input type='radio' name='wifidata' id='nmea_signalk'>
+          <label for='nmea_signalk'> signalk-server NMEA0183 port 10110</label>
+          <span></span>
+          <label for='nmea_signalk'>signalk server: %SIGNALK_ADDR%</label>
+        </div>
+        <div class='data-grid'>
+          <input type='radio' name='wifidata' id='nmea_client'></input>
+          <label for='nmea_client'>TCP client</label>
+          <span></span>            
+          <label for='nmea_client'>Host <input type='text' name='nmea_tcp_host' style='width: 10em;' value=%NMEACLIENTADDR% > Port <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% ></label>
+        </div>
+        <div class='data-grid'>
+          <input type='radio' name='wifidata' id='nmea_server'></input>
+          <label for='nmea_server'>TCP server</label>
+          <span></span>            
+          <label for='nmea_server'>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>
+        </div>
+        <div class='data-grid'>
+          <input type='radio' name='wifidata' id='signalk'></input>
+          <label for='signalk'>SignalK</label>
+          <span></span>
+          <label for='signalk'>SignalK server: %SIGNALK_ADDR%</span>
+          <span></span>
+          <span>To output to signalk you may have to <a href='signalk.local:3000'>grant access</a></span>
+        </div>
+        <div class='col3-grid'>
+          <div></div>
+          <input class='button' type='submit' value='Submit'>
+        </div>
+      </form>
+      <script type='text/javascript'>
+        var wifi_data = document.getElementById('%WIFIDATA%');
+        // Set the checked attribute to true
+        if (wifi_data)
+            wifi_data.checked = true;
+      </script>
+    </div>
+ 
+    <div class='box'>
+      <h2>Display</h2>
+      <form action='display' method='post'>
+        <div class='col1-grid'>
+          <span><input type='checkbox' name='usefahrenheit' id='usefahrenheit' value=%USEFAHRENHEIT%>
+            <label for='usefahrenheit'>Use Fahrenheit (default celcius)</label></span>
+          <span><input type='checkbox' name='usedepthft' id='usedepthft' value=%USEDEPTHFT%>
+            <label for='usedepthft'>Use depth ft (default meters)</label></span>
+          <span>Latitude Longitude Format <select name='latlonformat' value=%LATLONFORMAT%>
+            <option value='DECIMAL_DEGREES'>Decimal Degrees</option>
+            <option value='DECIMAL_MINUTES'>Decimal Minutes</option>
+            <option value='DECIMAL_SECONDS'>Decimal Seconds</option>
+          </select></span>
+          <span>LCD contrast <input type='number' name='contrast' style='width: 4em' value=%CONTRAST%></span>
+          <span>LCD backlight <input type='number' name='backlight' style='width: 4em' value=%BACKLIGHT%></span>          
+        </div>
+        %DISPLAYPAGES%
+        
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='submit' class='button-74' value='Submit'>
+        </div>
+      </form>
+    </div>
+  </div>
+  <h5>pypilot multi-function display %VERSION% written by Sean D'Epagnier</h5>
 </body>
+<script type='text/javascript' src='wind.js'></script>
 </html>
