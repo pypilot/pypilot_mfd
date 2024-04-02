@@ -2,7 +2,9 @@ $fn=40;
 
 length = 116;
 width = 85;
-height = 15;
+height = 14;
+
+board_length = 100;
 
 pane = [118,88, 3];
 
@@ -16,8 +18,8 @@ module box() {
             cube([length, width, height]);
             cylinder(r=thickness,h=bthickness);
         }
-        translate([-length/2,-width/2,bthickness])
-        cube([length, width, height+bthickness]);
+        translate([-board_length/2,-width/2,bthickness])
+        cube([board_length, width, height+bthickness]);
     
         cylinder(r=7, h=40, center=true);
 

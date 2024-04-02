@@ -41,7 +41,7 @@ U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset
 String getItemLabel(display_item_e item) {
     switch (item) {
     case WIND_SPEED: return "Wind Speed";
-    case WIND_DIRECTION: return "Wind Dir";
+    case WIND_DIRECTION: return "Wind Angle";
     case BAROMETRIC_PRESSURE: return "Baro Pressure";
     case AIR_TEMPERATURE: return "Air Temp";
     case WATER_TEMPERATURE: return "Water Temp";
@@ -124,6 +124,18 @@ struct history
 
 history histories[HISTORY_COUNT];
 
+void drawThickLine(int x1, int y1, int x2, int y2, int w)
+{
+    int dx = x2-x1, dy = y2-y1;
+    int d = sqrt(dx*dx + dy*dy);
+    dx = dx*w/d;
+    dy = dy*w/d;
+
+    int ax = x1+dy, ay = y1-dx;
+    int bx = x2+dy, by = y2-dx;
+    u8g2.drawTriangle(x1, y1, x2, y2, ax, ay);
+    u8g2.drawTriangle(x2, y2, bx, by, ax, ay);
+}
 
 struct display_data_t {
     display_data_t() : time(-10000) {}
@@ -232,7 +244,7 @@ struct text_display : public display {
         for(;;) {
             const uint8_t *font = getFont();
             if(!font)
-                break;
+                return;
             u8g2.setFont(font);
 
             int width = u8g2.getUTF8Width(str.c_str());
@@ -259,15 +271,20 @@ struct text_display : public display {
         if(label_h) yp += label_h/2;
         yp += (h-ht)/2;
         int xp;
-        if(centered)
+        if(centered) {
+            yp = y - ht/2;
             xp = x - wt/2; // center text over x position
-        else // right justify in bounds
-            xp = x + w-wt;
-
+        } else {
+            if(ht + label_h < h)
+                xp = x + (w-wt)/2;
+            // center bounds
+            else // right justify
+                xp = x + w-wt;
+        }
         //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", getLabel().c_str(), x, y, w, h, wt, ht, label_w, label_h);
         u8g2.drawUTF8(xp, yp, str.c_str());
 
-        if(label_h) {
+        if(label_h && label_w < w && label_h < h) {
             String label = getLabel();
             if(label) {
                 int lx = x, ly = y;
@@ -286,7 +303,7 @@ struct text_display : public display {
     const uint8_t *label_font;
     int ht;
     int label_w, label_h;
-    bool centered;
+    bool centered; // currently means centered over x (and no label)  maybe should change this
 };
 
 struct text_display_item : public text_display, public display_item {
@@ -315,9 +332,7 @@ struct speed_text_display : public text_display_item  {
     speed_text_display(display_item_e _i) : text_display_item(_i, "kt") {}
 
     String getTextItem() {
-        if(w < 20)
-            return String(display_data[item].value, 0);
-        return String(display_data[item].value, 1);
+        return String(display_data[item].value, 0);
     }
 };
 
@@ -325,9 +340,47 @@ struct angle_text_display : public text_display_item {
     angle_text_display(display_item_e _i, int _digits=0) : text_display_item(_i, "°"), digits(_digits) {}
 
     String getTextItem() {
-        return String(display_data[item].value, digits);
+        float v = display_data[item].value;
+        if(isnan(v))
+            return "---";
+        return String(v, digits);
     }
     int digits;
+};
+
+struct dir_angle_text_display : public angle_text_display {
+    dir_angle_text_display(display_item_e _i, bool _has360=false) : angle_text_display(_i, _has360 ? 0 : 1), has360(_has360) {}
+
+    String getTextItem() {
+        float v = display_data[item].value;
+        if(isnan(v))
+            return "---";
+        if(settings.use_360 && has360)
+            return String(resolv(v, 180));
+
+        return String(fabsf(v), digits);
+    }
+
+    void render() {
+        text_display_item::render();
+        if((settings.use_360&&has360) || centered)
+            return;
+        float v = display_data[item].value;
+        if(isnan(v))
+            return;
+        float xa, xb;
+        if(v > 0)
+            xa = .95, xb = .85f;
+        else if(v < 0)
+            xa = .05, xb = .15f;
+        int x1 = x+w*xa, x2 = x+w*xb, x3 = x+w*(xa*2+xb)/3;
+        int y1 = y+h/2, y2 = y+h*.35f, y3 = y+h*.65f;
+        int t = h/20;
+        drawThickLine(x1, y1, x2, y1, t);
+        drawThickLine(x1, y1, x3, y2, t);
+        drawThickLine(x3, y3, x1, y1, t);
+    }
+    bool has360;
 };
 
 struct temperature_text_display : public text_display_item {
@@ -506,6 +559,7 @@ struct gauge : public display, public display_item {
             w = h;
         else
             h = w;
+        r = min(w / 2, h / 2);
 
         // set text are proportional to the gauge area
         text.w = w/1.8f;
@@ -516,13 +570,12 @@ struct gauge : public display, public display_item {
     void render_ring() {
         xc = x + w / 2;
         yc = y + h / 2;
-        r = min(w / 2, h / 2);
 
         int thick = r / 36;
-        r -= thick*2;
+        int r2 = r-thick*2;
         for (int i = -thick; i <= thick; i++)
             for (int j = -thick; j <= thick; j++)
-                u8g2.drawCircle(xc + i, yc + j, r);
+                u8g2.drawCircle(xc + i, yc + j, r2);
     }
 
     void render_tick(float angle, int u, int &x0, int &y0) {
@@ -583,18 +636,15 @@ struct gauge : public display, public display_item {
         int u = 1+w/30;
         int xp = u * c;
         int yp = u * s;
+        int txp = -r / 2 * s, typ = r / 3 * c;
+
+        nxp = (txp + 15 * nxp) / 16;
+        nyp = (typ + 15 * nyp) / 16;
+        text.x = xc + nxp;
+        text.y = yc + nyp;
+        text.render();
 
         u8g2.drawTriangle(xc - xp, yc - yp, xc + x0, yc + y0, xc + xp, yc + yp);
-
-        xp = -r / 3 * s, yp = r / 4 * c;
-
-        nxp = (xp + 15 * nxp) / 16;
-        nyp = (yp + 15 * nyp) / 16;
-        xp = xc + nxp, yp = yc + nyp;
-
-        text.x = xp;
-        text.y = yp;
-        text.render();
     }
 
     void render_label() {
@@ -684,19 +734,6 @@ struct wind_direction_gauge : public gauge {
 };
 
 float boat_coords[] = {0, -.5, .15, -.35, .2, -.25, .15, .45, -.15, .45, -.2, -.25, -.15, -.35, 0, -.5};
-
-void drawThickLine(int x1, int y1, int x2, int y2, int w)
-{
-    int dx = x2-x1, dy = y2-y1;
-    int d = sqrt(dx*dx + dy*dy);
-    dx = dx*w/d;
-    dy = dy*w/d;
-
-    int ax = x1+dy, ay = y1-dx;
-    int bx = x2+dy, by = y2-dx;
-    u8g2.drawTriangle(x1, y1, x2, y2, ax, ay);
-    u8g2.drawTriangle(x2, y2, bx, by, ax, ay);
-}
 
 struct heading_gauge : public gauge {
     heading_gauge(text_display_item* _text) : gauge(_text, -180, 180, -180, 180, 45) {}
@@ -1208,7 +1245,7 @@ struct page : public grid_display {
 };
 
 // mnemonics for all possible displays
-#define WIND_DIR_T     new angle_text_display(WIND_DIRECTION)
+#define WIND_DIR_T     new dir_angle_text_display(WIND_DIRECTION, true)
 #define WIND_DIR_G     new wind_direction_gauge(WIND_DIR_T)
 #define WIND_SPEED_T   new speed_text_display(WIND_SPEED)
 #define WIND_SPEED_G   new speed_gauge(WIND_SPEED_T)
@@ -1221,8 +1258,8 @@ struct page : public grid_display {
 #define COMPASS_T      new angle_text_display(COMPASS_HEADING)
 #define COMPASS_G      new heading_gauge(COMPASS_T)
 #define PITCH_T        new angle_text_display(PITCH, 1)
-#define HEEL_T         new angle_text_display(HEEL, 1)
-#define RATE_OF_TURN_T new angle_text_display(RATE_OF_TURN, 1)
+#define HEEL_T         new dir_angle_text_display(HEEL)
+#define RATE_OF_TURN_T new dir_angle_text_display(RATE_OF_TURN)
 #define RATE_OF_TURN_G new rate_of_turn_gauge(RATE_OF_TURN_T)
 
 #define GPS_HEADING_T  new angle_text_display(GPS_HEADING)
@@ -1237,7 +1274,7 @@ struct page : public grid_display {
 #define DEPTH_T        new depth_text_display()
 #define DEPTH_H        new history_display(DEPTH_T)
 
-#define RUDDER_ANGLE_T new angle_text_display(RUDDER_ANGLE)
+#define RUDDER_ANGLE_T new dir_angle_text_display(RUDDER_ANGLE)
 #define RUDDER_ANGLE_G new rudder_angle_gauge(RUDDER_ANGLE_T)
 
 #define WATER_SPEED_T  new speed_text_display(WATER_SPEED)
@@ -1279,13 +1316,12 @@ struct pageC : public page {
 
 struct pageD : public page {
   pageD() : page("Wind gauges with IMU text") {
-    cols = 1;
+    cols = settings.landscape ? 1 : 2;
 
     grid_display *d = new grid_display(this, settings.landscape ? 2 : 1);
 
     d->add(WIND_DIR_G);
     d->add(WIND_SPEED_G);
-
 
     grid_display *t = new grid_display(this, settings.landscape ? 3 : 1);
     t->expanding = false;
@@ -1300,17 +1336,16 @@ struct pageD : public page {
 };
 
 struct pageE : public page {
-  pageE() : page("Wind Direction and IMU text") {
-    add(WIND_DIR_G);
+  pageE() : page("Wind and IMU text") {
+    add(WIND_DIR_T);
+    add(WIND_SPEED_T);
     grid_display *d = new grid_display(this, settings.landscape ? 1 : 2);
     d->expanding = false;
-
-    d->add(WIND_SPEED_T);
-    d->add(PRESSURE_T);
     d->add(COMPASS_T);
-    d->add(AIR_TEMP_T);
+    d->add(RATE_OF_TURN_T);
     d->add(PITCH_T);
     d->add(HEEL_T);
+//    d->add(PRESSURE_T);
   }
 };
 
@@ -1561,7 +1596,7 @@ struct pageU : public page {
 };
 
 struct pageV : public page {
-    pageV() : page("ais display") {
+    pageV() : page("AIS display") {
         add(AIS_SHIPS_DISPLAY);
     }
 };
@@ -1598,8 +1633,7 @@ char page_chr = 'A';
 void add(page* p) {
     p->fit();
     pages.push_back(p);
-    String n = ps+page_chr;
-    display_pages.push_back(page_info(n, p->description));
+    display_pages.push_back(page_info(page_chr, p->description));
     page_chr++;
 }
 
@@ -1631,7 +1665,7 @@ void display_setup()
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    cur_page='F'-'A';
+    cur_page='E'-'A';
 
     if(settings.landscape) {
         page_width = 256;
@@ -1668,7 +1702,7 @@ void display_setup()
     add(new pageW);
 
     for(int i=0; i<settings.enabled_pages.length(); i++)
-        if(settings.enabled_pages[i] != 'f')
+        if(settings.enabled_pages[i] == display_pages[i].name)
             display_pages[i].enabled = true;
 
     setup_analog_pins();

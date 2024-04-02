@@ -34,7 +34,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
     if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
         data[len] = 0;
         String message = (char*)data;
-        Serial.printf("websocket got %s", data);
+        Serial.printf("websocket got %s\n", data);
         if(message == "scan") ; // do scan put all sensors on same channel
 
         else {
@@ -118,16 +118,19 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 String get_display_pages()
 {
     String pages = "";
-    char p = 'A';
     for(std::vector<page_info>::iterator it = display_pages.begin(); it!=display_pages.end(); it++) {
-        pages += "<br><input type='checkbox' name='" + it->name + "' ";
+        pages += "<span><input type='checkbox' name='" + String(it->name) + "' id='page" + String(it->name) + "'";
         if(it->enabled)
-            pages += "checked";
-        pages += "><b>";
-        pages += p;
-        pages += "</b> " + it->description + "</input>";
-        p++;
+            pages += " checked";
+        pages += "><label for='page" + String(it->name) + "'><b>";
+        pages += it->name;
+        pages += "</b> " + it->description + "</label></span>\n";
     }
+    return pages;
+}
+
+String Checked(bool value) {
+    return value ? "checked" : "";
 }
 
 String processor(const String& var)
@@ -136,10 +139,10 @@ String processor(const String& var)
     if(var == "SSID")       return settings.ssid;
     if(var == "PSK")        return settings.psk;
     if(var == "CHANNEL")    return String(settings.channel);
-    if(var == "INPUTUSB")   return String(settings.input_usb);
-    if(var == "OUTPUTUSB")  return String(settings.output_usb);
-    if(var == "INPUTWIFI")  return String(settings.input_wifi);
-    if(var == "OUTPUTWIFI") return String(settings.output_wifi);
+    if(var == "INPUTUSB")   return Checked(settings.input_usb);
+    if(var == "OUTPUTUSB")  return Checked(settings.output_usb);
+    if(var == "INPUTWIFI")  return Checked(settings.input_wifi);
+    if(var == "OUTPUTWIFI") return Checked(settings.output_wifi);
     if(var == "USB_BAUD_RATE") return String(settings.usb_baud_rate);
     if(var == "RS422_BAUD_RATE") return String(settings.rs422_baud_rate);
     if(var == "PYPILOT_ADDR") return(pypilot_discovered==2 ? settings.pypilot_addr : "not detected");
@@ -149,8 +152,9 @@ String processor(const String& var)
     if(var == "NMEACLIENTPORT") return String(settings.nmea_client_port);
     if(var == "IPADDRESS") return WiFi.localIP().toString();    
     if(var == "NMEASERVERPORT") return String(settings.nmea_server_port);
-    if(var == "USEFAHRENHEIT")  return String(settings.use_fahrenheit);
-    if(var == "USEDEPTHFT")  return String(settings.use_depth_ft);
+    if(var == "USE360")  return Checked(settings.use_360);
+    if(var == "USEFAHRENHEIT")  return Checked(settings.use_fahrenheit);
+    if(var == "USEDEPTHFT")  return Checked(settings.use_depth_ft);
     if(var == "LATLONFORMAT")  return settings.lat_lon_format;
     if(var == "CONTRAST")  return String(settings.contrast);
     if(var == "DISPLAYPAGES") return get_display_pages();
@@ -165,85 +169,114 @@ void web_setup()
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(SPIFFS, "/index.html", String(), 0, processor);
-      Serial.printf("sent\n");
     });
 
     server.on("/network", HTTP_POST, [](AsyncWebServerRequest *request) {
-        Serial.printf("post network\n");
+        //Serial.printf("post network\n");
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+            String name = p->name(), value = p->value();
+            //printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+            if(name == "ssid")     settings.ssid = value;
+            else if(name == "psk") settings.psk = value;
+            else printf("web post wifi unknown parameter %s %s\n", name.c_str(), value.c_str());
+
         }
-        request->send(SPIFFS, "/index.html", String(), 0, processor);
+        request->redirect("/");
         settings_store();
     });
 
     server.on("/data", HTTP_POST, [](AsyncWebServerRequest *request) {
-        Serial.printf("post data\n");
+        //printf("post data %d\n", request->params());
+        settings.input_usb = settings.output_usb = false;
+        settings.input_wifi = settings.output_wifi = false;
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+            String name = p->name(), value = p->value();
+            //printf("POST[%s]: %s\n", name.c_str(), value.c_str());
+            if     (name == "input_usb")   settings.input_usb = true;
+            else if(name == "output_usb")  settings.output_usb = true;
+            else if(name == "usb_baud_rate")  settings.usb_baud_rate = value.toInt();
+            else if(name == "rs422_baud_rate")  settings.rs422_baud_rate = value.toInt();
+            else if(name == "input_wifi")  settings.input_wifi = true;
+            else if(name == "output_wifi") settings.output_wifi = true;
+            else if(name == "wifidata") {
+                if      (value == "nmea_pypilot") settings.wifi_data = NMEA_PYPILOT;
+                else if (value == "nmea_signalk") settings.wifi_data = NMEA_SIGNALK;
+                else if (value == "nmea_client") settings.wifi_data = NMEA_CLIENT;
+                else if (value == "nmea_server") settings.wifi_data =  NMEA_SERVER;
+                else if (value == "signalk") settings.wifi_data =  SIGNALK;
+                else printf("post unknown wifi data setting %s\n", value.c_str());
+            }
+            else if(name == "nmea_tcp_client_addr") settings.nmea_client_addr = value;
+            else if(name == "nmea_tcp_client_port") settings.nmea_client_port = value.toInt();
+            else if(name == "nmea_tcp_server_port") settings.nmea_server_port = value.toInt();
+            else printf("web post data unknown parameter %s %s\n", name.c_str(), value.c_str());
         }
-        request->send(SPIFFS, "/index.html", String(), 0, processor);
+        request->redirect("/");
         settings_store();
     });
 
     server.on("/display", HTTP_POST, [](AsyncWebServerRequest *request) {
-        Serial.printf("post pages\n");
+        settings.use_360 = settings.use_fahrenheit = settings.use_depth_ft = false;
+        String enabled_pages = "";
+        for(int i=0; i < display_pages.size(); i++)
+            display_pages[i].enabled = false;
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
-            Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            if(p->name() =="usefahrenheit")
-                settings.use_fahrenheit = p->value();
-            else if(p->name() =="usedepthft")
-                settings.use_depth_ft = p->value();
-            else if(p->name() =="latlonformat")
-                settings.lat_lon_format = p->value();
-
+            String name = p->name(), value = p->value();
+            //printf("POST[%s]: %s\n", name.c_str(), value.c_str());
+            if(name == "use360")
+                settings.use_360 = true;
+            else if(name == "usefahrenheit")
+                settings.use_fahrenheit = true;
+            else if(p->name() == "usedepthft")
+                settings.use_depth_ft = true;
+            else if(p->name() == "lat_lon_format")
+                settings.lat_lon_format = value;
+            else if(p->name() == "contrast")
+                settings.contrast = value.toInt();
+            else if(p->name() == "backlight")
+                settings.backlight = value.toInt();
             else {
-                String enabled_pages = "";
-                for(int i=0; i < display_pages.size(); i++) {
-                    page_info &page = display_pages[i];
-                    if(page.name == p->name())
-                        page.enabled = p->value() == "true";
-                    enabled_pages += p->value() ? "t" : "f";
+                for(int j=0; j < display_pages.size(); j++) {
+                    page_info &page = display_pages[j];
+                    if(String(page.name) == name)
+                        page.enabled = true;
                 }
-                settings.enabled_pages = enabled_pages;
+                enabled_pages += name;
             }
         }
-        display_change_page(0);
-        request->send(SPIFFS, "/index.html", String(), 0, processor);
+        settings.enabled_pages = enabled_pages;
+        request->redirect("/");
         settings_store();
+        display_change_page(0);
     });
 
-    server.on("/wind.js", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(SPIFFS, "/wind.js", String(), 0, processor);
-    });
-
-    server.on("/styles.css", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(SPIFFS, "/styles.css");
-    });
-    server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(SPIFFS, "/favicon.ico");
-    });
+    server.serveStatic("/", SPIFFS, "/");
 
     server.begin();
     Serial.println("web server listening");
 }
 
-static uint32_t last_sock_update;
 void web_poll()
 {
+    uint32_t t = millis();
+    static uint32_t last_sock_update;
+    if(t - last_sock_update < 200)
+        return;
+    last_sock_update = t;
+
     String s = jsonCurrent();
     if(s) {
         //Serial.println("ws: " + s);
         ws.textAll(s);
     }
 
-    uint32_t t = millis();
-    if(t - last_sock_update < 1000)
+    static uint32_t last_client_update;
+    if(t - last_client_update < 2000)
         return;
-    last_sock_update = t;
+    last_client_update = t;
 
 
     ws.cleanupClients();

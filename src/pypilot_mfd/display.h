@@ -36,8 +36,8 @@ void display_render();
 void display_data_update(display_item_e item, float value, data_source_e);
 
 struct page_info {
-    page_info(String n, String &d) : name(n), description(d), enabled(false) {}
-    String name;
+    page_info(char n, String &d) : name(n), description(d), enabled(false) {}
+    char name;
     String &description;
     bool enabled;
 };

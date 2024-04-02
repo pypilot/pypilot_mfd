@@ -42,52 +42,52 @@
         <div class='col2-grid'>
           <span>USB data (NMEA0183)</span>
           <span>
-            <input type='checkbox' name='input_usb' id='input_usb' value=%INPUTUSB%><label for='input_usb'>Input</label>
-            <input type='checkbox' name='output_usb' id='output_usb' value=%OUTPUTUSB%><label for='output_usb'>Output</label>
-            <select id='usb_baud_rate' value='%USB_BAUD_RATE%'>
+            <input type='checkbox' name='input_usb' id='input_usb' %INPUTUSB%><label for='input_usb'>Input</label>
+            <input type='checkbox' name='output_usb' id='output_usb' %OUTPUTUSB%><label for='output_usb'>Output</label>
+            <select id='usb_baud_rate' name='usb_baud_rate' value='%USB_BAUD_RATE%'>
               <option value='38400'>38400</option>
               <option value='115200'>115200</option>
             </select>
           </span>
           <span>RS422 data (NMEA0183)</span>
           <div>
-            <select id='rs422_baud_rate' value='%RS422_BAUD_RATE%'>
+            <select id='rs422_baud_rate' name='rs422_baud_rate' value='%RS422_BAUD_RATE%'>
               <option value='4800'>4800</option>
               <option value='38400'>38400</option>
             </select>
           </div>
           <span>WIFI data</span>
           <span>
-            <input type='checkbox' name='input_wifi' id='input_wifi' value=%INPUTWIFI%><label for='input_wifi'>Input</label>
-            <input type='checkbox' name='output_wifi' id='output_wifi' value=%OUTPUTWIFI%><label for='output_wifi'>Output</output>
+            <input type='checkbox' name='input_wifi' id='input_wifi' %INPUTWIFI%><label for='input_wifi'>Input</label>
+            <input type='checkbox' name='output_wifi' id='output_wifi' %OUTPUTWIFI%><label for='output_wifi'>Output</output>
           </span>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_pypilot'>
+          <input type='radio' name='wifidata' id='nmea_pypilot' value='nmea_pypilot'>
           <label for='nmea_pypilot'>pypilot NMEA0183 port 20220</label>
           <span></span>
           <label for='nmea_pypilot'>pypilot server: %PYPILOT_ADDR%</label>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_signalk'>
+          <input type='radio' name='wifidata' id='nmea_signalk' value='nmea_signalk'>
           <label for='nmea_signalk'> signalk-server NMEA0183 port 10110</label>
           <span></span>
           <label for='nmea_signalk'>signalk server: %SIGNALK_ADDR%</label>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_client'></input>
+          <input type='radio' name='wifidata' id='nmea_client' value='nmea_client'></input>
           <label for='nmea_client'>TCP client</label>
           <span></span>            
-          <label for='nmea_client'>Host <input type='text' name='nmea_tcp_host' style='width: 10em;' value=%NMEACLIENTADDR% > Port <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% ></label>
+          <label for='nmea_client'>Host <input type='text' name='nmea_tcp_client_addr' style='width: 10em;' value=%NMEACLIENTADDR% > Port <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% ></label>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_server'></input>
+          <input type='radio' name='wifidata' id='nmea_server' value='nmea_server'></input>
           <label for='nmea_server'>TCP server</label>
           <span></span>            
-          <label for='nmea_server'>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>
+          <label for='nmea_server'>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server_port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='signalk'></input>
+          <input type='radio' name='wifidata' id='signalk' value='signalk'></input>
           <label for='signalk'>SignalK</label>
           <span></span>
           <label for='signalk'>SignalK server: %SIGNALK_ADDR%</span>
@@ -111,23 +111,28 @@
       <h2>Display</h2>
       <form action='display' method='post'>
         <div class='col1-grid'>
-          <span><input type='checkbox' name='usefahrenheit' id='usefahrenheit' value=%USEFAHRENHEIT%>
+          <span><input type='checkbox' name='use360' id='use360' %USE360%>
+            <label for='use360'>Use 0-360 rather than 0-180 for angles</label></span>
+          <span><input type='checkbox' name='usefahrenheit' id='usefahrenheit' %USEFAHRENHEIT%>
             <label for='usefahrenheit'>Use Fahrenheit (default celcius)</label></span>
-          <span><input type='checkbox' name='usedepthft' id='usedepthft' value=%USEDEPTHFT%>
+          <span><input type='checkbox' name='usedepthft' id='usedepthft' %USEDEPTHFT%>
             <label for='usedepthft'>Use depth ft (default meters)</label></span>
-          <span>Latitude Longitude Format <select name='latlonformat' value=%LATLONFORMAT%>
-            <option value='DECIMAL_DEGREES'>Decimal Degrees</option>
-            <option value='DECIMAL_MINUTES'>Decimal Minutes</option>
-            <option value='DECIMAL_SECONDS'>Decimal Seconds</option>
-          </select></span>
+          <span>Latitude Longitude Format
+            <select name='lat_lon_format' value=%LATLONFORMAT%>
+              <option value='degrees'>Decimal Degrees</option>
+              <option value='minutes'>Decimal Minutes</option>
+              <option value='seconds'>Decimal Seconds</option>
+            </select>
+          </span>
           <span>LCD contrast <input type='number' name='contrast' style='width: 4em' value=%CONTRAST%></span>
           <span>LCD backlight <input type='number' name='backlight' style='width: 4em' value=%BACKLIGHT%></span>          
         </div>
-        %DISPLAYPAGES%
-        
+        <div class='col1-grid'>
+          %DISPLAYPAGES%
+        </div>
         <div class='col3-grid'>
           <div> </div>
-          <input class='button' type='submit' class='button-74' value='Submit'>
+          <input class='button' type='submit' value='Submit'>
         </div>
       </form>
     </div>
@@ -135,5 +140,5 @@
 <h5>pypilot multi-function display %VERSION%</h5>
 <h5>written by Sean D'Epagnier</h5>
 </body>
-<script type='text/javascript' src='wind.js'></script>
+<script type='text/javascript' src='mfd.js'></script>
 </html>

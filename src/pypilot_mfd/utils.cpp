@@ -46,11 +46,11 @@ float nice_number(float v, int dir)
     return v;
 }
 
-float resolv(float angle)
+float resolv(float angle, float mid)
 {
-    while(angle < -180)
+    while(angle < mid-180)
         angle += 360;
-    while(angle > 180)
+    while(angle > mid+180)
         angle -= 360;
     return angle;
 }
@@ -70,24 +70,41 @@ void distance_bearing(float lat1, float lon1, float lat2, float lon2, float *dis
         *brg = rad2deg(atan2(y, x));
 }
 
-uint64_t mac_str_to_int(String mac)
+uint64_t mac_as_int(const uint8_t *mac_addr)
 {
-    uint8_t data[8] = {0};
-    if(sscanf(mac.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", data+0, data+1, data+2, data+3, data+4, data+5) == 6)
-        return *(uint64_t*)data;
-    return 0;
+    uint64_t r = 0;
+    for(int i=0; i<6; i++) {
+        r<<=8;
+        r |= mac_addr[i];
+    }
+    return r;
 }
 
-String mac_int_to_str(uint64_t i)
+uint64_t mac_str_to_int(String mac)
 {
-    uint8_t mac_addr[8] = {0};
-    memcpy(mac_addr, &i, 6);
+    int data[6] = {0};
+    if(sscanf(mac.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", data+0, data+1, data+2, data+3, data+4, data+5) != 6)
+        return 0;
+
+    uint8_t mac_addr[6];
+    for(int i=0; i<6; i++)
+        mac_addr[i] = data[i];
+
+    return mac_as_int(mac_addr);
+}
+
+String mac_int_to_str(uint64_t r)
+{
+    uint8_t mac_addr[6] = {0};
+    for(int i=0; i<6; i++) {
+        mac_addr[5-i] = r & 0xff;
+        r>>=8;
+    }
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
     return macStrt;
 }
-
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     Serial.printf("Listing directory: %s\r\n", dirname);

@@ -174,10 +174,6 @@ void lowpass_direction(float dir)
 uint64_t cur_primary;
 uint32_t cur_primary_time;
 
-uint64_t mac_as_int(const uint8_t *mac_addr)
-{
-    return ((*(uint32_t*)mac_addr) << 16) + (*(uint16_t*)(mac_addr+4));
-}
 
 // callback when data is recv from Master
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
@@ -254,7 +250,6 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 #endif
     uint64_t mac_int = mac_as_int(mac_addr);
     uint32_t t = millis();
-
     if(wind_transmitters.find(mac_int) != wind_transmitters.end()) {
         wind_transmitter_t &wt = wind_transmitters[mac_int];
         wt.dir = resolv(dir + wt.offset);
@@ -271,7 +266,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
         }
     } else {
         wind_transmitter_t wt;
-        wt.dir = dir;
+        wt.dir = resolv(dir);
         wt.knots = knots;
         wt.offset = 0;
         wt.position = SECONDARY;
@@ -281,6 +276,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 
     if(mac_int == cur_primary) {
         wind_transmitter_t &wt = wind_transmitters[mac_int];
+
         lowpass_direction(wt.dir);
 
         char buf[128];

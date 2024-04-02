@@ -15,7 +15,7 @@
 #define DEFAULT_CHANNEL 6
 #define MAGIC "3A61CF00"
 
-String settings_filename = "settings.json";
+String settings_filename = "/settings.json";
 
 String get_wifi_data_str()
 {
@@ -29,6 +29,11 @@ String get_wifi_data_str()
     return "";
 }
 
+static String JString(const JSONVar &j)
+{
+    return j;
+}
+
 bool settings_load(String suffix)
 {
     printf("settings load\n");
@@ -36,19 +41,20 @@ bool settings_load(String suffix)
     // start with default settings
     settings.magic = MAGIC;
 
-    File file = SPIFFS.open(settings_filename + suffix);
+    File file = SPIFFS.open(settings_filename + suffix, "r");
     JSONVar s;
     bool ret = true;
     if(file && !file.isDirectory()) {
         String data;
         while(file.available())
-            data += file.read();
+            data += file.readString();
         file.close();
 
-        printf("READ SETTINGS %s\n", data.c_str());
+        //printf("READ SETTINGS %s\n", data.c_str());
 
         s = JSON.parse(data);
-        if(!s.hasOwnProperty("magic") || s["magic"] != MAGIC) {
+        String magic = s["magic"];
+        if(!s.hasOwnProperty("magic") || magic != MAGIC) {
             printf("settings file invalid/corrupted, will ignore data");
             s = JSONVar();
             ret = false;
@@ -58,9 +64,8 @@ bool settings_load(String suffix)
         ret = false;
     }
 
-
 #define LOAD_SETTING(NAME, DEFAULT)   if(s.hasOwnProperty(#NAME)) settings.NAME = s[#NAME]; else settings.NAME = DEFAULT;
-#define LOAD_SETTING_S(NAME, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = JSON.stringify(s[#NAME]); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_S(NAME, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = JString(s[#NAME]); else settings.NAME = DEFAULT;
 #define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = (TYPE)(int)s[#NAME]; else settings.NAME = DEFAULT;
 
 #define LOAD_SETTING_BOUND(NAME, MIN, MAX, DEFAULT) \
@@ -70,6 +75,7 @@ bool settings_load(String suffix)
 
     LOAD_SETTING_S(ssid, "pypilot")
     LOAD_SETTING_S(psk, "")
+
     LOAD_SETTING(channel, DEFAULT_CHANNEL);
 
     LOAD_SETTING(input_usb, true)
@@ -88,6 +94,7 @@ bool settings_load(String suffix)
     LOAD_SETTING(compensate_accelerometer, false)
 
     //display
+    LOAD_SETTING(use_360, false)
     LOAD_SETTING(use_fahrenheit, false)
     LOAD_SETTING(use_depth_ft, false)
     LOAD_SETTING_S(lat_lon_format, "minutes")
@@ -108,23 +115,29 @@ bool settings_load(String suffix)
     if(s.hasOwnProperty("transmitters")) {
         JSONVar t = s["transmitters"];
         JSONVar k = t.keys();
+
         for(int i=0; i<k.length(); i++) {
             String mac = k[i];
+            JSONVar u = t[mac];
+
             wind_transmitter_t tr = {0};
-            tr.position = (wind_position)(int)t["position"];
-            tr.offset = (double)t["offset"];
+            tr.position = (wind_position)(int)u["position"];
+            tr.offset = (double)u["offset"];
+
+            String str = JSON.stringify(u);//["position"];
             uint64_t maci = mac_str_to_int(mac);
             wind_transmitters[maci] = tr;
         }
     }
+
     return ret;
 }
 
 bool settings_store(String suffix)
 {
     JSONVar s;
-
 #define STORE_SETTING(NAME)    s[#NAME] = settings.NAME;
+    STORE_SETTING(magic)
 
     STORE_SETTING(ssid)
     STORE_SETTING(psk)
@@ -146,6 +159,7 @@ bool settings_store(String suffix)
     STORE_SETTING(compensate_accelerometer)
 
     //display
+    STORE_SETTING(use_360)
     STORE_SETTING(use_fahrenheit)
     STORE_SETTING(use_depth_ft)
     STORE_SETTING(lat_lon_format)
@@ -181,6 +195,7 @@ bool settings_store(String suffix)
     }
 
     String data = JSON.stringify(s);
+    printf("store data %s\n", data.c_str());
     uint8_t *cdata = (uint8_t*)data.c_str();
     int len = data.length();
     file.write(cdata, len);
