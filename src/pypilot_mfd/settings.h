@@ -45,6 +45,7 @@ struct settings_t {
     // cache mdns 
     String pypilot_addr, signalk_addr;
     int signalk_port;
+    String signalk_token;
 };
 
 enum wind_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};

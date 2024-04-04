@@ -4,9 +4,9 @@ length = 116;
 width = 85;
 height = 14;
 
-board_length = 100;
+board_length = 116;
 
-pane = [118,88, 3];
+pane = [118,88, 1.7];
 
 thickness = 8;
 bthickness = 2;
@@ -68,7 +68,7 @@ module frame() {
     difference() {
      translate([0,0,pane[2]/2])
         minkowski() {
-            cube([length, width, pane[2]], center=true);
+            cube([length, width, 1], center=true);
             cylinder(r=thickness,h=1);
         }
          cube([length, width, height], center=true);

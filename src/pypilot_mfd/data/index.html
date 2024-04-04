@@ -30,10 +30,11 @@
         </div>
       </div>
       <table style='width: 100%%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
+      <form action='scan' method='post'>
         <div class='col3-grid'>
           <div> </div>
-          <div ><button class='button' name='scan' onclick='scanSensors()' style='width: 100%%'>Scan</input></div>
-        </div>
+          <input class='button' type='submit' style='width: 100%%' value='Scan'>Scan</input>
+      </form>
     </div>
 
     <div class='box'>
@@ -105,6 +106,7 @@
         if (wifi_data)
             wifi_data.checked = true;
       </script>
+      <a href='/data.htm'>View Current Display Data</a>
     </div>
  
     <div class='box'>
@@ -134,6 +136,11 @@
           <div> </div>
           <input class='button' type='submit' value='Submit'>
         </div>
+      </form>
+      <form action='display_auto' method='post'>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='submit' style='width: 100%%'>Auto-enable pages</input>
       </form>
     </div>
   </div>

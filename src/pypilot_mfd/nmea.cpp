@@ -161,6 +161,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
             route_info.wpt_lat = wpt_lat;
             route_info.wpt_lon = wpt_lon;
         }
+        display_data_update(ROUTE_INFO, 0, source);
     } else
 
     if(prefix(line, "RMC")) {

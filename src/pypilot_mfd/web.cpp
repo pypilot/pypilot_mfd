@@ -15,10 +15,12 @@
 #include "display.h"
 #include "utils.h"
 #include "zeroconf.h"
+#include "signalk.h"
 #include "web.h"
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
+AsyncWebSocket ws_data("/ws_data");
 
 wind_position str2position(String p) {
     if(p == "Primary")   return PRIMARY;
@@ -35,24 +37,20 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
         data[len] = 0;
         String message = (char*)data;
         Serial.printf("websocket got %s\n", data);
-        if(message == "scan") ; // do scan put all sensors on same channel
-
-        else {
-            JSONVar input = JSON.parse(message);
-            for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
-                String mac = mac_int_to_str(i->first);
-                wind_transmitter_t &t = i->second;
-                if(input.hasOwnProperty(mac)) {
-                    JSONVar s = input[mac];
-                    if(s.hasOwnProperty("offset")) {
-                        float offset = (double)s["offset"];
-                        offset=fminf(fmaxf(offset, -180), 180);
-                        t.offset = offset;
-                    }
-                    if(s.hasOwnProperty("position"))
-                        t.position = str2position(s["position"]);
-                    break;
+        JSONVar input = JSON.parse(message);
+        for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
+            String mac = mac_int_to_str(i->first);
+            wind_transmitter_t &t = i->second;
+            if(input.hasOwnProperty(mac)) {
+                JSONVar s = input[mac];
+                if(s.hasOwnProperty("offset")) {
+                    float offset = (double)s["offset"];
+                    offset=fminf(fmaxf(offset, -180), 180);
+                    t.offset = offset;
                 }
+                if(s.hasOwnProperty("position"))
+                    t.position = str2position(s["position"]);
+                break;
             }
         }
     }
@@ -72,7 +70,7 @@ String position_str(wind_position p)
 
 static String jsonSensors() {
     uint32_t t = millis();
-    JSONVar sensors;
+    JSONVar windsensors;
     for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) {
         JSONVar jwt;
         wind_transmitter_t &wt = i->second;
@@ -83,9 +81,29 @@ static String jsonSensors() {
         jwt["knots"] = wt.knots;
         jwt["dt"] = t - wt.t;
 
-        sensors[mac_int_to_str(i->first)] = jwt;
+        windsensors[mac_int_to_str(i->first)] = jwt;
     }
+    JSONVar sensors;
+    if(windsensors.length())
+        sensors["wind"] = windsensors;
     return JSON.stringify(sensors);
+}
+
+static String jsonDisplayData() {
+    JSONVar displaydata;
+    float value;
+    String source;
+    uint32_t time, t0=millis();
+    for(int i=0; i<DISPLAY_COUNT; i++)
+        if(display_data_get((display_item_e)i, value, source, time)) {
+            JSONVar ji;
+            ji["value"] = value;
+            ji["source"] = source;
+            ji["latency"] = t0-time;
+            String name = getItemLabel((display_item_e)i);
+            displaydata[name] = ji;
+        }
+    return JSON.stringify(displaydata);
 }
 
 static String jsonCurrent()
@@ -165,6 +183,7 @@ String processor(const String& var)
 void web_setup()
 {
     ws.onEvent(onEvent);
+    ws_data.onEvent(onEvent);
     server.addHandler(&ws);
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -185,6 +204,11 @@ void web_setup()
         request->redirect("/");
         settings_store();
     });
+
+    server.on("/scan", HTTP_POST, [](AsyncWebServerRequest *request) {
+        scan_devices();
+        request->redirect("/");
+    }
 
     server.on("/data", HTTP_POST, [](AsyncWebServerRequest *request) {
         //printf("post data %d\n", request->params());
@@ -250,8 +274,14 @@ void web_setup()
         settings.enabled_pages = enabled_pages;
         request->redirect("/");
         settings_store();
+        signalk_subscribe();
         display_change_page(0);
     });
+
+    server.on("/display_auto", HTTP_POST, [](AsyncWebServerRequest *request) {
+        display_auto();
+        request->redirect("/");
+    }
 
     server.serveStatic("/", SPIFFS, "/");
 
@@ -278,8 +308,11 @@ void web_poll()
         return;
     last_client_update = t;
 
-
+    if(ws.count())
+        ws.textAll(jsonSensors());
     ws.cleanupClients();
 
-    ws.textAll(jsonSensors());
+    if(ws_data.count())
+        ws_data.textAll(jsonDisplayData());
+    ws_data.cleanupClients();
 }

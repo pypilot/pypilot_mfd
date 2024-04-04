@@ -29,7 +29,7 @@ settings_t settings;
 esp_now_peer_info_t chip;
 
 
-#define ID  0xf179
+#define WIND_ID  0xf179
 #define CHANNEL_ID 0x0a21
 
 enum keys {KEY_PAGE_UP, KEY_SCALE, KEY_PAGE_DOWN, KEY_0, KEY_COUNT};
@@ -174,31 +174,12 @@ void lowpass_direction(float dir)
 uint64_t cur_primary;
 uint32_t cur_primary_time;
 
-
-// callback when data is recv from Master
-void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
-#if 0
-    char macStrt[18];
-    snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
-             mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    Serial.print("Last Packet Recv from: "); Serial.print (macStrt);
-    //Serial.print(" Last Packet Recv Data: "); Serial.print(*data);
-    Serial.print(" Last Packet Recv Data Len: "); Serial.print(data_len);
-    Serial.println("");
-#endif
-    if(data_len != sizeof(packet_t)) {
-        Serial.println("wrong packet size");
-        return;
-    }
-        
-    packet_t *packet = (packet_t*)data;
-    if(packet->id != ID) {
-      Serial.println("ID mismatch");
-    }
-    
+static void DataRecvWind(const uint8_t *mac_addr, const uint8_t *data, int data_len)
+{
     uint16_t crc = crc16(data, data_len-2);
+    packet_t *packet = (packet_t*)data;
     if(crc != packet->crc16) {
-      Serial.printf("crc failed %x %x\n", crc, packet->crc16);
+        Serial.printf("espnow wind data packet crc failed %x %x\n", crc, packet->crc16);
         return;
     }
 
@@ -208,7 +189,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
     else
         dir = 360 - packet->angle*360.0f/16384.0f;
 
-    if(packet->period > 100) // period of 100uS cups is about 193 knots
+    if(packet->period > 100) // period of 100uS cups is about 193 knots for 100 rotations/s
         knots = 19350.0 / packet->period;
     else
         knots = 0;
@@ -299,6 +280,29 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 
     if(t - cur_primary_time > 1000)
         cur_primary = 0;
+}
+
+// callback when data is recv from Master
+void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+#if 0
+    char macStrt[18];
+    snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
+             mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+    Serial.print("Last Packet Recv from: "); Serial.print (macStrt);
+    //Serial.print(" Last Packet Recv Data: "); Serial.print(*data);
+    Serial.print(" Last Packet Recv Data Len: "); Serial.print(data_len);
+    Serial.println("");
+#endif
+    if(data_len != sizeof(packet_t)) {
+        Serial.println("wrong packet size");
+        return;
+    }
+        
+    packet_t *packet = (packet_t*)data;
+    if(packet->id != WIND_ID)
+        DataRecvWind(mac_addr, data, data_len);
+    else
+        Serial.println("ID mismatch");
 }
 
 void sendChannel()

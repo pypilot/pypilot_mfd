@@ -312,6 +312,8 @@ bool ais_parse_line(const char *line, data_source_e source)
     if(fragindex == fragcount) {
         bool result = decode_ais_data(data);
         data.clear();
+        if(result)
+            display_data_update(AIS_DATA, 0, source);
         return result;
     }
     return false;

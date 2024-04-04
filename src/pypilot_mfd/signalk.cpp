@@ -24,10 +24,12 @@
 #include "utils.h"
 #include "settings.h"
 
-String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2UiOiJweXBpbG90X21mZC0wMzgyMjQ2OTg4MCIsImlhdCI6MTcxMTY5MDA0MCwiZXhwIjoxNzQzMjQ3NjQwfQ.T-g3vkQMz5e6lbp9UGNEZgo6mEJex0i8eOeOUGUCGOI";
+//String token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2UiOiJweXBpbG90X21mZC0wMzgyMjQ2OTg4MCIsImlhdCI6MTcxMTY5MDA0MCwiZXhwIjoxNzQzMjQ3NjQwfQ.T-g3vkQMz5e6lbp9UGNEZgo6mEJex0i8eOeOUGUCGOI";
 String access_url;
 String ws_url;
 String uid;
+
+esp_websocket_client_handle_t ws_h;
 
 float to_knots(float m_s) { return m_s * 1.94384; }
         float celcius(float kelvin) { kelvin - 273.15; }
@@ -80,7 +82,7 @@ static void signalk_parse_value(JSONVar value)
     if(path == "navigation.courseOverGroundTrue") display_data_update(GPS_HEADING, rad2deg(v), s); else
     if(path == "navigation.speedOverGroundTrue") display_data_update(GPS_SPEED, to_knots(v), s); else
     if(path == "steering.rudderAngle") display_data_update(RUDDER_ANGLE, rad2deg(v), s); else
-    if(path == "steering.autopilot.target.headingTrue") route_info.target_bearing = rad2deg(v); else
+    if(path == "steering.autopilot.target.headingTrue") route_info.target_bearing = rad2deg(v), display_data_update(ROUTE_INFO, 0, s); else
     if(path == "navigation.headingMagnetic") display_data_update(COMPASS_HEADING, rad2deg(v), s); else
     if(path == "navigation.rateOfTurn") display_data_update(RATE_OF_TURN, rad2deg(v), s); else
     if(path == "navigation.speedThroughWater") display_data_update(WATER_SPEED, to_knots(v), s); else
@@ -88,17 +90,6 @@ static void signalk_parse_value(JSONVar value)
         ;
     
     return;
-}
-
-static void signalk_load_token()
-{
-
-}
-
-static void signalk_store_token()
-{
-    listDir(SPIFFS, "/", 0);
-
 }
 
 static bool signalk_parse(String line)
@@ -121,24 +112,70 @@ static bool signalk_parse(String line)
     return true;
 }
 
+static String item_to_signalk_path(display_item_e item)
+{
+    switch(item) {
+        case WIND_SPEED:          return "environment.wind.speedApparent";
+        case WIND_DIRECTION:      return "environment.wind.angleApparent";
+        case AIR_TEMPERATURE:     return "environment.outside.temperature";
+        case BAROMETRIC_PRESSURE: return "environment.outside.pressure";
+        case DEPTH:               return "environment.depth.belowSurface";
+        case GPS_SPEED:           return "navigation.speedOverGroundTrue";
+        case RUDDER_ANGLE:        return "steering.rudderAngle";
+        case ROUTE_INFO:          return "steering.autopilot.target.headingTrue"; // extend to multiple  keys?!
+        case COMPASS_HEADING:     return "navigation.headingMagnetic";
+        case RATE_OF_TURN:        return "navigation.rateOfTurn";
+        case WATER_SPEED:         return "navigation.speedThroughWater";
+    }
+    return "";
+}
 
-static void subscribe()
-{    
-    JSONVar subscription;
-    subscription["path"] = "navigation.speedOverGround";
-    subscription["minPeriod"] = 1000; // milliseconds
-    subscription["format"] = "delta";
-    subscription["policy"] = "instant";
+void signalk_subscribe()
+{
+    if (!esp_websocket_client_is_connected(ws_h))
+        return;
 
+    // unsubscribe all
+    JSONVar unsubscribe;
+    unsubscribe["context"] = "*";
+    JSONVar pathall;
+    pathall["path"] = "*";
+    JSONVar pathsall;
+    pathsall[0] = pathall;
+    unsubscribe["unsubscribe"] = pathall;
+
+    String payload = JSON.stringify(unsubscribe);
+    esp_websocket_client_send_text(ws_h, payload.c_str(), payload.length(), portMAX_DELAY);
+
+    if(!settings.input_wifi)
+        return;
+
+    std::list<display_item_e> items;
+    display_items(items);
+
+    int i=0;
     JSONVar subscriptions;
-    subscriptions[0] = subscription;
+    for(std::list<display_item_e>::iterator it=items.begin(); it!=items.end(); it++) {
+        JSONVar subscription;
+        String path = item_to_signalk_path(*it);
+        if(!path)
+            continue;
+        subscription["path"] = path;
+        subscription["minPeriod"] = 1000; // milliseconds
+        subscription["format"] = "delta";
+        subscription["policy"] = "instant";
+
+        subscriptions[i++] = subscription;
+    }
 
     JSONVar msg;
     msg["context"] = "vessels.self";
     msg["subscribe"] = subscriptions;
+
+    payload = JSON.stringify(msg);
+    esp_websocket_client_send_text(ws_h, payload.c_str(), payload.length(), portMAX_DELAY);
 }
 
-esp_websocket_client_handle_t ws_h;
 static void signalk_disconnect()
 {
     if(!ws_h)
@@ -211,8 +248,7 @@ static void request_access()
                     if(permission == "APPROVED") {
                         printf("signalk got new token!");
                         //store token, close signalk (to reconnect with token)
-                        token = JSON.stringify(access["token"]);
-                        signalk_store_token();
+                        settings.signalk_token = JSON.stringify(access["token"]);
                         signalk_disconnect();
                     }
                 } else {
@@ -233,6 +269,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
     switch (event_id) {
     case WEBSOCKET_EVENT_CONNECTED:
         Serial.println("WEBSOCKET_EVENT_CONNECTED");
+        signalk_subscribe();
         break;
     case WEBSOCKET_EVENT_DISCONNECTED:
         Serial.println("WEBSOCKET_EVENT_DISCONNECTED");
@@ -308,17 +345,15 @@ static void signalk_connect()
     if(!ws_url)
         return;
 
-    signalk_load_token();
-
     //ws_url += "?subscribe=none";
     esp_websocket_client_config_t ws_cfg = {0};
     ws_cfg.uri = ws_url.c_str();
     //ws_cfg.uri = "ws://10.10.10.1:3000/signalk/v1/stream";
     //ws_cfg.uri = "ws://10.10.10.66:12345/signalk/v1/stream";
 
-    if(token) {
+    if(settings.signalk_token) {
         headerstring = "Authorization: JWT ";
-        headerstring += token;
+        headerstring += settings.signalk_token;
         headerstring += "\r\n";
         ws_cfg.headers = (char*)headerstring.c_str();
     }
@@ -358,7 +393,7 @@ void signalk_poll()
         return;
 
     if(settings.output_wifi)
-        if(token.length()) {
+        if(settings.signalk_token.length()) {
             JSONVar upd;
             int i=0;
             for(std::map<String, float>::iterator it = skupdates.begin(); it != skupdates.end(); it++) {

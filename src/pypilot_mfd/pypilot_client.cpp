@@ -12,6 +12,7 @@
 
 #include "zeroconf.h"
 #include "pypilot_client.h"
+#include "display.h"
 #include "settings.h"
 
 
@@ -232,9 +233,10 @@ void pypilot_client_poll() {
     if(millis() - strobe_time > 5000 || settings.pypilot_addr != pypilot_client.host) {
         if(pypilot_client.connected())
             pypilot_client.disconnect();
-    } else if(pypilot_client.connected())
+    } else if(pypilot_client.connected()) {
         pypilot_client.poll();
-    else
+        display_data_update(PYPILOT, 0, WIFI_DATA);
+    } else
         pypilot_client.connect(settings.pypilot_addr);
 }
 

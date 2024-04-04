@@ -6,6 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <list>
 #include <vector>
 
 enum display_item_e { WIND_SPEED,
@@ -25,6 +26,9 @@ enum display_item_e { WIND_SPEED,
                       RATE_OF_TURN,
                       RUDDER_ANGLE,
                       TIME,
+                      ROUTE_INFO,
+                      AIS_DATA,
+                      PYPILOT,
                       DISPLAY_COUNT };
 
 enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
@@ -34,6 +38,11 @@ void display_change_page(int dir);
 void display_change_scale();
 void display_render();
 void display_data_update(display_item_e item, float value, data_source_e);
+bool display_data_get(display_item_e item, float &value, String &source, uint32_t &time);
+void display_auto();
+void display_items(std::list<display_item_e> &items);
+
+String getItemLabel(display_item_e item);
 
 struct page_info {
     page_info(char n, String &d) : name(n), description(d), enabled(false) {}

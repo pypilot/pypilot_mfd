@@ -8,3 +8,4 @@
 
 void signalk_poll();
 void signalk_send(String key, float value);
+void signalk_subscribe();
