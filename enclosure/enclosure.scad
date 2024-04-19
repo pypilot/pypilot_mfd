@@ -8,7 +8,7 @@ board_length = 116;
 
 pane = [118,88, 1.7];
 
-thickness = 8;
+thickness = 6;
 bthickness = 2;
 
 module box() {
@@ -21,7 +21,10 @@ module box() {
         translate([-board_length/2,-width/2,bthickness])
         cube([board_length, width, height+bthickness]);
     
-        cylinder(r=7, h=40, center=true);
+         translate([10,0,0])
+        cylinder(r=6.5, h=40, center=true);
+         translate([-8,0,0])
+        cylinder(r=6.5, h=40, center=true);
 
         translate([0,0,height+bthickness])
             cube(pane, center=true);

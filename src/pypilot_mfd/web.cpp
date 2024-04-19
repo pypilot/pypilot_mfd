@@ -84,7 +84,7 @@ static String jsonSensors() {
         windsensors[mac_int_to_str(i->first)] = jwt;
     }
     JSONVar sensors;
-    if(windsensors.length())
+    if(windsensors.length() > 0)
         sensors["wind"] = windsensors;
     return JSON.stringify(sensors);
 }
@@ -111,7 +111,10 @@ static String jsonCurrent()
     JSONVar j;
     j["direction"] = lpdir;
     j["knots"] = knots;
-    return JSON.stringify(j);
+
+    JSONVar l;
+    l["wind"] = j;
+    return JSON.stringify(l);
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -208,7 +211,7 @@ void web_setup()
     server.on("/scan", HTTP_POST, [](AsyncWebServerRequest *request) {
         scan_devices();
         request->redirect("/");
-    }
+    });
 
     server.on("/data", HTTP_POST, [](AsyncWebServerRequest *request) {
         //printf("post data %d\n", request->params());
@@ -281,7 +284,7 @@ void web_setup()
     server.on("/display_auto", HTTP_POST, [](AsyncWebServerRequest *request) {
         display_auto();
         request->redirect("/");
-    }
+    });
 
     server.serveStatic("/", SPIFFS, "/");
 

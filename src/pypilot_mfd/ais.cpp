@@ -16,12 +16,12 @@ std::map<int, ship> ships;
 
 float ship::simple_x(float slon)
 {
-    return cosf(deg2rad(lat))*resolv(slon-lon) * 60;
+    return cosf(deg2rad(lat))*resolv(lon-slon) * 60;
 }
 
 float ship::simple_y(float slat)
 {
-    return (slat-lat)*60;
+    return (lat-slat)*60;
 }
 
 void ship::compute(float slat, float slon, float ssog, float scog, uint32_t t0)
@@ -66,9 +66,9 @@ void ship::compute(float slat, float slon, float ssog, float scog, uint32_t t0)
 static const char *skip(const char *line, int count)
 {
     while(count) {
-        if(!line[count])
+        if(!*line)
             return 0;
-        if(line[count] == ',')
+        if(*line == ',')
             count--;
         line++;
     }
@@ -79,6 +79,11 @@ static std::vector<bool> ais_data[2];
 
 static int ais_n(std::vector<bool> &data, int start, int len, bool sign=false)
 {
+    //printf("ais_n %d %d %d\n", data.size(), start, len);
+    if(data.size() < start+len) {
+        printf("warning, empty ais data\n");
+        return 0;
+    }
     bool negative = false;
     if (sign) {
         if (data[start])
@@ -143,6 +148,8 @@ float sign(float v) {
 }
 
 float ais_rot(int rot) {
+    if(rot == -128)
+        return NAN;
     float d = rot / 4.733;
     return sign(rot) * d * d;
 }
@@ -206,6 +213,8 @@ static bool decode_ais_data(std::vector<bool> &data)
     int message_type = ais_n(data, 0, 6);
     int mmsi = ais_n(data, 8, 30);
 
+    //printf("decode ais_data %d %d\n", message_type, mmsi);
+
     if(ships.find(mmsi) == ships.end())
         ships[mmsi] = ship();
 
@@ -221,6 +230,7 @@ static bool decode_ais_data(std::vector<bool> &data)
         s.cog = ais_cog(ais_n(data, 116, 12));
         //'hdg' = ais_hdg(data[128:137)),
         s.timestamp = millis();
+        //printf("ais 1 %s %f %f %f %f %f\n", s.status.c_str(), s.rot, s.sog, s.lon, s.lat, s.cog);
     } else if(message_type == 5) {
         s.callsign = ais_t(data, 70, 42);
         s.name = ais_t(data, 112, 120);
@@ -272,8 +282,9 @@ static bool decode_ais_data(std::vector<bool> &data)
 // decode nmea ais messages and store ship information for display
 bool ais_parse_line(const char *line, data_source_e source)
 {
+    //printf("ais_parse_line %s\n", line);
     int len = strlen(line);
-    if(len < 10 || line[3] != 'V' || line[4] != 'D' || line[5] != 'D')
+    if(len < 10 || line[3] != 'V' || line[4] != 'D' || line[5] != 'M')
         return false;
 
     int fragcount, fragindex;
@@ -281,7 +292,7 @@ bool ais_parse_line(const char *line, data_source_e source)
         return false;
 
     const char *l = skip(line+6, 4);
-    if(*l)
+    if(!l)
         return false;
     char channel = 'A';
     if(*l != ',')
@@ -293,7 +304,7 @@ bool ais_parse_line(const char *line, data_source_e source)
     if(!e)
         return false;
 
-    len = l-e-1;
+    len = e-l-1;
     if(len > 77)
         return false;
 

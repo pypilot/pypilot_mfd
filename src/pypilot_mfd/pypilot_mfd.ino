@@ -32,8 +32,8 @@ esp_now_peer_info_t chip;
 #define WIND_ID  0xf179
 #define CHANNEL_ID 0x0a21
 
-enum keys {KEY_PAGE_UP, KEY_SCALE, KEY_PAGE_DOWN, KEY_0, KEY_COUNT};
-int key_pin[KEY_COUNT] = {25, 26, 270, };
+enum keys {KEY_PAGE_UP, KEY_SCALE, KEY_PAGE_DOWN, KEY_F1, KEY_F2, KEY_COUNT};
+int key_pin[KEY_COUNT] = {25, 26, 27, 32, 33};
 
 std::map<uint64_t, wind_transmitter_t> wind_transmitters;
 
@@ -359,23 +359,26 @@ struct SerialLinebuffer
         : serial(s), source(so) {}
 
     String readline() {
-        String data = serial.readStringUntil('\n');
-        if(!data)
-            return "";
-        if(data[buf.length()-1] == '\n') {
-            data = buf + data;
-            buf = "";
-            return data;
+        int c;
+        for(;;) {
+            c = serial.read();
+            if(c < 0)
+                return "";
+            if(c == '\n' || c == '\r') {
+                if(buf.isEmpty())
+                    continue;
+                String data = buf;
+                buf = "";
+                return data;
+            }
+            buf += (char)c;
         }
-
-        buf += data;
-        return "";
     }
 
     void read(bool enabled=true) {
         for(;;) {
             String line = readline();
-            if(!line)
+            if(line.isEmpty())
                 break;
 
             if(enabled)
@@ -393,8 +396,11 @@ SerialLinebuffer Serial2Buffer(Serial2, RS422_DATA);
 
 static void read_serials()
 {
+    uint32_t t0 = millis();
     SerialBuffer.read(settings.input_usb);
+    uint32_t t1 = millis();
     Serial2Buffer.read();
+    uint32_t t2 = millis();
 }
 
 void setup()
@@ -413,10 +419,6 @@ void setup()
     Serial.begin(settings.usb_baud_rate == 38400 ? 38400 : 115200);
     Serial.setTimeout(0);
 
-    Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
-                  SERIAL_8N1, 16, 17);    //Hardware Serial of ESP32
-    Serial2.setTimeout(0);
-
     if(!SPIFFS.begin(true))
         Serial.println("SPIFFS Mount Failed");
     else
@@ -426,12 +428,13 @@ void setup()
         settings_store(".bak");
     else
         settings_load(".bak");
-    settings.show_status=true;
+
+    Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
+                  SERIAL_8N1, 16, 17);    //Hardware Serial of ESP32
+    Serial2.setTimeout(0);
+
     settings.landscape = false;
 
-    settings.input_wifi = true;
-    //settings.output_wifi = true;
-    settings.wifi_data = NMEA_PYPILOT;
     settings.channel = 6;
 
 
@@ -510,7 +513,7 @@ void loop()
     }
 
     read_keys();
-    //read_serials();
+    read_serials();
     //read_pressure_temperature();
     nmea_poll();
     signalk_poll();

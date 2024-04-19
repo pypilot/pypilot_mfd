@@ -45,7 +45,7 @@
           <span>
             <input type='checkbox' name='input_usb' id='input_usb' %INPUTUSB%><label for='input_usb'>Input</label>
             <input type='checkbox' name='output_usb' id='output_usb' %OUTPUTUSB%><label for='output_usb'>Output</label>
-            <select id='usb_baud_rate' name='usb_baud_rate' value='%USB_BAUD_RATE%'>
+            <select id='usb_baud_rate' name='usb_baud_rate'>
               <option value='38400'>38400</option>
               <option value='115200'>115200</option>
             </select>
@@ -101,6 +101,8 @@
         </div>
       </form>
       <script type='text/javascript'>
+        document.getElementById('usb_baud_rate').value='%USB_BAUD_RATE%';
+        document.getElementById('rs422_baud_rate').value='%RS422_BAUD_RATE%';
         var wifi_data = document.getElementById('%WIFIDATA%');
         // Set the checked attribute to true
         if (wifi_data)
@@ -120,7 +122,7 @@
           <span><input type='checkbox' name='usedepthft' id='usedepthft' %USEDEPTHFT%>
             <label for='usedepthft'>Use depth ft (default meters)</label></span>
           <span>Latitude Longitude Format
-            <select name='lat_lon_format' value=%LATLONFORMAT%>
+            <select name='lat_lon_format'>
               <option value='degrees'>Decimal Degrees</option>
               <option value='minutes'>Decimal Minutes</option>
               <option value='seconds'>Decimal Seconds</option>
@@ -137,11 +139,16 @@
           <input class='button' type='submit' value='Submit'>
         </div>
       </form>
+      <script type='text/javascript'>
+        document.getElementById('lat_lon_format').value='%LATLONFORMAT%';
+      </script>
+      <!--
       <form action='display_auto' method='post'>
         <div class='col3-grid'>
           <div> </div>
           <input class='button' type='submit' style='width: 100%%'>Auto-enable pages</input>
       </form>
+      -->
     </div>
   </div>
 <h5>pypilot multi-function display %VERSION%</h5>

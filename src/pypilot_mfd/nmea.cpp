@@ -56,7 +56,7 @@ float convert_decimal_ll(float decll)
 
 bool nmea_parse_line(const char *line, data_source_e source)
 {
-    //Serial.printf("parse line %s\n", line);
+    //Serial.printf("parse line %d %s\n", source, line);
     // check checksum
     int len=strlen(line);
     if(len < 10 && len < 180)
@@ -434,9 +434,13 @@ static void poll_client(ClientSock &c)
         } else
             break;
         for(;;) {
-            int ind = c.data.indexOf('\n');
-            if(ind < 0)
-                break;
+            int ind = c.data.indexOf('$', 1);
+            if(ind < 0) {
+                ind = c.data.indexOf('\n');
+                if(ind < 0)
+                    break;
+            } else
+                ind --;
             String line = c.data.substring(0, ind);
             nmea_parse_line(line.c_str(), WIFI_DATA);
             c.data = c.data.substring(ind+1);

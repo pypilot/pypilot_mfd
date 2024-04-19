@@ -1,15 +1,8 @@
-52634129718992
+42365652576992
 pypilot_footprints
 433mhzreceiver
 
 
-0
-8
-8
-pypilot_footprints
-Bosch_LGA-8_2x2.5mm_P0.65mm_ClockwisePinNumbering_270
-LGA-8, https://ae-bst.resource.bosch.com/media/_tech/media/datasheets/BST-BMP280-DS001-18.pdf
-lga land grid array
 0
 8
 8
@@ -41,13 +34,6 @@ Surface mounted pin header SMD 2x03 2.54mm double row
 0
 6
 6
-pypilot_footprints
-LGA-12_2x2mm_P0.5mm_90
-LGA12
-lga land grid array
-0
-12
-12
 pypilot_footprints
 LM321
 5-pin SOT23 package
@@ -119,20 +105,6 @@ SOIC SO
 8
 8
 pypilot_footprints
-SOIC-16_3.9x9.9mm_P1.27mm_90
-SOIC, 16 Pin (JEDEC MS-012AC, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_16.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
-SOIC SO
-0
-16
-16
-pypilot_footprints
-SOIC-16_3.9x9.9mm_P1.27mm_270
-SOIC, 16 Pin (JEDEC MS-012AC, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_16.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
-SOIC SO
-0
-16
-16
-pypilot_footprints
 SOIC-20W_7.5x12.8mm_P1.27mm
 SOIC, 20 Pin (JEDEC MS-013AC, https://www.analog.com/media/en/package-pcb-resources/package/233848rw_20.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py
 SOIC SO
@@ -159,13 +131,6 @@ SOT-23, Standard
 SOT-23
 0
 3
-3
-pypilot_footprints
-SOT-223-3_TabPin2_180
-module CMS SOT223 4 pins
-CMS SOT
-0
-4
 3
 pypilot_footprints
 TDSON-8-1
@@ -202,13 +167,6 @@ jlx12864
 0
 12
 12
-pypilot_footprints
-uart
-
-
-0
-4
-4
 pypilot_footprints
 uart_host
 

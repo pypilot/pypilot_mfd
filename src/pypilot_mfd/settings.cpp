@@ -83,7 +83,7 @@ bool settings_load(String suffix)
     LOAD_SETTING(usb_baud_rate, 115200)
     LOAD_SETTING(rs422_baud_rate, 38400)
 
-    LOAD_SETTING(input_wifi, false)
+    LOAD_SETTING(input_wifi, true)
     LOAD_SETTING(output_wifi, false)
     LOAD_SETTING_E(wifi_data, wireless_data_e, NMEA_PYPILOT)
 

@@ -31,7 +31,7 @@
 #if 1
 //U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/5, /* dc=*/12, /* reset=*/14);
 //U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/18, /* data=*/23, /* cs=*/5, /* dc=*/12, /* reset=*/14);
-U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/14);
+U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
 
 String getItemLabel(display_item_e item) {
     switch (item) {
@@ -127,11 +127,13 @@ void drawThickLine(int x1, int y1, int x2, int y2, int w)
 {
     int ex = x2-x1, ey = y2-y1;
     int d = sqrt(ex*ex + ey*ey);
+    if(d == 0)
+        return;
     ex = ex*w/d/2;
     ey = ey*w/d/2;
 
     int ax = x1+ey, ay = y1-ex;
-    int bx = x1-ey, by = y2+ex;
+    int bx = x1-ey, by = y1+ex;
     int cx = x2+ey, cy = y2-ex;
     int dx = x2-ey, dy = y2+ex;
     u8g2.drawTriangle(ax, ay, bx, by, cx, cy);
@@ -898,35 +900,31 @@ static float ships_range_table[] = {0.25, .5, 1, 2, 5, 10, 20};
 struct ais_ships_display : public display_item {
     ais_ships_display() : display_item(AIS_DATA) {}
     void fit() {
-        int cols;
-        if(w > h) {
+        if(w < h) {
             xc = x + w / 2;
-            yc = xc;
-            r = h / 2;
-            tx = h;
-            ty = 0;
-            tw = w-tx;
-            th = h;
-            cols = 1;
-        } else {
-            yc = y + h / 2;
-            xc = yc;
+            yc = y + xc;
             r = w / 2;
             tx = 0;
             ty = w;
             tw = w;
-            th = h-ty;
-            cols = 2;
+            th = h-w;
+        } else {
+            yc = y + h / 2;
+            xc = x + yc;
+            r = h / 2;
+            tx = w;
+            ty = 0;
+            tw = w-h;
+            th = h;
         }
     }
 
-    void render_ring(float r) {
-
-        int thick = r / 60;
-        r -= thick*2;
+    void render_ring(float rm) {
+        int thick = r / 100;
+        int ri = r*rm - thick*2;
         for (int i = -thick; i <= thick; i++)
             for (int j = -thick; j <= thick; j++)
-                u8g2.drawCircle(xc + i, yc + j, r);
+                u8g2.drawCircle(xc + i, yc + j, ri);
     }
 
     void drawRightText(String text) {
@@ -937,7 +935,7 @@ struct ais_ships_display : public display_item {
     void drawItem(const char *label, String text) {
         if(ty0 + tdy >= ty + th)
             return;
-        u8g2.drawStr(tx, ty0, label);
+        u8g2.drawStr(tx, ty+ty0, label);
         ty0 += tdyl;
         drawRightText(text);
         ty0 += tdy;
@@ -1004,7 +1002,7 @@ struct ais_ships_display : public display_item {
             if(dist > rng)
                 continue;
 
-            if(dist < closest_dist) {
+            if(ship.sog > 0 && dist < closest_dist) {
                 closest = &ship;
                 closest_dist = dist;
             }
@@ -1012,13 +1010,13 @@ struct ais_ships_display : public display_item {
             x *= r / rng;
             y *= r / rng;
 
-            int x0 = xc + x, y0 = yc + y;
+            int x0 = xc + x, y0 = yc - y;
             u8g2.drawCircle(x0, y0, sr);
             
             float rad = deg2rad(ship.cog);
             float s = sin(rad), c = cos(rad);
-            int x1 = x0 + c*rp, y1 = y0 + s*rp;
-            x0 += c*sr, y0 += s*sr;
+            int x1 = x0 + s*rp, y1 = y0 - c*rp;
+            x0 += s*sr, y0 -= c*sr;
             u8g2.drawLine(x0, y0, x1, y1);
         }
 
@@ -1680,19 +1678,30 @@ static void setup_analog_pins()
 
     adcAttachPin(PHOTO_RESISTOR_PIN);
 
-  // ledcSetup(0, 1000, 10);
-  //ledcAttachPin(BACKLIGHT_PIN, 0);
-
-
+   ledcSetup(0, 1000, 10);
+  ledcAttachPin(BACKLIGHT_PIN, 0);
+        ledcWrite(0, 1023);
 }
 
 static void read_analog_pins()
 {
     uint32_t t = millis();
     int val = analogRead(PHOTO_RESISTOR_PIN);
-    //    printf("val %d %d\n", val, millis() - t);
-    // set backlight level to 50%
-    //ledcWrite(0, 1024*settings.backlight/1000);
+
+    // set backlight level
+    static bool backlight_on;
+//               printf("val %d %d %d\n", val, backlight_on, 1024*settings.backlight/100);
+    if(backlight_on && val > 3800)
+        backlight_on = false;
+    else if(!backlight_on && val < 2800)
+        backlight_on = true;
+    else
+        return;
+
+    if(backlight_on)
+        ledcWrite(0, 1024*settings.backlight/100);
+    else
+        ledcWrite(0, 1023);
 }
 
 void display_setup()
@@ -1701,7 +1710,7 @@ void display_setup()
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    cur_page='E'-'A';
+    cur_page='V'-'A';
 
     if(settings.landscape) {
         page_width = 256;
@@ -1738,8 +1747,9 @@ void display_setup()
     add(new pageW);
 
     for(int i=0; i<settings.enabled_pages.length(); i++)
-        if(settings.enabled_pages[i] == display_pages[i].name)
-            display_pages[i].enabled = true;
+        for(int j=0; j<(int)display_pages.size(); j++)
+            if(settings.enabled_pages[i] == display_pages[j].name)
+                display_pages[j].enabled = true;
 
     setup_analog_pins();
 }
@@ -1755,10 +1765,13 @@ void display_change_page(int dir)
     int looped = 0;
     while(looped < 2) {
         cur_page += dir;
-        if(cur_page >= display_pages.size())
-            looped++, cur_page = 0;
-        else if(cur_page < 0)
-            looped++, cur_page = display_pages.size()-1;
+        if(cur_page >= (int)display_pages.size()) {
+            looped++;
+            cur_page = 0;
+        } else if(cur_page < 0) {
+            looped++;
+            cur_page = display_pages.size()-1;
+        }
         if(display_pages[cur_page].enabled) {
             printf("changed to page %c\n", 'A'+cur_page);
             return;
