@@ -154,7 +154,7 @@ uint32_t data_source_time[DATA_SOURCE_COUNT];
 
 void display_data_update(display_item_e item, float value, data_source_e source) {
     uint32_t time = millis();
-    //Serial.printf("data_update %d %s %f\n", item, getItemLabel(item).c_str(), value);
+    //printf("data_update %d %s %f\n", item, getItemLabel(item).c_str(), value);
 
     if(source > display_data[item].source) {
         // ignore if higher priority data source updated in last 5 seconds
@@ -903,7 +903,7 @@ struct ais_ships_display : public display_item {
         if(w < h) {
             xc = x + w / 2;
             yc = y + xc;
-            r = w / 2;
+            r = w / 2-1;
             tx = 0;
             ty = w;
             tw = w;
@@ -927,26 +927,37 @@ struct ais_ships_display : public display_item {
                 u8g2.drawCircle(xc + i, yc + j, ri);
     }
 
-    void drawRightText(String text) {
-        int textw = u8g2.getStrWidth(text.c_str());
-        u8g2.drawStr(tx+tw-textw, ty+ty0, text.c_str());
-    }
-
     void drawItem(const char *label, String text) {
         if(ty0 + tdy >= ty + th)
             return;
-        u8g2.drawStr(tx, ty+ty0, label);
+        int ly = ty+ty0;
+        int lw = tdyl ? 0 : u8g2.getStrWidth(label);
         ty0 += tdyl;
-        drawRightText(text);
+
+            int textw = u8g2.getStrWidth(text.c_str());
+        int scrolldist = textw - (tw-lw);
+        if(scrolldist < 0)
+            scrolldist = textw;
+        else {
+            uint32_t mso = millis()/32;
+            scrolldist = mso % scrolldist + tw-lw;
+        }
+        u8g2.drawStr(tx+tw-scrolldist, ty+ty0, text.c_str());
         ty0 += tdy;
+
+        u8g2.drawStr(tx, ly, label);
     }
 
     void render_text(ship *closest) {
-        u8g2.setFont(u8g2_font_helvB10_tf);
+        u8g2.setFont(u8g2_font_helvB08_tf);
         // draw range in upper left corner
-        String str = String(ships_range_table[ships_range], 2) + "NMi";
-        u8g2.drawStr(x, y, str.c_str());
-        
+        String str = String(ships_range_table[ships_range], 1) + "NMi";
+        int textw = u8g2.getStrWidth(str.c_str());
+        u8g2.drawStr(x+w-textw, y, str.c_str());
+
+        u8g2.setFont(u8g2_font_helvB10_tf);
+        u8g2.drawStr(x, y, "AIS");
+
         ty0 = 0;
         tdy = 12;
         tdyl = tw > th ? 0 : tdy;
@@ -1695,11 +1706,9 @@ static void read_analog_pins()
         backlight_on = false;
     else if(!backlight_on && val < 2800)
         backlight_on = true;
-    else
-        return;
 
     if(backlight_on)
-        ledcWrite(0, 1024*settings.backlight/100);
+        ledcWrite(0, 1023*settings.backlight/100);
     else
         ledcWrite(0, 1023);
 }

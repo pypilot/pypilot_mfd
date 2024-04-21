@@ -34,6 +34,7 @@
         <div class='col3-grid'>
           <div> </div>
           <input class='button' type='submit' style='width: 100%%' value='Scan'>Scan</input>
+        </div>
       </form>
     </div>
 
@@ -108,11 +109,19 @@
         if (wifi_data)
             wifi_data.checked = true;
       </script>
-      <a href='/data.htm'>View Current Display Data</a>
+      <h5>
+        <a href='/data.htm'>View Current Display Data</a>
+      </h5>
     </div>
  
     <div class='box'>
       <h2>Display</h2>
+      <form action='display_auto' method='post'>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='submit' style='width: 100%%' value='Auto-enable pages'>
+        </div>
+      </form>
       <form action='display' method='post'>
         <div class='col1-grid'>
           <span><input type='checkbox' name='use360' id='use360' %USE360%>
@@ -142,13 +151,6 @@
       <script type='text/javascript'>
         document.getElementById('lat_lon_format').value='%LATLONFORMAT%';
       </script>
-      <!--
-      <form action='display_auto' method='post'>
-        <div class='col3-grid'>
-          <div> </div>
-          <input class='button' type='submit' style='width: 100%%'>Auto-enable pages</input>
-      </form>
-      -->
     </div>
   </div>
 <h5>pypilot multi-function display %VERSION%</h5>

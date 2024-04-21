@@ -98,7 +98,7 @@ bool settings_load(String suffix)
     LOAD_SETTING(use_fahrenheit, false)
     LOAD_SETTING(use_depth_ft, false)
     LOAD_SETTING_S(lat_lon_format, "minutes")
-    LOAD_SETTING_BOUND(contrast, 0, 40, 20)
+    LOAD_SETTING_BOUND(contrast, 0, 50, 20)
     LOAD_SETTING_BOUND(backlight, 0, 100, 50)
     
     LOAD_SETTING(show_status, true)

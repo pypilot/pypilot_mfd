@@ -89,7 +89,7 @@ static String jsonSensors() {
     return JSON.stringify(sensors);
 }
 
-static String jsonDisplayData() {
+static String j ta() {
     JSONVar displaydata;
     float value;
     String source;
@@ -178,6 +178,7 @@ String processor(const String& var)
     if(var == "USEDEPTHFT")  return Checked(settings.use_depth_ft);
     if(var == "LATLONFORMAT")  return settings.lat_lon_format;
     if(var == "CONTRAST")  return String(settings.contrast);
+    if(var == "BACKLIGHT")  return String(settings.backlight);
     if(var == "DISPLAYPAGES") return get_display_pages();
     if(var == "VERSION")    return String(VERSION);
     return String();
@@ -188,6 +189,7 @@ void web_setup()
     ws.onEvent(onEvent);
     ws_data.onEvent(onEvent);
     server.addHandler(&ws);
+    server.addHandler(&ws_data);
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(SPIFFS, "/index.html", String(), 0, processor);
@@ -262,9 +264,9 @@ void web_setup()
             else if(p->name() == "lat_lon_format")
                 settings.lat_lon_format = value;
             else if(p->name() == "contrast")
-                settings.contrast = value.toInt();
+                settings.contrast = min(max(value.toInt(), 0L), 50L);
             else if(p->name() == "backlight")
-                settings.backlight = value.toInt();
+                settings.backlight = min(max(value.toInt(), 0L), 100L);
             else {
                 for(int j=0; j < display_pages.size(); j++) {
                     page_info &page = display_pages[j];
