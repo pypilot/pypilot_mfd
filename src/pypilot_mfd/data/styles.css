@@ -20,6 +20,10 @@ h5 {
     text-align: center;
 }
 
+table {
+    margin: auto;
+}
+
 .box {
   border-radius: 42px;
   box-shadow:

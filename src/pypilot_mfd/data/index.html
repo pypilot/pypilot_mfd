@@ -29,11 +29,11 @@
           <span>Wind Speed</span><span id='wind_knots'>N/A</span><span>Knots</span>
         </div>
       </div>
-      <table style='width: 100%%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
+      <table style='width: 90%%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
       <form action='scan' method='post'>
         <div class='col3-grid'>
           <div> </div>
-          <input class='button' type='submit' style='width: 100%%' value='Scan'>Scan</input>
+          <input class='button' type='submit' style='width: 100%%' value='Scan'>
         </div>
       </form>
     </div>
@@ -131,7 +131,7 @@
           <span><input type='checkbox' name='usedepthft' id='usedepthft' %USEDEPTHFT%>
             <label for='usedepthft'>Use depth ft (default meters)</label></span>
           <span>Latitude Longitude Format
-            <select name='lat_lon_format'>
+            <select id='lat_lon_format'>
               <option value='degrees'>Decimal Degrees</option>
               <option value='minutes'>Decimal Minutes</option>
               <option value='seconds'>Decimal Seconds</option>

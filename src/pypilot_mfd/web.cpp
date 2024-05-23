@@ -68,7 +68,8 @@ String position_str(wind_position p)
     return "Invalid";
 }
 
-static String jsonSensors() {
+static String jsonSensors()
+{
     uint32_t t = millis();
     JSONVar windsensors;
     for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) {
@@ -80,16 +81,17 @@ static String jsonSensors() {
         jwt["dir"] = wt.dir;
         jwt["knots"] = wt.knots;
         jwt["dt"] = t - wt.t;
-
         windsensors[mac_int_to_str(i->first)] = jwt;
     }
+
     JSONVar sensors;
-    if(windsensors.length() > 0)
+    if(wind_transmitters.size() > 0)
         sensors["wind"] = windsensors;
+
     return JSON.stringify(sensors);
 }
 
-static String j ta() {
+static String jsonDisplayData() {
     JSONVar displaydata;
     float value;
     String source;

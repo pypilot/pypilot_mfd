@@ -320,7 +320,7 @@ struct text_display : public display_item {
 
     virtual String getTextItem() = 0;
 
-    String getLabel() {
+    virtual String getLabel() {
         return getItemLabel(item);
     }
 
@@ -535,16 +535,30 @@ struct string_text_display : public label_text_display  {
 };
 
 struct pypilot_text_display : public label_text_display  {
-    pypilot_text_display(String label_, String key_, bool expanding_=false)
-        : label_text_display(PYPILOT, label_), key(key_) { expanding = expanding_; pypilot_watch(key); }
+    pypilot_text_display(String label_, String key_, bool expanding_=false, int digits_=1)
+        : label_text_display(PYPILOT, label_), key(key_), digits(digits_) { expanding = expanding_; pypilot_watch(key); }
 
     String getTextItem() {
-        return pypilot_client_value(key);
+        return pypilot_client_value(key, digits);
     }
 
     String key;
+    int digits;
 };
 
+struct pypilot_command_display : public pypilot_text_display  {
+    pypilot_command_display() : pypilot_text_display("command", "ap.heading_command", true, 0)
+    {
+        pypilot_watch("ap.enabled");
+    }
+
+    String getTextItem() {
+        String x = pypilot_client_value("ap.enabled");
+        if(x == "false")
+            return "standby";
+        return pypilot_text_display::getTextItem();
+    }
+};
 
 struct gauge : public display_item {
     gauge(text_display* _text, int _min_v, int _max_v, int _min_ang, int _max_ang, float _ang_step)
@@ -1617,12 +1631,13 @@ struct pageV : public page {
 
 struct pageW : public page {
     pageW() : page("pypilot statistics") {
-        add(new pypilot_text_display("heading", "ap.heading", true));
-        add(new pypilot_text_display("command", "ap.heading_command", true));
+        add(new pypilot_text_display("heading", "ap.heading", true, 0));
+        add(new pypilot_command_display());
+        //add(new pypilot_text_display("command", "ap.heading_command", true));
         add(new pypilot_text_display("mode", "ap.mode"));
         add(new pypilot_text_display("profile", "profile"));
-        add(new pypilot_text_display("uptime", "imu.uptime"));
-        add(new pypilot_text_display("runtime", "imu.uptime"));
+        //add(new pypilot_text_display("uptime", "imu.uptime"));
+        add(new pypilot_text_display("runtime", "ap.runtime"));
         add(new pypilot_text_display("watts", "servo.watts"));
         add(new pypilot_text_display("amp hours", "servo.amp_hours"));
         add(new pypilot_text_display("rudder", "rudder.angle"));
@@ -1719,7 +1734,7 @@ void display_setup()
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    cur_page='V'-'A';
+    cur_page='W'-'A';
 
     if(settings.landscape) {
         page_width = 256;

@@ -22,6 +22,7 @@
 
 #include "settings.h"
 
+
 bool wifi_ap_mode = false;
 settings_t settings;
 
@@ -284,7 +285,7 @@ static void DataRecvWind(const uint8_t *mac_addr, const uint8_t *data, int data_
 
 // callback when data is recv from Master
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
-#if 0
+#if 1
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
@@ -299,10 +300,10 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
     }
         
     packet_t *packet = (packet_t*)data;
-    if(packet->id != WIND_ID)
+    if(packet->id == WIND_ID)
         DataRecvWind(mac_addr, data, data_len);
     else
-        Serial.println("ID mismatch");
+        printf("ID mismatch %x, %x\n",  packet->id, WIND_ID);
 }
 
 void sendChannel()
@@ -452,8 +453,16 @@ void setup()
     InitESPNow();
     mdns_setup();
     web_setup();
+    printf("web setup complete\n");
+    delay(1000);
 
     display_setup();
+    printf("display setup complete\n");
+
+    int ss = CONFIG_ARDUINO_LOOP_STACK_SIZE;
+    if(ss < 16384)
+        printf("WARNING STACK TOO SMALL\n");
+    printf("Stack Size %d\n", ss);
 
     Serial.println("setup complete");
 }
@@ -517,7 +526,7 @@ void loop()
     //read_pressure_temperature();
     nmea_poll();
     signalk_poll();
-    //pypilot_client_poll();
+    pypilot_client_poll();
 
     display_render();
     web_poll();

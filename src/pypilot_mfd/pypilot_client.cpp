@@ -44,6 +44,7 @@ struct pypilotClient
     std::map<String, JSONVar> map;
     std::map<String, double> watchlist;
     bool connecting;
+    uint32_t connect_time;
 };
 
 pypilotClient::pypilotClient()
@@ -53,6 +54,12 @@ pypilotClient::pypilotClient()
 
 bool pypilotClient::connect(String h, int port)
 {
+    uint32_t t0 = millis();
+    if(t0 - connect_time < 3000)
+        return false;
+    connect_time = t0;
+
+    printf("pypilot conn %s %d\n", h.c_str(), port);
     host = h;
     const char *addr = host.c_str();
 
@@ -60,7 +67,7 @@ bool pypilotClient::connect(String h, int port)
     dest_addr.sin_addr.s_addr = inet_addr(addr);
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(port);
-    //inet_ntoa_r(dest_addr.sin_addr, addr_str, sizeof(addr_str) - 1);
+    //inet_ntoa_r(dest_addr.sin_addr, addr, sizeof(addr) - 1);
                 
     sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (sock < 0) {
@@ -73,19 +80,22 @@ bool pypilotClient::connect(String h, int port)
     fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
                 
     int err = ::connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
-    if (err != 0 || errno != EINPROGRESS) {
-        Serial.printf("Socket unable to connect: errno %d\n", errno);
+    if (err != 0 && errno != EINPROGRESS) {
+        printf("pypilot socket unable to connect: %d errno %d\n", sock, errno);
         disconnect();
+        return false;
     }
 
-    Serial.printf("pypilot client connected to %s:%d %d %d\n", addr, port, err, errno);
+    printf("pypilot client connected to %s:%d %d %d\n", addr, port, err, errno);
     connecting = true;
     return true;
 }
 
 void pypilotClient::disconnect()
 {
+    printf("pypilot client disconnect\n");
     close(sock);
+    sock = 0;
     map.clear();
     sock_buffer = "";
 }
@@ -108,13 +118,17 @@ void pypilotClient::set(String name, JSONVar &value)
     if(!connected())
         return;
 
-    String str = name + "=" + JSON.stringify(value);
+    String str = name + "=" + JSON.stringify(value) + "\n";
     int ret = send(sock, str.c_str(), str.length(), 0);
+    printf("send %s %d %d\n", str.c_str(), str.length(), ret);
     if(ret < 0) {
         if(errno == EAGAIN)
             printf("pypilot socket couldnt take data\n");
-        else
+        else {
+            printf("Set error errno %d\n", errno);
             disconnect();
+
+        }
     }
 }
 
@@ -150,14 +164,16 @@ void pypilotClient::poll()
         return;
 
     if(connecting) {
-        int ret = recv(sock, 0, 0, 0);
+        int ret = send(sock, 0, 0, 0);
+        printf("poll send0 %d\n", ret);
         if(ret < 0) {
             if(errno == EAGAIN)
                 return;
-            printf("pypilot client closed on receive\n");
+            printf("pypilot client closed on receive %d\n", errno);
             disconnect();
             return;
         }
+        printf("pypilot client ready\n");
         // return 0 means ready
         map.clear();
         sock_buffer = "";
@@ -176,11 +192,16 @@ void pypilotClient::poll()
     for(;;) {
         char buf[1024];
         int ret = recv(sock, buf, sizeof buf-1, 0);
+        //printf("pypilot client recv %d %d\n", ret, errno);
         if(ret < 0) {
             if(errno == EAGAIN)
                 return;
             printf("pypilot client socket recv failed %d\n", errno);
             disconnect();
+            if(errno == EBADF) {
+                printf("EBADF received: resetting esp\n");
+                //ESP.restart();
+            }
             return;
         }
         
@@ -193,32 +214,40 @@ void pypilotClient::poll()
             return;
         }
         
-        int start, line_end = 0;
+        int start = 0, line_end;
         for(;;) {
-            start = line_end;
             line_end = sock_buffer.indexOf("\n", start);
             if(line_end <= 0)
                 break;
-            String line = sock_buffer.substring(start, line_end);
-            int c = line.indexOf('=', start);
+
+            int c = sock_buffer.indexOf('=', start);
             if(c < 0) {
-                printf("pypilot client: Error parsing - %s", line.c_str());
+                printf("pypilot client: Error parsing - %s\n", sock_buffer.c_str());
                 continue;
             }
             
-            String key = line.substring(start, c);
-            String json_line = line.substring(c+1);
+            String key = sock_buffer.substring(start, c);
+            String json_line = sock_buffer.substring(c+1, line_end);
+            start = line_end + 1;
+
+            //printf("pypilot client %s = %s\n", key.c_str(), json_line.c_str());
             JSONVar value = JSON.parse(json_line);
             if(value == null) {
-                printf("pypilot cleint: Error parsing message - %s=%s", key.c_str(), json_line.c_str());
+                printf("pypilot client: Error parsing message - %s=%s", key.c_str(), json_line.c_str());
                 continue;
             }
             if(key == "values") {
 
-            } else
+            } else {
                 map[key] = value;
+            }
         }
-        sock_buffer = sock_buffer.substring(line_end+1);
+
+          //      printf("RECV0 %s %d\n", sock_buffer.c_str(),start);
+
+        sock_buffer = sock_buffer.substring(start);
+        //printf("RECV1 %s\n", sock_buffer.c_str());
+
     }
 }
 
@@ -233,6 +262,7 @@ void pypilot_client_poll() {
     if(millis() - strobe_time > 5000 || settings.pypilot_addr != pypilot_client.host) {
         if(pypilot_client.connected())
             pypilot_client.disconnect();
+        pypilot_client.host = settings.pypilot_addr;
     } else if(pypilot_client.connected()) {
         pypilot_client.poll();
         display_data_update(PYPILOT, 0, WIFI_DATA);
@@ -240,13 +270,19 @@ void pypilot_client_poll() {
         pypilot_client.connect(settings.pypilot_addr);
 }
 
-String pypilot_watch(String key)
+void pypilot_watch(String key)
 {
     pypilot_client.watchlist[key] = 1; // one second for now
 }
 
-String pypilot_client_value(String key) {
+String pypilot_client_value(String key, int digits) {
     if(pypilot_client.map.find(key) == pypilot_client.map.end())
         return "N/A";
-    return pypilot_client.map[key];
+
+    JSONVar value = pypilot_client.map[key];
+    if(JSONVar::typeof_(value) == "string")
+        return value;
+    if(JSONVar::typeof_(value) == "number")
+        return String((double)value, digits);
+    return JSON.stringify(value);
 }

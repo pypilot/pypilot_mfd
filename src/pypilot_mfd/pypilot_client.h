@@ -8,5 +8,5 @@
 
 void pypilot_client_strobe();
 void pypilot_client_poll();
-String pypilot_watch(String key);
-String pypilot_client_value(String key);
+void pypilot_watch(String key);
+String pypilot_client_value(String key, int digits=1);
