@@ -1,15 +1,15 @@
 $fn=40;
 
 length = 116;
-width = 85;
-height = 14;
+width = 86;
+height = 19;
 
 board_length = 116;
 
-pane = [118,88, 1.7];
+pane = [120,90, 2.2];
 
-thickness = 6;
-bthickness = 2;
+thickness = 7;
+bthickness = .9;
 
 module box() {
     difference() {
@@ -21,17 +21,22 @@ module box() {
         translate([-board_length/2,-width/2,bthickness])
         cube([board_length, width, height+bthickness]);
     
-         translate([10,0,0])
+         translate([10,-.8,0])
         cylinder(r=6.5, h=40, center=true);
-         translate([-8,0,0])
+         translate([-8,-.8,0])
         cylinder(r=6.5, h=40, center=true);
 
         translate([0,0,height+bthickness])
             cube(pane, center=true);
         translate([0,0,height])
         screws();
-    }   
-
+        
+        translate([-board_length/2-thickness+1, 0, height/2])
+        rotate([0, -90, 0])
+        rotate(-90)
+            linear_extrude(height = 2)
+                text("pypilot", size = 10, font=font, halign = "center", valign = "center", $fn = 16);  
+    }
 }
 
 module screw()
@@ -64,7 +69,7 @@ module enclosure() {
     box();
     all()
         translate([length*.3, width*.3])
-        cylinder(r=3, h=3);
+       ;// cylinder(r=3, h=3);
 }
 
 module frame() {
@@ -78,7 +83,8 @@ module frame() {
         screws();
     }
 }
+if(1)
 enclosure();
-
+else
 translate([0,width + thickness*3, 0])
 frame();
