@@ -1,15 +1,26 @@
 $fn=40;
 
-length = 116;
-width = 86;
+use_threads = true;
+
+length = 120;
+width = 90;
 height = 19;
 
-board_length = 116;
+board_length = 116.25;
+board_width = 86.25;
 
-pane = [120,90, 2.2];
+pane = [124,94, 4];
 
-thickness = 7;
+thickness = 8;
 bthickness = .9;
+
+conn = [18, 3.5];
+
+connoff = 76/2-22;
+
+lcd_area = [111, 65];
+lcd_off = 7;
+
 
 module box() {
     difference() {
@@ -18,8 +29,8 @@ module box() {
             cube([length, width, height]);
             cylinder(r=thickness,h=bthickness);
         }
-        translate([-board_length/2,-width/2,bthickness])
-        cube([board_length, width, height+bthickness]);
+        translate([-board_length/2,-board_width/2,bthickness])
+        cube([board_length, board_width, height+bthickness]);
     
          translate([10,-.8,0])
         cylinder(r=6.5, h=40, center=true);
@@ -28,14 +39,19 @@ module box() {
 
         translate([0,0,height+bthickness])
             cube(pane, center=true);
-        translate([0,0,height])
-        screws();
+       // translate([0,0,height])
+       // screws();
         
-        translate([-board_length/2-thickness+1, 0, height/2])
+        translate([connoff,pane[1]/2-1,3])
+          cube([conn[0], conn[1], height]);
+        translate([connoff,pane[1]/2-8,3])
+          cube([conn[0], 10, height-pane[2]-5   ]);
+        
+        translate([-board_length/2-thickness-1, 0, height/2])
         rotate([0, -90, 0])
         rotate(-90)
             linear_extrude(height = 2)
-                text("pypilot", size = 10, font=font, halign = "center", valign = "center", $fn = 16);  
+                text("pypilot", size = 10, halign = "center", valign = "center", $fn = 16);  
     }
 }
 
@@ -65,26 +81,73 @@ module all() {
     }
 }
 
+use <threads-library-by-cuiso-v1.scad>
+
 module enclosure() {
     box();
     all()
         translate([length*.3, width*.3])
-       ;// cylinder(r=3, h=3);
+        cylinder(r=3, h=1.4);
+    
+    if(use_threads)
+    translate([1,0,-20])
+        difference() {
+            thread_for_screw(diameter=48, length=20);
+           translate([0,0,-1]) 
+            cylinder(r=18, h=22);
+        }
+}
+
+module nut() {
+difference(){
+    union() {
+cylinder(r=35, h=2);
+   translate([0,0,2]) 
+cylinder(r1=35, r2=29, h=2);
+   translate([0,0,4]) 
+cylinder(r=30, h=6, $fn = 10);
+    } 
+    translate([0,0,-.1])
+    thread_for_nut(diameter=48, length=20.2, usrclearance=0.3); 
+}
+}
+
+module keypad() {
+    minkowski() {
+        cube([64, 10, 2],center=true);
+        cylinder(r=6, h=5);
+    }
 }
 
 module frame() {
     difference() {
-     translate([0,0,pane[2]/2])
+     //translate([0,0,pane[2]/2])
         minkowski() {
             cube([length, width, 1], center=true);
-            cylinder(r=thickness,h=1);
+            cylinder(r=thickness,h=.5);
         }
-         cube([length, width, height], center=true);
-        screws();
+        translate([0,-lcd_off,0])
+        minkowski() {
+         cube([lcd_area[0]-6, lcd_area[1]-6, height], center=true);
+            cylinder(r=3);
+        }
+        translate([connoff, pane[1]/2-7, 0])
+        keypad();
+       ;// screws();
     }
 }
-if(1)
+
+
+
+nut();
+
+//translate([0,0,20])
+if(0)
 enclosure();
-else
-translate([0,width + thickness*3, 0])
+if(0)
+//translate([0,width + thickness*3, 0])
+
+//translate([0,0, height])
+translate([0,7, 0])
+
 frame();
