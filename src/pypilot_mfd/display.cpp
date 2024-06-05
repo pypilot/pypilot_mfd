@@ -32,6 +32,7 @@
 //U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/5, /* dc=*/12, /* reset=*/14);
 //U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/18, /* data=*/23, /* cs=*/5, /* dc=*/12, /* reset=*/14);
 U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
+//U8G2_ST75256_JLX256160_2_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
 
 String getItemLabel(display_item_e item) {
     switch (item) {
@@ -1734,8 +1735,8 @@ void display_setup()
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    cur_page='W'-'A';
-
+    cur_page=0;//'W'-'A';
+#if 1
     if(settings.landscape) {
         page_width = 256;
         page_height = settings.show_status ? 148 : 160;
@@ -1745,6 +1746,8 @@ void display_setup()
         page_height = settings.show_status ? 244 : 256;
         u8g2.setDisplayRotation(U8G2_R1);
     }
+#endif
+    u8g2.setFlipMode(true);
 
     add(new pageA);
     add(new pageB);

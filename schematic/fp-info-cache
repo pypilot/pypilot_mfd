@@ -1,4 +1,4 @@
-18100987408582022
+18106140539924022
 Battery
 BatteryHolder_Bulgin_BX0036_1xC
 Bulgin Battery Holder, BX0036, Battery Type C (https://www.bulgin.com/products/pub/media/bulgin/data/Battery_holders.pdf)
@@ -79821,6 +79821,13 @@ DO214AC PACKAGE. MONODIRECTIONAL.
 2
 2
 pypilot_footprints
+DO-214AC
+
+
+0
+2
+2
+pypilot_footprints
 DS8606
 SOT-89-3
 SOT-89-3
@@ -80010,6 +80017,13 @@ DPAK TO-252 DPAK-3 TO-252-3 SOT-428
 7
 3
 pypilot_footprints
+TO-252-2_180
+TO-252 / DPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO252/PG-TO252-3-1/
+DPAK TO-252 DPAK-3 TO-252-3 SOT-428
+0
+7
+3
+pypilot_footprints
 TO-252-2_270
 TO-252 / DPAK SMD package, http://www.infineon.com/cms/en/product/packages/PG-TO252/PG-TO252-3-1/
 DPAK TO-252 DPAK-3 TO-252-3 SOT-428
@@ -80100,6 +80114,13 @@ Through hole pin header THT 1x02 2.54mm single row
 0
 2
 2
+pypilot_mfd_footprints
+PinHeader_1x06_P2.54mm_Horizontal
+Through hole angled pin header, 1x06, 2.54mm pitch, 6mm pin length, single row
+Through hole angled pin header THT 1x06 2.54mm single row
+0
+6
+6
 pypilot_mfd_footprints
 PinHeader_1x14_P2.54mm_Vertical
 Through hole straight pin header, 1x14, 2.54mm pitch, single row

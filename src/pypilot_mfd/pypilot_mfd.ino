@@ -91,7 +91,16 @@ void setup_wifi()
 
         if(settings.ssid) {
             Serial.printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
-        
+            wifi_country_t myWiFi;
+            //Country code (cc) set to 'X','X','X' is the standard, apparently.
+            myWiFi.cc[0]='X';
+            myWiFi.cc[1]='X';
+            myWiFi.cc[2]='X';
+            myWiFi.schan = 6;
+            myWiFi.nchan = 1;
+            myWiFi.policy = WIFI_COUNTRY_POLICY_MANUAL;
+
+            esp_wifi_set_country(&myWiFi);
             WiFi.begin(settings.ssid.c_str(), settings.psk.c_str());
         } else
             WiFi.disconnect();
@@ -110,6 +119,7 @@ void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info)
 
 // Init ESP Now with fallback
 void InitESPNow() {
+    printf("InitESPNow %d\n", chip.channel);
       esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
     if (esp_now_init() == ESP_OK) {
         Serial.println("ESPNow Init Success");
@@ -285,7 +295,7 @@ static void DataRecvWind(const uint8_t *mac_addr, const uint8_t *data, int data_
 
 // callback when data is recv from Master
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
-#if 1
+#if 0
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
@@ -535,7 +545,7 @@ void loop()
     int dt = millis() - t0;
     const int period = 100;
     if(dt < period) {
-        //printf("delay %d\n", dt);  
+        printf("delay %d\n", dt);  
         delay(period-dt);
     }
 }

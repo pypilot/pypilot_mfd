@@ -84,8 +84,9 @@ U 1 1 65BF25E1
 P 9950 2400
 F 0 "J5" H 10030 2392 50  0000 L CNN
 F 1 "jlx256160" H 10030 2301 50  0000 L CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x14_P2.54mm_Vertical" H 9950 2400 50  0001 C CNN
+F 2 "pypilot_mfd_footprints:PinHeader_1x14_P2.54mm_Vertical" H 9950 2400 50  0001 C CNN
 F 3 "~" H 9950 2400 50  0001 C CNN
+F 4 "C2905490" H 9950 2400 50  0001 C CNN "LCSC"
 	1    9950 2400
 	1    0    0    -1  
 $EndComp
@@ -147,39 +148,16 @@ F 3 "" H 8650 2950 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L Connector_Generic:Conn_01x02 J3
-U 1 1 65BFB4F7
-P 8450 1000
-F 0 "J3" H 8530 946 50  0000 L CNN
-F 1 "Conn_01x02" H 8530 901 50  0001 L CNN
-F 2 "pypilot_mfd_footprints:PinHeader_1x02_P2.54mm_Vertical" H 8450 1000 50  0001 C CNN
-F 3 "~" H 8450 1000 50  0001 C CNN
-F 4 "C706874" H 8450 1000 50  0001 C CNN "LCSC"
-	1    8450 1000
-	1    0    0    -1  
-$EndComp
-$Comp
-L Connector_Generic:Conn_01x02 J4
-U 1 1 65BFBA43
-P 9100 1000
-F 0 "J4" H 9180 946 50  0000 L CNN
-F 1 "Conn_01x02" H 9180 901 50  0001 L CNN
-F 2 "pypilot_mfd_footprints:PinHeader_1x02_P2.54mm_Vertical" H 9100 1000 50  0001 C CNN
-F 3 "~" H 9100 1000 50  0001 C CNN
-F 4 "C706874" H 9100 1000 50  0001 C CNN "LCSC"
-	1    9100 1000
-	1    0    0    -1  
-$EndComp
-$Comp
 L Connector_Generic:Conn_01x06 J2
 U 1 1 65BFDA65
-P 6150 3900
-F 0 "J2" H 6230 3892 50  0000 L CNN
-F 1 "keypad" H 6050 4200 50  0000 L CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical" H 6150 3900 50  0001 C CNN
-F 3 "~" H 6150 3900 50  0001 C CNN
-	1    6150 3900
-	1    0    0    -1  
+P 6150 4000
+F 0 "J2" H 6230 3992 50  0000 L CNN
+F 1 "keypad" H 6050 4300 50  0000 L CNN
+F 2 "pypilot_mfd_footprints:PinHeader_1x06_P2.54mm_Horizontal" H 6150 4000 50  0001 C CNN
+F 3 "~" H 6150 4000 50  0001 C CNN
+F 4 "C225492" H 6150 4000 50  0001 C CNN "LCSC"
+	1    6150 4000
+	1    0    0    1   
 $EndComp
 Text GLabel 9000 4150 0    50   Input ~ 0
 SDA
@@ -1611,8 +1589,6 @@ Text GLabel 4850 3800 0    50   Input ~ 0
 PWR_LED
 Text GLabel 7550 3650 2    50   Input ~ 0
 PWR_LED
-Text GLabel 7550 3550 2    50   Input ~ 0
-PWR
 $Comp
 L power:GND #PWR0119
 U 1 1 668737EF
@@ -1766,12 +1742,12 @@ $EndComp
 $Comp
 L power:+3V3 #PWR0143
 U 1 1 66976515
-P 6000 6350
-F 0 "#PWR0143" H 6000 6200 50  0001 C CNN
-F 1 "+3V3" H 6100 6450 50  0000 C CNN
-F 2 "" H 6000 6350 50  0001 C CNN
-F 3 "" H 6000 6350 50  0001 C CNN
-	1    6000 6350
+P 5950 6350
+F 0 "#PWR0143" H 5950 6200 50  0001 C CNN
+F 1 "+3V3" H 6050 6450 50  0000 C CNN
+F 2 "" H 5950 6350 50  0001 C CNN
+F 3 "" H 5950 6350 50  0001 C CNN
+	1    5950 6350
 	1    0    0    -1  
 $EndComp
 $Comp
@@ -1802,27 +1778,70 @@ Connection ~ 6100 6150
 Wire Wire Line
 	6100 6150 6200 6150
 $Comp
-L pypilot_mfd:BUZZER-freetronics_schematic U?
+L pypilot_mfd:BUZZER-freetronics_schematic U8
 U 1 1 665E746D
 P 6350 6350
-F 0 "U?" V 6289 6505 70  0000 L CNN
-F 1 "BUZZER-freetronics_schematic" V 6410 6505 70  0000 L CNN
+F 0 "U8" V 6411 6505 70  0000 L CNN
+F 1 "BUZZER-freetronics_schematic" V 6290 6505 70  0000 L CNN
 F 2 "pypilot_mfd_footprints:PUIAudio_SMT_0825_S_4_R_90" V 6471 6505 60  0001 L CNN
 F 3 "" H 6300 6300 60  0000 C CNN
 F 4 "C94599" V 6350 6350 50  0001 C CNN "LCSC"
 	1    6350 6350
-	0    1    1    0   
+	0    1    -1   0   
 $EndComp
 $Comp
-L pypilot_mfd:74AHC04 U?
+L pypilot_mfd:74AHC04 U7
 U 1 1 665F06FC
 P 5600 6350
-F 0 "U?" H 5675 6915 50  0000 C CNN
-F 1 "74AHC04" H 5675 6824 50  0000 C CNN
+F 0 "U7" H 5650 6915 50  0000 C CNN
+F 1 "74AHC04" H 5650 6824 50  0000 C CNN
 F 2 "pypilot_footprints:SOT-23-6_180" H 5650 6550 50  0001 C CNN
 F 3 "https://assets.nexperia.com/documents/data-sheet/74AHC_AHCT04.pdf" H 5650 6550 50  0001 C CNN
-F 4 "C5375975" H 5600 6350 50  0001 C CNN "LCSC"
+F 4 "C10428" H 5600 6350 50  0001 C CNN "LCSC"
 	1    5600 6350
 	1    0    0    -1  
 $EndComp
+Wire Wire Line
+	7550 2050 7800 2050
+Wire Wire Line
+	7800 2050 7800 1000
+Wire Wire Line
+	7800 1000 8250 1000
+$Comp
+L power:GND #PWR0144
+U 1 1 6672EFAC
+P 8250 1100
+F 0 "#PWR0144" H 8250 850 50  0001 C CNN
+F 1 "GND" H 8255 927 50  0001 C CNN
+F 2 "" H 8250 1100 50  0001 C CNN
+F 3 "" H 8250 1100 50  0001 C CNN
+	1    8250 1100
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x02 J4
+U 1 1 65BFBA43
+P 9100 1000
+F 0 "J4" H 9180 946 50  0000 L CNN
+F 1 "Conn_01x02" H 9180 901 50  0001 L CNN
+F 2 "pypilot_mfd_footprints:PinHeader_1x02_P2.54mm_Vertical" H 9100 1000 50  0001 C CNN
+F 3 "~" H 9100 1000 50  0001 C CNN
+F 4 "C492401" H 9100 1000 50  0001 C CNN "LCSC"
+	1    9100 1000
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x02 J3
+U 1 1 65BFB4F7
+P 8450 1000
+F 0 "J3" H 8530 946 50  0000 L CNN
+F 1 "Conn_01x02" H 8530 901 50  0001 L CNN
+F 2 "pypilot_mfd_footprints:PinHeader_1x02_P2.54mm_Vertical" H 8450 1000 50  0001 C CNN
+F 3 "~" H 8450 1000 50  0001 C CNN
+F 4 "C492401" H 8450 1000 50  0001 C CNN "LCSC"
+	1    8450 1000
+	1    0    0    -1  
+$EndComp
+Text GLabel 7550 3550 2    50   Input ~ 0
+PWR
 $EndSCHEMATC

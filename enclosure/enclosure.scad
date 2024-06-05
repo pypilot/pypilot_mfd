@@ -1,10 +1,10 @@
 $fn=40;
 
-use_threads = true;
+use_threads = false;
 
 length = 120;
-width = 90;
-height = 19;
+width = 94;
+height = 17;
 
 board_length = 116.25;
 board_width = 86.25;
@@ -14,17 +14,17 @@ pane = [124,94, 4];
 thickness = 8;
 bthickness = .9;
 
-conn = [18, 3.5];
+conn = [19, 3.5];
 
-connoff = 76/2-22;
+connoff = -18;
 
-lcd_area = [111, 65];
-lcd_off = 7;
+lcd_area = [111, 64];
+lcd_off = 5;
 
 
 module box() {
     difference() {
-        translate([-length/2,-width/2,0])
+        translate([-length/2,-width/2+2,0])
         minkowski() {
             cube([length, width, height]);
             cylinder(r=thickness,h=bthickness);
@@ -42,7 +42,7 @@ module box() {
        // translate([0,0,height])
        // screws();
         
-        translate([connoff,pane[1]/2-1,3])
+        translate([connoff,pane[1]/2+1,3])
           cube([conn[0], conn[1], height]);
         translate([connoff,pane[1]/2-8,3])
           cube([conn[0], 10, height-pane[2]-5   ]);
@@ -114,24 +114,24 @@ cylinder(r=30, h=6, $fn = 10);
 
 module keypad() {
     minkowski() {
-        cube([64, 10, 2],center=true);
+        cube([80-12, 25-12, 2],center=true);
         cylinder(r=6, h=5);
     }
 }
 
 module frame() {
     difference() {
-     //translate([0,0,pane[2]/2])
+     translate([0,2,0])
         minkowski() {
             cube([length, width, 1], center=true);
-            cylinder(r=thickness,h=.5);
+            cylinder(r=thickness,h=1);
         }
         translate([0,-lcd_off,0])
         minkowski() {
          cube([lcd_area[0]-6, lcd_area[1]-6, height], center=true);
             cylinder(r=3);
         }
-        translate([connoff, pane[1]/2-7, 0])
+        translate([0, pane[1]/2-5, 0])
         keypad();
        ;// screws();
     }
@@ -139,15 +139,14 @@ module frame() {
 
 
 
-nut();
+//nut();
 
 //translate([0,0,20])
 if(0)
 enclosure();
-if(0)
+if(1)
 //translate([0,width + thickness*3, 0])
 
-//translate([0,0, height])
-translate([0,7, 0])
+translate([0,0, height+3])
 
 frame();
