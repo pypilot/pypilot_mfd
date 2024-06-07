@@ -11,6 +11,8 @@
 #include <WiFi.h>
 #include <lwip/sockets.h>
 
+#include <Wire.h>
+
 #include "bmp280.h"
 #include "zeroconf.h"
 #include "web.h"
@@ -33,8 +35,8 @@ esp_now_peer_info_t chip;
 #define WIND_ID  0xf179
 #define CHANNEL_ID 0x0a21
 
-enum keys {KEY_PAGE_UP, KEY_SCALE, KEY_PAGE_DOWN, KEY_F1, KEY_F2, KEY_COUNT};
-int key_pin[KEY_COUNT] = {25, 26, 27, 32, 33};
+enum keys {KEY_PAGE_UP, KEY_SCALE, KEY_PAGE_DOWN, KEY_PWR, KEY_COUNT};
+int key_pin[KEY_COUNT] = {27, 32, 33, 25};
 
 std::map<uint64_t, wind_transmitter_t> wind_transmitters;
 
@@ -277,7 +279,7 @@ static void DataRecvWind(const uint8_t *mac_addr, const uint8_t *data, int data_
         else // invalid wind direction (no magnet?)
             snprintf(buf, sizeof buf, PSTR("MWV,,R,%d.%02d,N,A"), (int)knots, (int)(knots*100)%100);
 
-        nmea_send(buf);
+        //nmea_send(buf);
 
         if(settings.wifi_data == SIGNALK) {
             if(!isnan(lpdir))
@@ -414,6 +416,56 @@ static void read_serials()
     uint32_t t2 = millis();
 }
 
+#define DEVICE_ADDRESS 0x19  // 0x32  // LIS2DW12TR
+#define LIS2DW12_CTRL 0x1F   // CTRL1 is CTRL+1
+
+static void setup_accel()
+{
+    // init communication with accelerometer
+    Wire.begin();
+    Wire.beginTransmission(0x19);
+    Wire.write(LIS2DW12_CTRL + 1);
+    Wire.write(0x44);  // high performance
+    Wire.endTransmission();
+
+    Wire.beginTransmission(0x19);
+    Wire.write(LIS2DW12_CTRL + 6);
+    Wire.write(0x10);  // set +/- 4g FS, LP filter ODR/2
+    Wire.endTransmission();
+
+    // enable block data update (bit 3) and auto register address increment (bit 2)
+    Wire.beginTransmission(0x19);
+    Wire.write(LIS2DW12_CTRL + 2);
+    Wire.write(0x08 | 0x04);
+    Wire.endTransmission();
+}
+
+void read_accel()
+{
+    Wire.beginTransmission(0x19);
+    Wire.write(0x28);
+    Wire.endTransmission();
+    Wire.requestFrom(0x19, 6);
+    int i = 0;
+    uint8_t data[6] = { 0 };
+    while (Wire.available() && i < 6)
+        data[i++] = Wire.read();
+    if (i != 6)
+        return;
+
+    int16_t x = (data[1] << 8) | data[0];
+    int16_t y = (data[3] << 8) | data[2];
+
+    int rotation;
+    if(abs(x) > abs(y)) {
+        rotation = x < 0 ? 2 : 0;
+    } else
+        rotation = y < 0 ? 1 : 3;
+
+    display_set_mirror_rotation(rotation);
+    //printf("accel %d %d %d\n", rotation, x, y);
+}
+
 void setup()
 {
     memset(&chip, 0, sizeof(chip));
@@ -444,16 +496,13 @@ void setup()
                   SERIAL_8N1, 16, 17);    //Hardware Serial of ESP32
     Serial2.setTimeout(0);
 
-    settings.landscape = false;
-
     settings.channel = 6;
-
 
     Serial.println("pypilot_mfd");
 
    // bmX280_setup();
+    pinMode(2, INPUT_PULLUP);  // strap for display
 
-    pinMode(35, INPUT_PULLUP);
     for(int i=0; i<KEY_COUNT; i++)
         pinMode(key_pin[i], INPUT_PULLUP);
 
@@ -464,8 +513,9 @@ void setup()
     mdns_setup();
     web_setup();
     printf("web setup complete\n");
-    delay(1000);
+    delay(200);  ///  remove this??
 
+    setup_accel();
     display_setup();
     printf("display setup complete\n");
 
@@ -524,7 +574,6 @@ static void read_keys()
 void loop()
 {
     uint32_t t0 = millis();
-
     static uint32_t tl;
     if(t0-tl > 60000) { // report memory statistics every 60 seconds
         Serial.printf("pypilot_mfd %d %d %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize());
@@ -538,6 +587,7 @@ void loop()
     signalk_poll();
     pypilot_client_poll();
 
+    read_accel();
     display_render();
     web_poll();
 
@@ -545,7 +595,7 @@ void loop()
     int dt = millis() - t0;
     const int period = 100;
     if(dt < period) {
-        printf("delay %d\n", dt);  
+//        printf("delay %d\n", dt);  
         delay(period-dt);
     }
 }

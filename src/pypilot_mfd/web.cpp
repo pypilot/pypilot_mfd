@@ -181,6 +181,8 @@ String processor(const String& var)
     if(var == "LATLONFORMAT")  return settings.lat_lon_format;
     if(var == "CONTRAST")  return String(settings.contrast);
     if(var == "BACKLIGHT")  return String(settings.backlight);
+    if(var == "ROTATION")  return String(settings.rotation);
+    if(var == "MIRROR")  return Checked(settings.mirror);
     if(var == "DISPLAYPAGES") return get_display_pages();
     if(var == "VERSION")    return String(VERSION);
     return String();
@@ -282,6 +284,7 @@ void web_setup()
         request->redirect("/");
         settings_store();
         signalk_subscribe();
+        //display_set_mirror_rotation();
         display_change_page(0);
     });
 

@@ -38,7 +38,8 @@ struct settings_t {
     String lat_lon_format;
     int contrast, backlight;
     bool show_status;
-    bool landscape;
+    int rotation; // 0-3 are set, 4 is auto
+    int mirror; // 2 is auto
 
     String enabled_pages;
 

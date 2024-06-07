@@ -1266,9 +1266,10 @@ struct grid_display : public display {
 int page_width = 160;
 int page_height = 240;
 
+static bool landscape = false;
 struct page : public grid_display {
     page(String _description)
-    : description(_description) { w = page_width; h = page_height; cols = settings.landscape ? 2 : 1; }
+    : description(_description) { w = page_width; h = page_height; cols = landscape ? 2 : 1; }
 
     String description;
 };
@@ -1316,7 +1317,7 @@ struct page : public grid_display {
 struct pageA : public page {
   pageA() : page("Wind gauges with pressure") {
     add(WIND_DIR_G);
-    grid_display *d = new grid_display(this, settings.landscape ? 1 : 2);
+    grid_display *d = new grid_display(this, landscape ? 1 : 2);
     d->expanding = false;
     d->add(WIND_SPEED_G);
     grid_display *e = new grid_display(d);
@@ -1345,19 +1346,19 @@ struct pageC : public page {
 
 struct pageD : public page {
   pageD() : page("Wind gauges with IMU text") {
-    cols = settings.landscape ? 1 : 2;
+    cols = landscape ? 1 : 2;
 
-    grid_display *d = new grid_display(this, settings.landscape ? 2 : 1);
+    grid_display *d = new grid_display(this, landscape ? 2 : 1);
 
     d->add(WIND_DIR_G);
     d->add(WIND_SPEED_G);
 
-    grid_display *t = new grid_display(this, settings.landscape ? 3 : 1);
+    grid_display *t = new grid_display(this, landscape ? 3 : 1);
     t->expanding = false;
     t->add(PRESSURE_T);
     t->add(AIR_TEMP_T);
     t->add(COMPASS_T);
-    if(settings.landscape)
+    if(landscape)
         t->add(RATE_OF_TURN_T);
     t->add(PITCH_T);
     t->add(HEEL_T); 
@@ -1368,7 +1369,7 @@ struct pageE : public page {
   pageE() : page("Wind and IMU text") {
     add(WIND_DIR_T);
     add(WIND_SPEED_T);
-    grid_display *d = new grid_display(this, settings.landscape ? 1 : 2);
+    grid_display *d = new grid_display(this, landscape ? 1 : 2);
     d->expanding = false;
     d->add(COMPASS_T);
     d->add(RATE_OF_TURN_T);
@@ -1381,7 +1382,7 @@ struct pageE : public page {
 struct pageF : public page {
   pageF() : page("Compass Gauge with inertial information") {
     add(COMPASS_G);
-    grid_display *d = new grid_display(this, settings.landscape ? 1 : 2);
+    grid_display *d = new grid_display(this, landscape ? 1 : 2);
     d->expanding = false;
     d->add(RATE_OF_TURN_G);
 
@@ -1395,7 +1396,7 @@ struct pageG : public page {
   pageG() : page("GPS Gauges") {
     add(GPS_HEADING_G);
     add(GPS_SPEED_G);
-    if(settings.landscape) {
+    if(landscape) {
         add(LATITUDE_T);
         add(LONGITUDE_T);
     }
@@ -1417,11 +1418,11 @@ struct pageH : public page {
 struct pageI : public page {
   pageI() : page("Wind and GPS speed gauge") {
     add(WIND_DIR_G);
-    grid_display *d = new grid_display(this, settings.landscape ? 1 : 2);
+    grid_display *d = new grid_display(this, landscape ? 1 : 2);
     d->expanding = false;
 
     d->add(WIND_SPEED_G);
-    if(settings.landscape) {
+    if(landscape) {
         d->add(WIND_DIR_T);
         d->add(GPS_SPEED_T);
         d->add(GPS_HEADING_T);
@@ -1463,7 +1464,7 @@ struct pageL : public page {
 
 struct pageM : public page {
   pageM() : page("Wind gauges, GPS and inertial text ") {
-    cols = settings.landscape ? 3 : 2;
+    cols = landscape ? 3 : 2;
     add(WIND_DIR_G);
     add(WIND_SPEED_G);
     add(PRESSURE_T);
@@ -1482,7 +1483,7 @@ struct pageM : public page {
 struct pageN : public page {
   pageN() : page("Depth text and history") {
     display *depth_t = DEPTH_T;
-    if(!settings.landscape) 
+    if(!landscape) 
         depth_t->h = h/3; // expand to 1/3rd of height of area;
     add(depth_t);
     add(DEPTH_H);
@@ -1498,7 +1499,7 @@ struct pageO : public page {
 
 struct pageP : public page {
   pageP() : page("wind, rudder, compass gauges") {
-    if(settings.landscape) {
+    if(landscape) {
         cols = 3;
         grid_display *d = new grid_display(this);
         d->add(WIND_DIR_G);
@@ -1546,7 +1547,7 @@ struct pageR : public page {
 
 struct pageS : public page {
   pageS() : page("lots of gauges") {
-    cols = settings.landscape ? 3 : 2;
+    cols = landscape ? 3 : 2;
     add(WIND_DIR_G);
     add(WIND_SPEED_G);
     add(COMPASS_G);
@@ -1559,7 +1560,7 @@ struct pageS : public page {
 
 struct pageT : public page {
   pageT() : page("most text fields") {
-    cols = settings.landscape ? 3 : 2;
+    cols = landscape ? 3 : 2;
     add(WIND_DIR_T);
     add(WIND_SPEED_T);
     add(PRESSURE_T);
@@ -1575,7 +1576,7 @@ struct pageT : public page {
     add(DEPTH_T);
     add(RUDDER_ANGLE_T);
     add(WATER_SPEED_T);
-    if(!settings.landscape)
+    if(!landscape)
         add(WATER_TEMP_T);
   }
 };
@@ -1736,19 +1737,59 @@ void display_setup()
     u8g2.setFontPosTop();
 
     cur_page=0;//'W'-'A';
-#if 1
-    if(settings.landscape) {
-        page_width = 256;
-        page_height = settings.show_status ? 148 : 160;
-        u8g2.setDisplayRotation(U8G2_R0);
-    } else {
-        page_width = 160;
-        page_height = settings.show_status ? 244 : 256;
-        u8g2.setDisplayRotation(U8G2_R1);
-    }
-#endif
-    u8g2.setFlipMode(true);
+    display_set_mirror_rotation(settings.rotation);
 
+    setup_analog_pins();
+}
+
+void display_set_mirror_rotation(int rotation)
+{
+    int r = settings.rotation;
+    static int prev_r = -1;
+    // if 4, get from accelerometers
+    if(r == 4)
+        r = rotation;
+    if(r == 4)
+        r = 0;
+
+    if(r == prev_r)
+        return;
+    prev_r = r;
+
+    switch(r) {
+        case 0:
+        case 2:
+            page_width = 256;
+            page_height = settings.show_status ? 148 : 160;
+            landscape = true;
+            break;
+        case 1:
+        case 3:
+            page_width = 160;
+            page_height = settings.show_status ? 244 : 256;
+            landscape = false;
+        break;
+    }
+    
+    switch(r) {
+        case 0: u8g2.setDisplayRotation(U8G2_R0); break;
+        case 1: u8g2.setDisplayRotation(U8G2_R1); break;
+        case 2: u8g2.setDisplayRotation(U8G2_R2); break;
+        case 3: u8g2.setDisplayRotation(U8G2_R3); break;
+    };        
+
+    if(settings.mirror == 2)
+        settings.mirror = digitalRead(2);
+
+    if(settings.mirror)
+        u8g2.setFlipMode(true);
+
+    for(int i=0; i<pages.size(); i++)
+        delete pages[i];
+    pages.clear();
+    display_pages.clear();
+
+    // rebuild display pages
     add(new pageA);
     add(new pageB);
     add(new pageC);
@@ -1777,8 +1818,6 @@ void display_setup()
         for(int j=0; j<(int)display_pages.size(); j++)
             if(settings.enabled_pages[i] == display_pages[j].name)
                 display_pages[j].enabled = true;
-
-    setup_analog_pins();
 }
 
 void display_change_page(int dir)

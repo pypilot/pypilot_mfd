@@ -1,4 +1,4 @@
-$fn=40;
+$fn=120;
 
 use_threads = false;
 
@@ -142,9 +142,9 @@ module frame() {
 //nut();
 
 //translate([0,0,20])
-if(0)
-enclosure();
 if(1)
+enclosure();
+if(0)
 //translate([0,width + thickness*3, 0])
 
 translate([0,0, height+3])

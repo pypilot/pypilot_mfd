@@ -34,6 +34,7 @@ enum display_item_e { WIND_SPEED,
 enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
 
 void display_setup();
+void display_set_mirror_rotation(int);
 void display_change_page(int dir);
 void display_change_scale();
 void display_render();

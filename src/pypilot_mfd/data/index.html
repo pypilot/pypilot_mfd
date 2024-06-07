@@ -138,7 +138,17 @@
             </select>
           </span>
           <span>LCD contrast <input type='number' name='contrast' style='width: 4em' value=%CONTRAST%></span>
-          <span>LCD backlight <input type='number' name='backlight' style='width: 4em' value=%BACKLIGHT%></span>          
+          <span>LCD backlight <input type='number' name='backlight' style='width: 4em' value=%BACKLIGHT%></span>
+            <select name='rotation' value='%ROTATION%'>
+              <option value=0>0</option>
+              <option value=1>1</option>
+              <option value=2>2</option>
+              <option value=3>3</option>
+              <option value=4>Auto</option>
+            </select>
+          <span><input type='checkbox' name='mirror' id='mirror' %MIRROR%>
+            <label for='mirror'>Mirror display</label>
+          </span>
         </div>
         <div class='col1-grid'>
           %DISPLAYPAGES%

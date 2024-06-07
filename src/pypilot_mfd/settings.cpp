@@ -102,7 +102,8 @@ bool settings_load(String suffix)
     LOAD_SETTING_BOUND(backlight, 0, 100, 50)
     
     LOAD_SETTING(show_status, true)
-    LOAD_SETTING(landscape, false)
+    LOAD_SETTING(rotation, 4)
+    LOAD_SETTING(mirror, 2)
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
 
@@ -167,7 +168,8 @@ bool settings_store(String suffix)
     STORE_SETTING(backlight)
     
     STORE_SETTING(show_status)
-    STORE_SETTING(landscape)
+    STORE_SETTING(rotation)
+    STORE_SETTING(mirror)
 
     STORE_SETTING(enabled_pages)
 
