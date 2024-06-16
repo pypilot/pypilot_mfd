@@ -77,6 +77,8 @@ bool settings_load(String suffix)
     LOAD_SETTING_S(psk, "")
 
     LOAD_SETTING(channel, DEFAULT_CHANNEL);
+    if(settings.channel == 0 || settings.channel > 12)
+        settings.channel = 6;
 
     LOAD_SETTING(input_usb, true)
     LOAD_SETTING(output_usb, true)
@@ -96,6 +98,7 @@ bool settings_load(String suffix)
     //display
     LOAD_SETTING(use_360, false)
     LOAD_SETTING(use_fahrenheit, false)
+    LOAD_SETTING(use_inHg, false)
     LOAD_SETTING(use_depth_ft, false)
     LOAD_SETTING_S(lat_lon_format, "minutes")
     LOAD_SETTING_BOUND(contrast, 0, 50, 20)
@@ -162,6 +165,7 @@ bool settings_store(String suffix)
     //display
     STORE_SETTING(use_360)
     STORE_SETTING(use_fahrenheit)
+    STORE_SETTING(use_inHg)
     STORE_SETTING(use_depth_ft)
     STORE_SETTING(lat_lon_format)
     STORE_SETTING(contrast)

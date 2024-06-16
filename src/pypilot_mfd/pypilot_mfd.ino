@@ -24,13 +24,11 @@
 
 #include "settings.h"
 
-
 bool wifi_ap_mode = false;
 settings_t settings;
 
 // Global copy of chip
 esp_now_peer_info_t chip;
-
 
 #define WIND_ID  0xf179
 #define CHANNEL_ID 0x0a21
@@ -53,18 +51,6 @@ struct packet_channel_t {
   uint16_t channel;
   uint16_t crc16;
 } __attribute__((packed));
-
-
-int32_t getWiFiChannel(const char *ssid) {
-  if (int32_t n = WiFi.scanNetworks()) {
-      for (uint8_t i=0; i<n; i++) {
-          if (!strcmp(ssid, WiFi.SSID(i).c_str())) {
-              return WiFi.channel(i);
-          }
-      }
-  }
-  return 0;
-}
 
 void setup_wifi()
 {
@@ -93,12 +79,14 @@ void setup_wifi()
 
         if(settings.ssid) {
             Serial.printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
+
+            // setting a custom "country" locks the wifi in a particular channel
             wifi_country_t myWiFi;
             //Country code (cc) set to 'X','X','X' is the standard, apparently.
             myWiFi.cc[0]='X';
             myWiFi.cc[1]='X';
             myWiFi.cc[2]='X';
-            myWiFi.schan = 6;
+            myWiFi.schan = settings.channel;
             myWiFi.nchan = 1;
             myWiFi.policy = WIFI_COUNTRY_POLICY_MANUAL;
 
@@ -279,7 +267,8 @@ static void DataRecvWind(const uint8_t *mac_addr, const uint8_t *data, int data_
         else // invalid wind direction (no magnet?)
             snprintf(buf, sizeof buf, PSTR("MWV,,R,%d.%02d,N,A"), (int)knots, (int)(knots*100)%100);
 
-        //nmea_send(buf);
+        nmea_send(buf);
+        //printf("lpdir %f\n", lpdir);
 
         if(settings.wifi_data == SIGNALK) {
             if(!isnan(lpdir))
@@ -332,6 +321,45 @@ void sendChannel()
     if (result != ESP_OK) {
         Serial.print("Send failed Status: ");
         Serial.println(result);
+    }
+}
+
+static std::map <String, int> wifi_networks;
+static String wifi_networks_html;
+static uint32_t scanning = 0;
+void scan_wifi_networks() {
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
+    int32_t n = WiFi.scanNetworks(true));
+    scanning = millis();
+    if(!scanning) scanning++;
+    // display on screen scanning for wifi networks progress
+}
+
+void scaning_poll()
+{
+    if(t - scanning > 5000) {
+            scanning = 0;
+            int n = WiFi.scanComplete();
+            for (uint8_t i=0; i<n; i++) {
+                String ssid = WiFi.SSID(i);
+                int channel = WiFi.channel(i);
+                if(ssid == settings.ssid)
+                    settings.channel = channel;
+                if(wifi_networks.find(ssid) == wifi_networks.end()) {
+                    wifi_networks[ssid] = channel;
+                    String tr = "<tr><td>" + ssid + "</td><td>" + channel + "</td>";
+                    tr += "<td>" + WiFi.RSSI(i) + "</td><td>";
+                    tr += WiFi.encryptionType(i) == ENC_TYPE_NONE ? "open" : "encrypted";
+                    tr += "</td></tr>";
+                    printf("wifi network %s\n", tr.c_str());
+                    wifi_networks_html += tr;
+                }
+            }
+            WiFi.scanDelete();
+        }
+        setup_wifi();
+        return;
     }
 }
 
@@ -458,12 +486,12 @@ void read_accel()
 
     int rotation;
     if(abs(x) > abs(y)) {
-        rotation = x < 0 ? 2 : 0;
+        rotation = x < 0 ? 0 : 2;
     } else
-        rotation = y < 0 ? 1 : 3;
+        rotation = y < 0 ? 3 : 1;
 
     display_set_mirror_rotation(rotation);
-    //printf("accel %d %d %d\n", rotation, x, y);
+    printf("accel %d %d %d\n", rotation, x, y);
 }
 
 void setup()
@@ -475,7 +503,7 @@ void setup()
     if(chip.channel > 12)
         chip.channel = 1;
 
-    chip.channel = 6;
+    //chip.channel = 6;
     chip.encrypt = 0; 
 
     settings.usb_baud_rate = 115200;
@@ -496,11 +524,19 @@ void setup()
                   SERIAL_8N1, 16, 17);    //Hardware Serial of ESP32
     Serial2.setTimeout(0);
 
-    settings.channel = 6;
+    //settings.channel = 6;
 
     Serial.println("pypilot_mfd");
 
-   // bmX280_setup();
+    // buzzer
+    ledcSetup(1, 4000, 10);
+    ledcAttachPin(4, 1);
+    ledcWrite(1, 512);
+    delay(100);
+    ledcWrite(1, 0);
+
+
+    // bmX280_setup();
     pinMode(2, INPUT_PULLUP);  // strap for display
 
     for(int i=0; i<KEY_COUNT; i++)
@@ -512,12 +548,11 @@ void setup()
     InitESPNow();
     mdns_setup();
     web_setup();
+    setup_accel();
     printf("web setup complete\n");
     delay(200);  ///  remove this??
 
-    setup_accel();
-    display_setup();
-    printf("display setup complete\n");
+    bmX280_setup();
 
     int ss = CONFIG_ARDUINO_LOOP_STACK_SIZE;
     if(ss < 16384)
@@ -525,6 +560,12 @@ void setup()
     printf("Stack Size %d\n", ss);
 
     Serial.println("setup complete");
+
+    read_accel();
+    display_setup();
+    printf("display setup complete\n");
+
+    esp_log_level_set("*", ESP_LOG_NONE);
 }
 
 static void toggle_wifi_mode()
@@ -580,16 +621,19 @@ void loop()
         tl = t0;
     }
 
-    read_keys();
-    read_serials();
-    //read_pressure_temperature();
-    nmea_poll();
-    signalk_poll();
-    pypilot_client_poll();
+    if(scanning)
+        scanning_poll();
+    else {
+        read_keys();
+        read_serials();
+        //read_pressure_temperature();
+        nmea_poll();
+        signalk_poll();
+        pypilot_client_poll();
 
-    read_accel();
+        web_poll();
+    }
     display_render();
-    web_poll();
 
     // sleep remainder of second
     int dt = millis() - t0;

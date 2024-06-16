@@ -7,7 +7,15 @@
   <div class='container'>
     <div class='box'>
       <h2>WIFI Network Configuration</h2>
+      <form action='scan_wifi' method='post'>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='submit' style='width: 100%%' value='Scan'>
+        </div>
+      </form>
       <form action='network' method='post'>
+        <table style='width: 90%%;' id='wifi_networks_table'><tr><th>SSID</th><th>channel</th><th>Strength</th><th>Encryption</th></tr>%WIFI_NETWORKS%</table>
+          
         <div class='col2-grid'>
           <span>SSID</span><input type='text' name='ssid' value='%SSID%' autofocus style='width: 60%%'>
           <span>PSK</span><input type='text' name='psk' value='%PSK%' style='width: 60%%'>
@@ -30,7 +38,7 @@
         </div>
       </div>
       <table style='width: 90%%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
-      <form action='scan' method='post'>
+      <form action='scan_sensors' method='post'>
         <div class='col3-grid'>
           <div> </div>
           <input class='button' type='submit' style='width: 100%%' value='Scan'>
@@ -128,6 +136,8 @@
             <label for='use360'>Use 0-360 rather than 0-180 for angles</label></span>
           <span><input type='checkbox' name='usefahrenheit' id='usefahrenheit' %USEFAHRENHEIT%>
             <label for='usefahrenheit'>Use Fahrenheit (default celcius)</label></span>
+          <span><input type='checkbox' name='useinHg' id='useinHg' %USEINHG%>
+            <label for='useinHg'>Use in Hg for pressure (default mbar)</label></span>
           <span><input type='checkbox' name='usedepthft' id='usedepthft' %USEDEPTHFT%>
             <label for='usedepthft'>Use depth ft (default meters)</label></span>
           <span>Latitude Longitude Format

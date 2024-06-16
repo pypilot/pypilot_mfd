@@ -22,6 +22,7 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 AsyncWebSocket ws_data("/ws_data");
 
+
 wind_position str2position(String p) {
     if(p == "Primary")   return PRIMARY;
     if(p == "Secondary") return SECONDARY;
@@ -159,6 +160,7 @@ String Checked(bool value) {
 String processor(const String& var)
 {
     //Serial.println(var);
+    if(var == "WIFI_NETWORKS") return wifi_networks_html;
     if(var == "SSID")       return settings.ssid;
     if(var == "PSK")        return settings.psk;
     if(var == "CHANNEL")    return String(settings.channel);
@@ -177,6 +179,7 @@ String processor(const String& var)
     if(var == "NMEASERVERPORT") return String(settings.nmea_server_port);
     if(var == "USE360")  return Checked(settings.use_360);
     if(var == "USEFAHRENHEIT")  return Checked(settings.use_fahrenheit);
+    if(var == "USEINHG")  return Checked(settings.use_inHg);
     if(var == "USEDEPTHFT")  return Checked(settings.use_depth_ft);
     if(var == "LATLONFORMAT")  return settings.lat_lon_format;
     if(var == "CONTRAST")  return String(settings.contrast);
@@ -208,13 +211,17 @@ void web_setup()
             if(name == "ssid")     settings.ssid = value;
             else if(name == "psk") settings.psk = value;
             else printf("web post wifi unknown parameter %s %s\n", name.c_str(), value.c_str());
-
         }
         request->redirect("/");
         settings_store();
     });
 
-    server.on("/scan", HTTP_POST, [](AsyncWebServerRequest *request) {
+    server.on("/scan_wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
+        scan_wifi_networks();
+        request->redirect("/");
+    });
+
+    server.on("/scan_sensors", HTTP_POST, [](AsyncWebServerRequest *request) {
         scan_devices();
         request->redirect("/");
     });
@@ -251,7 +258,8 @@ void web_setup()
     });
 
     server.on("/display", HTTP_POST, [](AsyncWebServerRequest *request) {
-        settings.use_360 = settings.use_fahrenheit = settings.use_depth_ft = false;
+        settings.use_360 = settings.use_fahrenheit = false;
+        settings.use_inHg = settings.use_depth_ft = false;
         String enabled_pages = "";
         for(int i=0; i < display_pages.size(); i++)
             display_pages[i].enabled = false;
@@ -263,6 +271,8 @@ void web_setup()
                 settings.use_360 = true;
             else if(name == "usefahrenheit")
                 settings.use_fahrenheit = true;
+            else if(name == "useinHg")
+                settings.use_inHg = true;
             else if(p->name() == "usedepthft")
                 settings.use_depth_ft = true;
             else if(p->name() == "lat_lon_format")
@@ -302,6 +312,7 @@ void web_setup()
 void web_poll()
 {
     uint32_t t = millis();
+
     static uint32_t last_sock_update;
     if(t - last_sock_update < 200)
         return;

@@ -11,6 +11,8 @@
 
 #include <esp32-hal-gpio.h>
 
+#include <Wire.h>
+
 #include "Arduino.h"
 
 #include "settings.h"
@@ -57,42 +59,60 @@ int i2c_read(uint8_t *data, uint8_t count) {
     //i2c_master_read_from_device(I2C_NUM_0, DEVICE_ADDRESS, data, count, pdMS_TO_TICKS(1000));
 }
 
+bool bm_read(uint8_t addr, int count, uint8_t *d)
+{
+    Wire.beginTransmission(0x76);
+    Wire.write(addr);
+    Wire.endTransmission();
+
+    Wire.requestFrom(0x76, count);
+    for(int i=0; i< count; i++) {
+        if(!Wire.available())
+            return false;
+        d[i] = Wire.read();
+    }
+    return true;
+}
+
+bool bm_write(uint8_t addr, uint8_t val)
+{
+    Wire.beginTransmission(0x76);
+    Wire.write(addr);
+    Wire.write(val);
+    Wire.endTransmission();
+}
+
 void bmX280_setup()
 {
     Serial.println(F("bmX280 setup"));
 
     // NOTE:  local version of twi does not enable pullup as
     // bmX_280 device is 3.3v and arduino runs at 5v
-    i2c_init();
+    //i2c_init();
 
     // incase arduino version (although pullups will put
     // too high voltage for short time anyway....
-    pinMode(SDA, INPUT);
-    pinMode(SCL, INPUT);
-    delay(1);
+    //pinMode(SDA, INPUT);
+    //pinMode(SCL, INPUT);
+    //delay(1);
 
     have_bmp280 = 0;
-    bmX280_tries--;
 
     uint8_t d[24];
-    if(i2c_write_byte(0xd0) == ESP_OK &&
-       i2c_read(d, 1) == ESP_OK &&
-       d[0] == 0x58) {
-        have_bmp280 = 1;
-    }
-    else {
-        Serial.print(F("bmp280 not found: "));
-        Serial.println(d[0]);
-        // attempt reset command
+    if(!bm_read(0xd0, 1, d)) {
+        printf("failed to read from bmp\n");
         return;
     }
 
-    if(i2c_write_byte(0x88) != ESP_OK) {
-        Serial.println(F("bmp280 F1"));
-        have_bmp280 = 0;
+    if(d[0] == 0x58) {
+        have_bmp280 = 1;
+    }
+    else {
+        printf("bmp280 not found: %x\n", d[0]);
+        return;
     }
 
-    if(i2c_read(d, 24) != ESP_OK) {
+    if(!bm_read(0x88, 24, d)) {
         Serial.println(F("bmp280 failed to read calibration"));
         have_bmp280 = 0;
     }
@@ -112,7 +132,7 @@ void bmX280_setup()
 
     
     // b00011111  // configure
-    if(i2c_write(0xf4, 0xff) != ESP_OK) {
+    if(!bm_write(0xf4, 0xff)) {
         Serial.println(F("bmp280 F2"));
         have_bmp280 = 0;
     }
@@ -159,15 +179,9 @@ void read_pressure_temperature()
         return;
 
     uint8_t buf[6] = {0};
-    buf[0] = 0xf7;
-    uint8_t r = i2c_write_byte(0xf7);
-    if(r && have_bmp280) {
-        Serial.print(F("bmp280 twierror "));
-        Serial.println(r);
-    }
 
-    //if(i2c_read(buf, 6) != ESP_OK c != 6 && have_bmp280)
-      //  Serial.println(F("bmp280 failed to read 6 bytes from bmp280"));
+    if(!bm_read(0xf7, 6, buf) && have_bmp280)
+        Serial.println(F("bmp280 failed to read 6 bytes from bmp280"));
 
     int32_t p, t;
     
@@ -185,7 +199,7 @@ void read_pressure_temperature()
     bmp280_count++;
 
     if(!have_bmp280) {
-        if(bmp280_count == 512) {
+        if(bmp280_count == 16) {
             bmp280_count = 0;
             /* only re-run setup when count elapse */
             bmX280_setup();
@@ -193,10 +207,10 @@ void read_pressure_temperature()
         return;
     }
 
-    if(bmp280_count == 1024) {
+    if(bmp280_count == 32) {
         bmp280_count = 0;
-        pressure >>= 12;
-        temperature >>= 12;
+        pressure >>= 7;
+        temperature >>= 7;
     
         temperature_comp = bmp280_compensate_T_int32(temperature);// + 10*eeprom_data.temperature_offset;
         pressure_comp = (bmp280_compensate_P_int64(pressure) >> 8);// + eeprom_data.barometer_offset;

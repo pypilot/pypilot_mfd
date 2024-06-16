@@ -293,7 +293,7 @@ struct text_display : public display_item {
             else // right justify
                 xp = x + w-wt;
         }
-        //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", getLabel().c_str(), x, y, w, h, wt, ht, label_w, label_h);
+        //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", str.c_str(), x, y, w, h, wt, ht, xp, yp);
         u8g2.drawUTF8(xp, yp, str.c_str());
 
         if(label_h && label_w < w && label_h < h) {
@@ -423,21 +423,28 @@ struct pressure_text_display : public text_display {
 
     String getTextItem() {
         float cur = display_data[item].value;
+        if (settings.use_inHg)
+            cur /= 33.8639;
         String s;
-        if(w > 80)
-            s = String(cur, 2);
+        if(w > 100)
+            s = String(cur, 5);
         else if(w > 50)
-            s = String(cur, 1);
+            s = String(cur, 4);
         else
-            s = String(cur, 0);
-        if(w > 60 && prev.size()>3) {
-            if(cur < prev.front() - 1)
-                units = "↓";
-            else if(cur > prev.front() + 1)
-                units = "↑";
-            else
-                units = "~";
-        }
+            s = String(cur, 3);
+
+        if(w > 50) {
+            if(prev.size()>3) {
+                if(cur < prev.front() - .005f)
+                    units = "↓";
+                else if(cur > prev.front() + .005f)
+                    units = "↑";
+                else
+                    units = "~";
+            } else
+                units = " ";
+        } else
+            units = "";
 
         if(millis() - prev_time > 60000) {
             prev.push_back(cur);
@@ -446,15 +453,22 @@ struct pressure_text_display : public text_display {
             prev_time = millis();
         }
 
-        if(w > 100)
-            units += " mbar";
+        if(w > 100) {
+            if (settings.use_inHg)
+                units += " inHg";
+            else
+                units += " mbar";
+        }
+        //printf("prev %s %d %d\n", units.c_str(), prev.size(), w);
 
         return s;
     }
 
-    std::list<float> prev;
+    static std::list<float> prev;
     uint32_t prev_time;
 };
+
+std::list<float> pressure_text_display::prev;
 
 struct position_text_display : public text_display {
     position_text_display(display_item_e _i) : text_display(_i) {}
@@ -589,7 +603,7 @@ struct gauge : public display_item {
         yc = y + h / 2;
 
         int thick = r / 36;
-        int r2 = r-thick*2;
+        int r2 = r-thick-1;
         for (int i = -thick; i <= thick; i++)
             for (int j = -thick; j <= thick; j++)
                 u8g2.drawCircle(xc + i, yc + j, r2);
@@ -597,7 +611,7 @@ struct gauge : public display_item {
 
     void render_tick(float angle, int u, int &x0, int &y0) {
         float rad = deg2rad(angle);
-        float s = sin(rad), c = cos(rad);
+        float s = sinf(rad), c = cosf(rad);
 
         x0 = xc + (r - u) * s;
         y0 = yc - (r - u) * c;
@@ -610,26 +624,53 @@ struct gauge : public display_item {
     }
 
     void render_ticks(bool text = false) {
-        char buf[16];
-
-        if (w > 64)
-            u8g2.setFont(u8g2_font_helvB12_tf);
+        int th;
+        if (w > 90)
+            u8g2.setFont(u8g2_font_helvB08_tf), th = 8;
         else
-            u8g2.setFont(u8g2_font_helvB08_tf);
+            u8g2.setFont(u8g2_font_5x7_tf), th = 7;
 
         for (float angle = min_ang; angle <= max_ang; angle += ang_step) {
             int x0, y0;
             render_tick(angle, w/12, x0, y0);
+        }
 
+        float step = (int) (((float)max_v - min_v) / 8 + .5);
+        for(float val = min_v; val <= max_v; val += step) {
+            if(max_ang >= 160 && val  > 160)
+                break; // avoid rendering overlapping 180
+
+            float ival = (int)val;
+            // map over range from 0 - 1
+            float v = (ival-min_v) / (max_v-min_v);
+            // now convert to gauge angle
+            v = min_ang + v * (max_ang - min_ang);
+
+            float rad = deg2rad(v);
+            float s = sinf(rad), c = cosf(rad);
+            float r1 = r - w/10;
+            int x0 = xc + r1 * s;
+            int y0 = yc - r1 * c;
+            //printf("gauge %d %d %f %d %f\n", x0, y0, ival, step, max_v, min_v);
+
+            char buf[16];
             if (text) {
-                float val = angle * (max_v - min_v) / (max_ang - min_ang) + min_v;
-                snprintf(buf, sizeof buf, "%03d", (int)val);
+                snprintf(buf, sizeof buf, "%d", abs((int)ival));
+                int tsw = u8g2.getStrWidth(buf);
+                if(x0 > xc + w/4)
+                    x0 -= tsw;
+                else if(x0 > xc - w/4)
+                    x0 -= tsw / 2;
+                if(y0 > yc + h/4)
+                    y0 -= th;
+                else if(y0 > yc - h/4)
+                    y0 -= th / 2;
                 u8g2.drawStr(x0, y0, buf);
             }
 
-            if (text) {  // intermediate ticks
-                float iangle = angle + ang_step / 2.0f;
-                render_tick(iangle, w/20, x0, y0);
+            if (0&&text) {  // intermediate ticks
+                //float iangle = angle + ang_step / 2.0f;
+                //render_tick(iangle, w/20, x0, y0);
             }
         }
     }
@@ -637,8 +678,10 @@ struct gauge : public display_item {
     virtual void render_dial() {
         // draw actual arrow toward wind direction
         float val = display_data[item].value;
-        if (isnan(val))
+        if (isnan(val)) {
+            printf("ISNAN%f\n", val);
             return;
+        }
 
         // map over range from 0 - 1
         float v = (val-min_v)/ (max_v-min_v);
@@ -696,7 +739,7 @@ struct gauge : public display_item {
         render_label();
         render_dial();
         render_ring();
-        render_ticks();
+        render_ticks(w > 60);
     }
 
     text_display &text;
@@ -864,18 +907,26 @@ struct history_display : public display_item {
         // todo: match range to nice values, render ticks, and text ticks etc
 
         // draw history data
-        maxv = nice_number(maxv);
         float range;
-        if(min_zero)
+        int digits = 5;
+        if(min_zero) {
             minv = 0;
-        else
-            minv = nice_number(minv, -1);
+            maxv = nice_number(maxv);
+            digits = 0;
+        } else {
+            // extend range slightly
+            float rng = maxv - minv;
+            maxv += rng/8;
+            minv -= rng/8;
+        }
         range = maxv - minv;
 
         int lxp = -1, lyp;
         for(std::list<history_element>::iterator it = data.begin(); it!=data.end(); it++) {
             int xp = w - (time - it->time) * w / totalmillis;
-            int yp = h-it->value * h / range;
+            int yp = h- (it->value - minv) * h / range;
+
+            //printf("YP %d %d %f %f\n", h, yp, it->value, range);
 
             if(lxp >= 0)
                 u8g2.drawLine(x+lxp, y+lyp, x+xp, y+yp);
@@ -883,9 +934,9 @@ struct history_display : public display_item {
         }
 
         u8g2.setFont(u8g2_font_helvB08_tf);
-        u8g2.drawStr(x, y, String(maxv, 0).c_str());
-        u8g2.drawStr(x, y+h/2-4, String(minv, 1).c_str());
-        u8g2.drawStr(x, y+h-8, String(minv, 0).c_str());
+        u8g2.drawStr(x, y, String(maxv, digits).c_str());
+        u8g2.drawStr(x, y+h/2-4, String((minv+maxv)/2, digits).c_str());
+        u8g2.drawStr(x, y+h-8, String(minv, digits).c_str());
 
         String history_label = getHistoryLabel((history_range_e)r);
         int sw = u8g2.getStrWidth(history_label.c_str());
@@ -1282,7 +1333,7 @@ struct page : public grid_display {
 #define WIND_SPEED_H   new history_display(WIND_SPEED_T)
 
 #define PRESSURE_T     new pressure_text_display()
-#define PRESSURE_H     new history_display(PRESSURE_T)
+#define PRESSURE_H     new history_display(PRESSURE_T, false)
 #define AIR_TEMP_T     new temperature_text_display(AIR_TEMPERATURE)
 
 #define COMPASS_T      new angle_text_display(COMPASS_HEADING)
@@ -1730,33 +1781,26 @@ static void read_analog_pins()
         ledcWrite(0, 1023);
 }
 
+static int rotation;
+void display_set_mirror_rotation(int r)
+{
+    rotation = settings.rotation;
+    // if 4, get from accelerometers
+    if(rotation == 4)
+        rotation = r;
+}
+
 void display_setup()
 {
     u8g2.begin();
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    cur_page=0;//'W'-'A';
-    display_set_mirror_rotation(settings.rotation);
+    cur_page='C'-'A';
 
-    setup_analog_pins();
-}
+    printf("setup rotation %d\n", rotation);
 
-void display_set_mirror_rotation(int rotation)
-{
-    int r = settings.rotation;
-    static int prev_r = -1;
-    // if 4, get from accelerometers
-    if(r == 4)
-        r = rotation;
-    if(r == 4)
-        r = 0;
-
-    if(r == prev_r)
-        return;
-    prev_r = r;
-
-    switch(r) {
+    switch(rotation) {
         case 0:
         case 2:
             page_width = 256;
@@ -1770,17 +1814,20 @@ void display_set_mirror_rotation(int rotation)
             landscape = false;
         break;
     }
-    
-    switch(r) {
+
+    if(settings.mirror == 2)
+        settings.mirror = digitalRead(2);
+
+    if(settings.mirror)
+        rotation ^= 2;
+    switch(rotation) {
         case 0: u8g2.setDisplayRotation(U8G2_R0); break;
         case 1: u8g2.setDisplayRotation(U8G2_R1); break;
         case 2: u8g2.setDisplayRotation(U8G2_R2); break;
         case 3: u8g2.setDisplayRotation(U8G2_R3); break;
     };        
 
-    if(settings.mirror == 2)
-        settings.mirror = digitalRead(2);
-
+    settings.mirror = 0;
     if(settings.mirror)
         u8g2.setFlipMode(true);
 
@@ -1818,6 +1865,8 @@ void display_set_mirror_rotation(int rotation)
         for(int j=0; j<(int)display_pages.size(); j++)
             if(settings.enabled_pages[i] == display_pages[j].name)
                 display_pages[j].enabled = true;
+
+    setup_analog_pins();
 }
 
 void display_change_page(int dir)
@@ -1896,8 +1945,15 @@ void display_render()
 
     u8g2.setContrast(160 + settings.contrast);
     uint32_t t0 = millis();
+    
+#if 1
     u8g2.clearBuffer();
     u8g2.setDrawColor(1);
+#else
+    u8g2.setDrawColor(1);
+    u8g2.drawBox(0, 0, page_width, page_height);
+    u8g2.setDrawColor(0);
+#endif
     uint32_t t1 = millis();
 
     u8g2.setFont(u8g2_font_helvB14_tf);
@@ -1917,8 +1973,11 @@ void display_render()
     }
 
     for(int i=0; i<DISPLAY_COUNT; i++)
-        if(t0-display_data[i].time > 5000)
+        if(millis()+100-display_data[i].time > 5000) {
+            //if(!isnan(display_data[i].value))
+              //  printf("timeout %ld %ld %d\n", t0, display_data[i].time, i);
             display_data[i].value = NAN;  // timeout if no data 
+        }
 
     uint32_t t2 = millis();
 

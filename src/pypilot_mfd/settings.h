@@ -34,7 +34,7 @@ struct settings_t {
     bool compensate_accelerometer;
 
     //display
-    bool use_360, use_fahrenheit, use_depth_ft;
+    bool use_360, use_fahrenheit, use_inHg, use_depth_ft;
     String lat_lon_format;
     int contrast, backlight;
     bool show_status;
@@ -71,4 +71,5 @@ extern bool wifi_ap_mode;
 
 extern float lpdir, knots;
 
+void scan_wifi_networks();
 void scan_devices();
