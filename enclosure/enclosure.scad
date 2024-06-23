@@ -1,10 +1,11 @@
-$fn=30;
+$fn=120;
 
-use_threads = false;
+use_threads = true;
+//use_holes = true;
 
 length = 124;
 width = 96;
-height = 20;
+height = 19;
 
 board_length = 116.25;
 board_width = 86.25-4;
@@ -21,17 +22,19 @@ connoff = -19;
 lcd_area = [101, 60];
 lcd_off = 3;
 
-board_off=-0;
+ex_r = 3;
+
+board_off=4;
 module box() {
     difference() {
-        translate([-length/2,-width/2,0])
+        translate([-length/2+ex_r,-width/2+ex_r,0])
         minkowski() {
-            cube([length, width, height]);
-            cylinder(r=thickness,h=bthickness);
+            cube([length-ex_r*2, width-ex_r*2, height]);
+            cylinder(r=thickness+ex_r,h=bthickness);
         }
-        translate([-board_length/2,-board_width/2-board_off,bthickness])
+        translate([-board_length/2,-board_width/2,bthickness])
         cube([board_length, board_width, height+bthickness]);
-        translate([-board_length/2,-board_width/2-board_off-4,bthickness])
+        translate([-board_length/2,-board_width/2-board_off,bthickness])
         cube([board_length, board_width, height-bthickness]);
     
         // usb port
@@ -39,10 +42,10 @@ module box() {
         cylinder(r=6.5, h=40, center=true);
         
         // rs422 port
-     //    translate([-8,-.8-board_off,0])
-       // cylinder(r=6.5, h=40, center=true);
+        translate([-8,-.8-board_off,0])
+        cylinder(r=6.5, h=40, center=true);
 
-    translate([0,0,height+bthickness])
+    translate([0,0,height+bthickness-.4])
         scale([1, 1, .7])
         groove();
 
@@ -51,7 +54,10 @@ module box() {
         translate([0,0,-1])
         screws();
         
-        translate([connoff,pane[1]/2-9,3])
+        if(use_holes)
+            holes();
+        
+        translate([connoff,pane[1]/2-9,4])
           cube([conn[0], conn[1], height]);
         //translate([connoff,pane[1]/2-8,3])
           //cube([conn[0], 15, height-pane[2]-5   ]);
@@ -79,17 +85,45 @@ all()
 module side_groove() {
         translate([length/2,0,0])
         rotate([90,0,0])
-            cylinder(r=gasket_d/2, h=width-thickness*2, center=true);
+            cylinder(r=gasket_d/2, h=width-thickness*2-ex_r*2+.1, center=true);
     translate([0, width/2,0])
         rotate([0,90,0])
-            cylinder(r=gasket_d/2, h=length-thickness*2, center=true);
+            cylinder(r=gasket_d/2, h=length-thickness*2-ex_r*2+.1, center=true);
 }
 
 module corner_groove() {
-    translate([length/2-thickness, width/2-thickness,0])
+    translate([length/2-thickness-ex_r, width/2-thickness-ex_r,0])
         rotate_extrude(angle=90)
-    translate([thickness,0])
+    translate([thickness+ex_r,0])
             circle(r=gasket_d/2);
+}
+
+module holea()
+{
+        translate([0,0,height/2])
+            rotate([90,0,0])
+                cylinder(r=height/2-2, h=width+1, center=true);
+}
+
+module holeb()
+{
+        translate([0,0,height/2])
+            rotate([0,90,0])
+                cylinder(r=height/2-2, h=length+1, center=true);
+}
+
+
+module holes()
+{
+    translate([32,0,0])
+        holea();
+    translate([-32,0,0])
+        holea();
+        holea();
+    translate([0,16,0])
+        holeb();
+    translate([0,-16,0])
+        holeb();
 }
 
 module screw() {
@@ -98,16 +132,16 @@ module screw() {
 }
 
 module screws() {
-all() {
-    translate([length/2+thickness*.55, 0, -.1])
-        screw();
-    translate([length/2+thickness*.55, width*.35, -.1])
-        screw();
-    translate([length*.42,width/2+thickness*.55, -.1])
-        screw();
-    translate([length*.16, width/2+thickness*.55, -.1])
-        screw();
-}
+    all() {
+        translate([length/2+thickness*.55, 0, -.1])
+            screw();
+        translate([length/2+thickness*.55, width*.35, -.1])
+            screw();
+        translate([length*.4,width/2+thickness*.55, -.1])
+            screw();
+        translate([length*.15, width/2+thickness*.55, -.1])
+            screw();
+    }
 }
 
 module all() {
@@ -123,18 +157,58 @@ module all() {
 
 use <threads-library-by-cuiso-v1.scad>
 
+sr = 1.4;
+module support()
+{
+       hull() {
+        translate([length*.3, width/2])
+            cylinder(r=sr, h=4);
+        translate([-length*.7, -width/2])
+            cylinder(r=sr, h=4);
+   }
+       hull() {
+        translate([length*.8, width/2])
+            cylinder(r=sr, h=4);
+        translate([-length*.2, -width/2])
+            cylinder(r=sr, h=4);
+   }
+       hull() {
+        translate([-length*.8, width/2])
+            cylinder(r=sr, h=4);
+        translate([length*.2, -width/2])
+            cylinder(r=sr, h=4);
+   }
+
+       hull() {
+        translate([-length*.3, width/2])
+            cylinder(r=sr, h=4);
+        translate([length*.7, -width/2])
+            cylinder(r=sr, h=4);
+   }
+}
+
+thread_len=36;
 module enclosure() {
     box();
     all()
         translate([length*.3, width*.3])
-        cylinder(r=3, h=5);
-    
+        cylinder(r=5, h=6);
+    intersection() {
+    support();
+        
+        cube([length, width, height],center=true);
+    }
+   
     if(use_threads)
-    translate([1,0,-20])
+    translate([1,0,-thread_len])
         difference() {
-            thread_for_screw(diameter=48, length=20);
+            union() {
+                translate([0,0,thread_len-11])
+                cylinder(r=21.5, h=11);
+            thread_for_screw(diameter=48, length=thread_len-10);
+            }
            translate([0,0,-1]) 
-            cylinder(r=18, h=22);
+            cylinder(r=18, h=thread_len+2);
         }
 }
 
