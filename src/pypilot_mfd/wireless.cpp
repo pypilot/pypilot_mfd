@@ -311,7 +311,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     wind_transmitter_t &wt = wind_transmitters.update(data.mac, primary, dir);
     wt.dir = resolv(dir + wt.offset);
     wt.knots = knots;
-
+'
     if (!primary)
         return;
 

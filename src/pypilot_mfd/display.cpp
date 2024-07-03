@@ -17,6 +17,8 @@
 #include "ais.h"
 #include "pypilot_client.h"
 #include "utils.h"
+#include "history.h"
+#include "buzzer.h"
 
 // autocompensate contrast based on light and temperature
 #define BACKLIGHT_PIN 14
@@ -24,20 +26,150 @@
 #define PHOTO_RESISTOR_PIN 34
 #define PWR_LED 26
 
-#include <U8g2lib.h>
-
 bool display_on = true;
 
-//#include <TFT_eSPI.h>  // Hardware-specific library
-//#include <SPI.h>
+// uncomment to declare which graphics library
+#define USE_U8G2
+//#define USE_LVGL     // color lcd
+//#define USE_TFT_ESPI // only small wind display supported (bottom of file)
 
-#if 1
+
+#ifdef USE_U8G2
+
+#include <U8g2lib.h>
 //U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/5, /* dc=*/12, /* reset=*/14);
 //U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/18, /* data=*/23, /* cs=*/5, /* dc=*/12, /* reset=*/14);
 U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
 //U8G2_ST75256_JLX256160_2_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
 
-String getItemLabel(display_item_e item) {
+
+void drawThickLine(int x1, int y1, int x2, int y2, int w)
+{
+    int ex = x2-x1, ey = y2-y1;
+    int d = sqrt(ex*ex + ey*ey);
+    if(d == 0)
+        return;
+    ex = ex*w/d/2;
+    ey = ey*w/d/2;
+
+    int ax = x1+ey, ay = y1-ex;
+    int bx = x1-ey, by = y1+ex;
+    int cx = x2+ey, cy = y2-ex;
+    int dx = x2-ey, dy = y2+ex;
+    u8g2.drawTriangle(ax, ay, bx, by, cx, cy);
+    u8g2.drawTriangle(bx, by, dx, dy, cx, cy);
+}
+
+void drawCircle(int x, int y, int r, int thick=0)
+{
+    for (int i = -thick; i <= thick; i++)
+        for (int j = -thick; j <= thick; j++)
+            u8g2.drawCircle(xc + i, yc + j, r);
+}
+
+void drawLine(int x1, int y1, int x2, int y2)
+{
+    u8g2.drawLine(x1, y1, x2, y2);
+}
+
+void drawTriangle(int x1, int y1, int x2, int y2, int x3, int y3)
+{
+    u8g2.drawTriangle(x1, y1, x2, y2, x3, y3);
+}
+
+void setFont(void *font)
+{
+    u8g2.setFont(u8g2_font_helvB08_tf);
+}
+
+int getTextWidth(const char *str)
+{
+    return u8g2.getStrWidth(str);
+}
+
+void drawText(int x, int y, const char *str)
+{
+    u8g2.drawUTF8(x, y, text.c_str());
+}
+
+const uint8_t *getFont(int &ht) {
+    if(ht < 7) return 0;
+    if(ht < 11) return ht = 7, u8g2_font_5x7_tf;
+    if (ht < 13) return ht = 11, u8g2_font_helvB08_tf;
+    if (ht < 15) return ht = 13, u8g2_font_helvB10_tf;
+    if (ht < 18) return ht = 15, u8g2_font_helvB12_tf;
+    if (ht < 24) return ht = 18, u8g2_font_helvB14_tf;
+    if (ht < 28) return ht = 24, u8g2_font_helvB18_tf;
+    if (ht < 30) return ht = 28, u8g2_font_helvB24_tf;
+    if (ht < 35) return ht = 30, u8g2_font_inb24_mf;
+    if (ht < 40) return ht = 35, u8g2_font_inb27_mf;
+    if (ht < 44) return ht = 40, u8g2_font_inb30_mf;
+    if (ht < 48) return ht = 44, u8g2_font_inb33_mf;
+    if (ht < 52) return ht = 48, u8g2_font_inb38_mf;
+    if (ht < 56) return ht = 52, u8g2_font_inb42_mf;
+    return ht = 56, u8g2_font_inb46_mf;
+}
+
+void selectFont(int &wt, int &ht, String str) {
+    // based on width and height determine best font
+    for(;;) {
+        const uint8_t *font = getFont();
+        if(!font)
+            return;
+        u8g2.setFont(ht, font);
+        
+        int width = u8g2.getUTF8Width(str.c_str());
+        if((width+label_w < wt || ht+label_h<h) && width < wt && ht < h) {
+            wt = width;
+            break;
+        }
+        ht--;
+    }
+}
+
+
+#endif
+
+
+#ifdef USE_LVGL     // color lcd
+void drawThickLine(int x1, int y1, int x2, int y2, int w)
+{
+
+}
+
+void drawCircle(int x, int y, int r, int thick)
+{
+}
+
+void drawLine(int x1, int y1, int x2, int y2)
+{
+}
+
+void drawTriangle(int x1, int y1, int x2, int y2, int x3, int y3)
+{
+}
+
+void selectFont(int &wt, int &ht, String str) {
+}
+
+void setFont(void *font)
+{
+}
+
+int getTextWidth(const char *str)
+{
+    return 0;
+}
+
+void drawText(int x, int y, const char *str)
+{
+}
+
+#endif
+
+
+String display_get_item_label(display_item_e item)
+{
     switch (item) {
     case WIND_SPEED: return "Wind Speed";
     case WIND_DIRECTION: return "Wind Angle";
@@ -64,90 +196,7 @@ String getItemLabel(display_item_e item) {
 
 const char *source_name[] = {"ESP", "USB", "RS422", "W"};
 
-// 5m, 1 hr, 1d
-enum history_range_e {MINUTE, HOUR, DAY, RANGE_COUNT};
-uint32_t history_range_time[] = {5*60, 60*60, 24*60*60};
 
-int history_display_range;
-
-String getHistoryLabel(history_range_e range)
-{
-    switch(range) {
-        case MINUTE: return "5m";
-        case HOUR:   return "1h";
-        case DAY:    return "1d";
-    }
-    return "";
-}
-
-display_item_e history_items[] = { WIND_SPEED, BAROMETRIC_PRESSURE, DEPTH, GPS_SPEED, WATER_SPEED };
-
-struct history_element {
-    float value;
-    uint32_t time;
-    history_element(float _value, uint32_t _time) : value(_value), time(_time) {}
-};
-
-struct history
-{
-    std::list<history_element> data[RANGE_COUNT];
-
-    void put(float value, uint32_t time)
-    {
-//        printf(" history put %f\n", value);
-        for(int range = 0; range < RANGE_COUNT; range++) {
-            int range_time = history_range_time[range];
-            int range_timeout = range_time * 1000 / 80;
-
-            uint32_t fronttime = data[range].empty() ? 0 : data[range].front().time;
-            uint32_t dt = time - fronttime;
-            if(dt > range_timeout) {
-                if(range > 0) {
-                    // average previous range data
-                    value = 0;
-                    int count = 0;
-                    for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) {
-                        value += it->value;
-                        count++;
-                        if(it->time < time - range_timeout)
-                            break;
-                    }
-                    value /= count;
-                }
-                data[range].push_front(history_element(value, time));
-            }
-
-            // remove elements that expired
-            while(!data[range].empty()) {
-                history_element &back = data[range].back();
-                if(time - back.time < range_time * 1000)
-                    break;
-                data[range].pop_back();
-            }
-        }
-    }
-};
-
-#define HISTORY_COUNT  (sizeof history_items) / (sizeof *history_items)
-
-history histories[HISTORY_COUNT];
-
-void drawThickLine(int x1, int y1, int x2, int y2, int w)
-{
-    int ex = x2-x1, ey = y2-y1;
-    int d = sqrt(ex*ex + ey*ey);
-    if(d == 0)
-        return;
-    ex = ex*w/d/2;
-    ey = ey*w/d/2;
-
-    int ax = x1+ey, ay = y1-ex;
-    int bx = x1-ey, by = y1+ex;
-    int cx = x2+ey, cy = y2-ex;
-    int dx = x2-ey, dy = y2+ex;
-    u8g2.drawTriangle(ax, ay, bx, by, cx, cy);
-    u8g2.drawTriangle(bx, by, dx, dy, cx, cy);
-}
 
 struct display_data_t {
     display_data_t() : time(-10000) {}
@@ -165,7 +214,7 @@ void display_data_update(display_item_e item, float value, data_source_e source)
     uint32_t time = millis();
     if(isnan(value))
         printf("invalid display data update %d %d\n", item, source);
-    //printf("data_update %d %s %f\n", item, getItemLabel(item).c_str(), value);
+    //printf("data_update %d %s %f\n", item, display_get_item_label(item).c_str(), value);
 
     if(source > display_data[item].source) {
         // ignore if higher priority data source updated in last 5 seconds
@@ -173,11 +222,7 @@ void display_data_update(display_item_e item, float value, data_source_e source)
             return;
     }
 
-    for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
-        if(history_items[i] == item) {
-            histories[i].put(value, time);
-            break;
-        }
+    history_put(item, value, time);
 
     display_data[item].value = value;
     display_data[item].time = time;
@@ -225,56 +270,20 @@ struct text_display : public display_item {
         ht = h;
 
         if(centered) { // if centered do not draw label either for now
-            label_w = 0;
-            label_h = 0;
+            label_w =  label_h = 0;
         } else {
             String str = getLabel();
             label_font = u8g2_font_helvB08_tf;
-            u8g2.setFont(label_font);
-            label_w = u8g2.getStrWidth(str.c_str());
+            setFont(label_font);
+            label_w = getTextWidth(str.c_str());
             label_h = 10;
 
             if(label_w > w/2 || label_h > h/2) {
                 label_font = u8g2_font_5x7_tf;
-                u8g2.setFont(label_font);
-                label_w = u8g2.getStrWidth(str.c_str());
+                setFont(label_font);
+                label_w = getTextWidth(str.c_str());
                 label_h = 7;
             }
-        }
-    }
-
-    const uint8_t *getFont() {
-            if(ht < 7) return 0;
-            if(ht < 11) return ht = 7, u8g2_font_5x7_tf;
-            if (ht < 13) return ht = 11, u8g2_font_helvB08_tf;
-            if (ht < 15) return ht = 13, u8g2_font_helvB10_tf;
-            if (ht < 18) return ht = 15, u8g2_font_helvB12_tf;
-            if (ht < 24) return ht = 18, u8g2_font_helvB14_tf;
-            if (ht < 28) return ht = 24, u8g2_font_helvB18_tf;
-            if (ht < 30) return ht = 28, u8g2_font_helvB24_tf;
-            if (ht < 35) return ht = 30, u8g2_font_inb24_mf;
-            if (ht < 40) return ht = 35, u8g2_font_inb27_mf;
-            if (ht < 44) return ht = 40, u8g2_font_inb30_mf;
-            if (ht < 48) return ht = 44, u8g2_font_inb33_mf;
-            if (ht < 52) return ht = 48, u8g2_font_inb38_mf;
-            if (ht < 56) return ht = 52, u8g2_font_inb42_mf;
-            return ht = 56, u8g2_font_inb46_mf;
-    }
-
-    void selectFont(int &wt, String str) {
-        // based on width and height determine best font
-        for(;;) {
-            const uint8_t *font = getFont();
-            if(!font)
-                return;
-            u8g2.setFont(font);
-
-            int width = u8g2.getUTF8Width(str.c_str());
-            if((width+label_w < wt || ht+label_h<h) && width < wt && ht < h) {
-                wt = width;
-                break;
-            }
-            ht--;
         }
     }
 
@@ -284,7 +293,7 @@ struct text_display : public display_item {
 
         // try to fit text along side label
         wt = w;
-        selectFont(wt, str);
+        selectFont(wt, ht, str);
 
         //if(ht + label_h > h && wt + label_w > w)
         //    label = false;
@@ -304,8 +313,7 @@ struct text_display : public display_item {
                 xp = x + w-wt;
         }
         //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", str.c_str(), x, y, w, h, wt, ht, xp, yp);
-        u8g2.drawUTF8(xp, yp, str.c_str());
-
+        drawText(xp, yp, str.c_str());
         if(label_h && label_w < w && label_h < h) {
             String label = getLabel();
             if(label) {
@@ -314,8 +322,8 @@ struct text_display : public display_item {
                     lx += w/2 - label_w/2;
                 else if(wt + label_w < w)
                     ly += h/2 - label_h/2;
-                u8g2.setFont(label_font);
-                u8g2.drawUTF8(lx, ly, label.c_str());
+                setFont(label_font);
+                drawText(lx, ly, label.c_str());
             }
         }
     }
@@ -332,7 +340,7 @@ struct text_display : public display_item {
     virtual String getTextItem() = 0;
 
     virtual String getLabel() {
-        return getItemLabel(item);
+        return display_get_item_label(item);
     }
 
     bool use_units;
@@ -342,7 +350,6 @@ struct text_display : public display_item {
     int label_w, label_h;
     bool centered; // currently means centered over x (and no label)  maybe should change this
 };
-
 
 struct speed_text_display : public text_display  {
     speed_text_display(display_item_e _i) : text_display(_i, "kt") {}
@@ -478,7 +485,7 @@ struct pressure_text_display : public text_display {
     uint32_t prev_time;
 };
 
-std::list<float> pressure_text_display::prev;
+std::list<float> pressure_text_display::prev; // static member for pressure trend
 
 struct position_text_display : public text_display {
     position_text_display(display_item_e _i) : text_display(_i) {}
@@ -585,6 +592,23 @@ struct pypilot_command_display : public pypilot_text_display  {
     }
 };
 
+struct stat_display : public text_display  {
+    stat_display(display_item_e _i) : text_display(i) {}
+
+    virtual String getLabel() {
+        return display_get_item_label(item); + " Min/Max ";
+    }
+    
+    String getTextItem() {
+        uint32_t totalmillis;
+        float high, low;
+        std::list<history_element> *data = history_find(item, history_display_range,
+                                                        totalmillis, high, low);
+        int digits = 1;
+        return "low: " + String(low, digits) + "  high: " + String(high, digits);
+    }
+};
+
 struct gauge : public display_item {
     gauge(text_display* _text, int _min_v, int _max_v, int _min_ang, int _max_ang, float _ang_step)
         : display_item(_text->item), text(*_text),
@@ -614,9 +638,7 @@ struct gauge : public display_item {
 
         int thick = r / 36;
         int r2 = r-thick-1;
-        for (int i = -thick; i <= thick; i++)
-            for (int j = -thick; j <= thick; j++)
-                u8g2.drawCircle(xc + i, yc + j, r2);
+        drawCircle(xc, yc, r2, thick);
     }
 
     void render_tick(float angle, int u, int &x0, int &y0) {
@@ -630,15 +652,15 @@ struct gauge : public display_item {
         int xp = v * c;
         int y1 = yc - r * c;
         int yp = v * s;
-        u8g2.drawTriangle(x1 - xp, y1 - yp, x0, y0, x1 + xp, y1 + yp);
+        drawTriangle(x1 - xp, y1 - yp, x0, y0, x1 + xp, y1 + yp);
     }
 
     void render_ticks(bool text = false) {
         int th;
         if (w > 90)
-            u8g2.setFont(u8g2_font_helvB08_tf), th = 8;
+            setFont(u8g2_font_helvB08_tf), th = 8;
         else
-            u8g2.setFont(u8g2_font_5x7_tf), th = 7;
+            setFont(u8g2_font_5x7_tf), th = 7;
 
         for (float angle = min_ang; angle <= max_ang; angle += ang_step) {
             int x0, y0;
@@ -666,7 +688,7 @@ struct gauge : public display_item {
             char buf[16];
             if (text) {
                 snprintf(buf, sizeof buf, "%d", abs((int)ival));
-                int tsw = u8g2.getStrWidth(buf);
+                int tsw = getTextWidth(buf);
                 if(x0 > xc + w/4)
                     x0 -= tsw;
                 else if(x0 > xc - w/4)
@@ -675,7 +697,7 @@ struct gauge : public display_item {
                     y0 -= th;
                 else if(y0 > yc - h/4)
                     y0 -= th / 2;
-                u8g2.drawStr(x0, y0, buf);
+                drawText(x0, y0, buf);
             }
 
             if (0&&text) {  // intermediate ticks
@@ -714,11 +736,11 @@ struct gauge : public display_item {
         text.y = yc + nyp;
         text.render();
 
-        u8g2.drawTriangle(xc - xp, yc - yp, xc + x0, yc + y0, xc + xp, yc + yp);
+        drawTriangle(xc - xp, yc - yp, xc + x0, yc + y0, xc + xp, yc + yp);
     }
 
     void render_label() {
-        String label = getItemLabel(item);
+        String label = display_get_item_label(item);
         int space1 = label.indexOf(' '), space2 = label.lastIndexOf(' ');
         String label1 = space1 > 0 ? label.substring(0, space1) : label;
         String label2 = space2 > 0 ? label.substring(space2) : "";
@@ -729,9 +751,9 @@ struct gauge : public display_item {
         for(int i=0; i<(sizeof fonts)/(sizeof *fonts); i++) {
             if(!fonts[i])
                 return;
-            u8g2.setFont(fonts[i]);
-            lw1 = u8g2.getStrWidth(label1.c_str());
-            lw2 = u8g2.getStrWidth(label2.c_str());
+            setFont(fonts[i]);
+            lw1 = getTextWidth(label1.c_str());
+            lw2 = getTextWidth(label2.c_str());
 
             int x1 = -w/2+lw1, y12 = -h/2+fth[i];
             int x2 = w/2-lw2;
@@ -741,8 +763,8 @@ struct gauge : public display_item {
             if(r1_2 > mr || r2_2 > mr)
                 break;
         }
-        u8g2.drawStr(x, y, label1.c_str());
-        u8g2.drawStr(x+w-lw2, y, label2.c_str());
+        drawText(x, y, label1.c_str());
+        drawText(x+w-lw2, y, label2.c_str());
     }
 
     virtual void render() {
@@ -796,9 +818,9 @@ struct wind_direction_gauge : public gauge {
             int x0 = s*r, y0 = c*r;
             int x1 = x0*8/10, y1 = y0*8/10;
             int xp = c*3, yp = s*3;
-            u8g2.drawTriangle(xc + x0 - xp, yc + y0 - yp,
-                              xc + x1, yc + y1,
-                              xc + x0 + xp, yc + y0 + yp);
+            drawTriangle(xc + x0 - xp, yc + y0 - yp,
+                         xc + x1, yc + y1,
+                         xc + x0 + xp, yc + y0 + yp);
         }
     }
 };
@@ -880,12 +902,6 @@ struct history_display : public display_item {
     history_display(text_display* _text, bool _min_zero=true, bool _inverted=false)
         : display_item(_text->item), text(*_text ), min_zero(_min_zero), inverted(_inverted)
     {
-        for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
-            if(history_items[i] == item) {
-                history_item = i;
-                return;
-            }
-        history_item = 0; // error
     }
 
     void fit() {
@@ -898,35 +914,28 @@ struct history_display : public display_item {
 
     void render()
     {
-        int r = history_display_range;
-        uint32_t totalmillis = history_range_time[r] * 1000;
+        uint32_t time = millis(), totalmillis;
+        float high, low;
+        std::list<history_element> *data = history_find(item, history_display_range,
+                                                        totalmillis, high, low);
 
-        uint32_t time = millis();
-        std::list<history_element> &data = histories[history_item].data[r];
-
-        // compute range
-        float aminv = INFINITY, amaxv = -INFINITY;
-        for(std::list<history_element>::iterator it = data.begin(); it!=data.end(); it++) {
-            if(it->value < aminv)
-                aminv = it->value;
-            if(it->value > amaxv)
-                amaxv = it->value;
-        }
-        // todo: match range to nice values, render ticks, and text ticks etc
+        if(!data)
+            return;
 
         // draw history data
         float range, minv, maxv;
         int digits = 5;
         if(min_zero) {
             minv = 0;
-            maxv = nice_number(amaxv);
+            maxv = nice_number(high);
             digits = 0;
         } else {
             // extend range slightly
             float rng = amaxv - aminv;
-            maxv = amaxv + rng/8;
-            minv = aminv - rng/8;
+            maxv = high + rng/8;
+            minv = low - rng/8;
         }
+
         range = maxv - minv;
 
         int lxp = -1, lyp;
@@ -935,13 +944,14 @@ struct history_display : public display_item {
         uint32_t totals = totalmillis / 1000; // avoid overflowing uint32 by just using seconds`
         for(std::list<history_element>::iterator it = data.begin(); it!=data.end(); it++) {
             int xp = w - (time - it->time) / 1000 * w / totals;
-            int yp = h- (it->value - minv) * h / range;
+            int yp = h - (it->value - minv) * h / range;
 
             if(xp < 0)
                 break;
             if(lxp >= 0) {
-                u8g2.drawLine(x+lxp, y+lyp, x+xp, y+yp);
-//                if(abs(lxp - xp) > 100)
+                if(xp - lxp < 3)
+                    drawLine(x+lxp, y+lyp, x+xp, y+yp);
+//              if(abs(lxp - xp) > 100)
                     //printf("BADLINE ! %d %d %d %d %d %d %\n", cnt++, it->time, lastt, xp, lxp, yp, lyp);
             }
 
@@ -950,24 +960,23 @@ struct history_display : public display_item {
         }
 
         //render scale
-        u8g2.setFont(u8g2_font_helvB08_tf);
-        u8g2.drawStr(x, y, String(maxv, digits).c_str());
-        u8g2.drawStr(x, y+h/2-4, String((minv+maxv)/2, digits).c_str());
-        u8g2.drawStr(x, y+h-8, String(minv, digits).c_str());
+        setFont(u8g2_font_helvB08_tf);
+        drawText(x, y, String(maxv, digits).c_str());
+        drawText(x, y+h/2-4, String((minv+maxv)/2, digits).c_str());
+        drawText(x, y+h-8, String(minv, digits).c_str());
 
         String history_label = getHistoryLabel((history_range_e)r);
-        int sw = u8g2.getStrWidth(history_label.c_str());
-        u8g2.drawStr(x+w-sw, y, history_label.c_str());
+        int sw = getTextWidth(history_label.c_str());
+        drawText(x+w-sw, y, history_label.c_str());
         text.render();
 
         if(h > 100) {
-            String minmax = "min: " + String(aminv, digits) + "  max: " + String(amaxv, digits);
-            int sw = u8g2.getStrWidth(minmax.c_str());
-            u8g2.drawStr(x+(w-sw)/2, y+15, minmax.c_str());
+            String minmax = "low: " + String(low, digits) + "  high: " + String(high, digits);
+            int sw = getTextWidth(minmax.c_str());
+            drawText(x+(w-sw)/2, y+15, minmax.c_str());
         }
     }
 
-    int history_item;
     text_display &text;
     bool min_zero, inverted;
 };
@@ -978,9 +987,9 @@ struct route_display : public display_item {
         float scog = display_data[GPS_HEADING].value;
         float course_error = resolv(route_info.target_bearing - scog);
         int p = course_error/(w/20);
-        u8g2.drawLine(x+w/2+p-w/8, y, x+w/2-w/4, y+h);
-        u8g2.drawLine(x+w/2+p+w/8, y, x+w/2+w/4, y+h);
-        u8g2.drawLine(x+w/2+p,     y, x+w/2,     y+h);
+        drawLine(x+w/2+p-w/8, y, x+w/2-w/4, y+h);
+        drawLine(x+w/2+p+w/8, y, x+w/2+w/4, y+h);
+        drawLine(x+w/2+p,     y, x+w/2,     y+h);
     }
 };
 
@@ -1011,19 +1020,17 @@ struct ais_ships_display : public display_item {
     void render_ring(float rm) {
         int thick = r / 100;
         int ri = r*rm - thick*2;
-        for (int i = -thick; i <= thick; i++)
-            for (int j = -thick; j <= thick; j++)
-                u8g2.drawCircle(xc + i, yc + j, ri);
+        drawCircle(xc, yc, ri, thick);
     }
 
     void drawItem(const char *label, String text) {
         if(ty0 + tdy >= ty + th)
             return;
         int ly = ty+ty0;
-        int lw = tdyl ? 0 : u8g2.getStrWidth(label);
+        int lw = tdyl ? 0 : getTextWidth(label);
         ty0 += tdyl;
 
-            int textw = u8g2.getStrWidth(text.c_str());
+        int textw = getTextWidth(text.c_str());
         int scrolldist = textw - (tw-lw);
         if(scrolldist < 0)
             scrolldist = textw;
@@ -1031,28 +1038,28 @@ struct ais_ships_display : public display_item {
             uint32_t mso = millis()/32;
             scrolldist = mso % scrolldist + tw-lw;
         }
-        u8g2.drawStr(tx+tw-scrolldist, ty+ty0, text.c_str());
+        drawText(tx+tw-scrolldist, ty+ty0, text.c_str());
         ty0 += tdy;
 
-        u8g2.drawStr(tx, ly, label);
+        drawText(tx, ly, label);
     }
 
     void render_text(ship *closest) {
-        u8g2.setFont(u8g2_font_helvB08_tf);
+        setFont(u8g2_font_helvB08_tf);
         // draw range in upper left corner
         String str = String(ships_range_table[ships_range], 1) + "NMi";
-        int textw = u8g2.getStrWidth(str.c_str());
-        u8g2.drawStr(x+w-textw, y, str.c_str());
+        int textw = getTextWidth(str.c_str());
+        drawText(x+w-textw, y, str.c_str());
 
-        u8g2.setFont(u8g2_font_helvB10_tf);
-        u8g2.drawStr(x, y, "AIS");
+        setFont(u8g2_font_helvB10_tf);
+        drawText(x, y, "AIS");
 
         ty0 = 0;
         tdy = 12;
         tdyl = tw > th ? 0 : tdy;
 
         if(!closest) {
-            u8g2.drawStr(tx, ty, "no target");
+            drawText(tx, ty, "no target");
             return;
         }
 
@@ -1111,13 +1118,13 @@ struct ais_ships_display : public display_item {
             y *= r / rng;
 
             int x0 = xc + x, y0 = yc - y;
-            u8g2.drawCircle(x0, y0, sr);
+            drawCircle(x0, y0, sr);
             
             float rad = deg2rad(ship.cog);
             float s = sin(rad), c = cos(rad);
             int x1 = x0 + s*rp, y1 = y0 - c*rp;
             x0 += s*sr, y0 -= c*sr;
-            u8g2.drawLine(x0, y0, x1, y1);
+            drawLine(x0, y0, x1, y1);
         }
 
         render_text(closest);
@@ -1354,6 +1361,7 @@ struct page : public grid_display {
 #define WIND_SPEED_T   new speed_text_display(WIND_SPEED)
 #define WIND_SPEED_G   new speed_gauge(WIND_SPEED_T)
 #define WIND_SPEED_H   new history_display(WIND_SPEED_T)
+#define WIND_STAT_TD   new wind_stat_display(WIND_STAT_T)
 
 #define PRESSURE_T     new pressure_text_display()
 #define PRESSURE_H     new history_display(PRESSURE_T, false)
@@ -1781,6 +1789,7 @@ static void setup_analog_pins()
         ledcWrite(0, 1023);
 }
 
+// read from photo resistor and adjust the backlight
 static void read_analog_pins()
 {
     uint32_t t = millis();
@@ -1820,6 +1829,8 @@ void display_toggle()
 
 void display_setup()
 {
+    pinMode(2, INPUT_PULLUP);  // strap for display
+#ifdef USE_U8G2    
     u8g2.begin();
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
@@ -1861,6 +1872,7 @@ void display_setup()
     settings.mirror = 0;
     if(settings.mirror)
         u8g2.setFlipMode(true);
+#endif
 
     for(int i=0; i<pages.size(); i++)
         delete pages[i];
@@ -1906,7 +1918,8 @@ void display_change_page(int dir)
         if(display_pages[cur_page].enabled)
             return;
         dir = 1;
-    }
+    } else
+        buzzer_buzz(1000, 100, 0);
 
     int looped = 0;
     while(looped < 2) {
@@ -1941,80 +1954,88 @@ void display_change_scale()
 
 static void render_status()
 {
+#ifdef USE_U8G2
     u8g2.setFont(u8g2_font_helvB08_tf);
     int y = page_height;
     char wifi[] = "WIFI";
     if (WiFi.status() == WL_CONNECTED)
-        u8g2.drawStr(0, y, wifi);
+        drawText(0, y, wifi);
 
-    int x = u8g2.getStrWidth(wifi) + 15;
+    int x = getTextWidth(wifi) + 15;
     // show data source
     uint32_t t0 = millis();
     
     for(int i = 0; i<DATA_SOURCE_COUNT; i++) {
         uint32_t dt = t0 - data_source_time[i];
         if(dt < 5000) {
-            u8g2.drawStr(x, y, source_name[i]);
-            x += u8g2.getStrWidth(source_name[i]) + 5;
+            drawText(x, y, source_name[i]);
+            x += getTextWidth(source_name[i]) + 5;
             if(i==WIFI_DATA)
-                u8g2.drawStr(x, y, get_wifi_data_str().c_str());
+                drawText(x, y, get_wifi_data_str().c_str());
         }
     }
 
     // show page letter
     char letter[] = "A";
     letter[0] += cur_page;
-    int w = u8g2.getStrWidth(letter);
+    int w = getTextWidth(letter);
 
-    u8g2.drawStr(page_width - w, y, letter);
+    drawText(page_width - w, y, letter);
+#endif
 }
 
-
-void display_render()
+void data_timeout()
 {
-    read_analog_pins();
-
-    u8g2.setContrast(160 + settings.contrast);
-    uint32_t t0 = millis();
-    
-#if 1
-    u8g2.clearBuffer();
-    u8g2.setDrawColor(1);
-#else
-    u8g2.setDrawColor(1);
-    u8g2.drawBox(0, 0, page_width, page_height);
-    u8g2.setDrawColor(0);
-#endif
-
-    if(!display_on) {
-        u8g2.sendBuffer();
-        return;
-    }
-    uint32_t t1 = millis();
-
-    u8g2.setFont(u8g2_font_helvB14_tf);
-
-    if (wifi_ap_mode) {
-        u8g2.drawStr(0, 0, "WIFI AP");
-
-        u8g2.drawStr(0, 20, "pypilot_mfd");
-        u8g2.drawStr(0, 60, "http://wind.local");
-
-        char buf[16];
-        snprintf(buf, sizeof buf, "Version %.2f", VERSION);
-        u8g2.drawStr(0, 100, buf);
-        
-        u8g2.sendBuffer();
-        return;
-    }
-
     for(int i=0; i<DISPLAY_COUNT; i++)
         if(millis()+100-display_data[i].time > 5000) {
             //if(!isnan(display_data[i].value))
             //  printf("timeout %ld %ld %d\n", t0, display_data[i].time, i);
             display_data[i].value = NAN;  // timeout if no data 
         }
+}
 
+#ifdef USE_U8G2
+void display_render()
+{
+    read_analog_pins();
+
+    u8g2.setContrast(160 + settings.contrast);
+    uint32_t t0 = millis();
+
+    if(!display_on) {
+        u8g2.clearBuffer();
+        u8g2.sendBuffer();
+        return;
+    }
+
+    if(settings.invert) {
+        u8g2.setDrawColor(1);
+        u8g2.drawBox(0, 0, page_width, page_height);
+        u8g2.setDrawColor(0);
+    } else {
+        u8g2.clearBuffer();
+        u8g2.setDrawColor(1);
+    }
+    
+    uint32_t t1 = millis();
+
+    setFont(u8g2_font_helvB14_tf);
+
+    if (wifi_ap_mode) {
+        drawText(0, 0, "WIFI AP");
+
+        drawText(0, 20, "pypilot_mfd");
+        drawText(0, 60, "http://wind.local");
+
+        char buf[16];
+        snprintf(buf, sizeof buf, "Version %.2f", VERSION);
+        drawText(0, 100, buf);
+        
+        u8g2.sendBuffer();
+        return;
+    }
+
+    data_timeout();
     uint32_t t2 = millis();
 
     pages[cur_page]->render();
@@ -2028,8 +2049,47 @@ void display_render()
     uint32_t t4 = millis();
     //Serial.printf("render took %d %d %d %d\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
+#endif
 
-#else
+#ifdef USE_LVGL
+void display_render()
+{
+    read_analog_pins();
+
+    if(!display_on) {
+        return;
+    }
+
+    if(settings.invert) {
+        //???
+    }
+    
+    uint32_t t1 = millis();
+    if (wifi_ap_mode) {
+        // show wifi info
+        return;
+    }
+
+    data_timeout();
+
+    uint32_t t2 = millis();
+
+    pages[cur_page]->render();
+    if(settings.show_status)
+        render_status();
+
+    uint32_t t3 = millis();
+
+    //u8g2.sendBuffer();
+
+    uint32_t t4 = millis();
+    //Serial.printf("render took %d %d %d %d\n", t1-t0, t2-t1, t3-t2, t4-t3);
+}
+#endif
+
+#ifdef USE_TFT_ESPI
+//#include <TFT_eSPI.h>  // Hardware-specific library
+//#include <SPI.h>
 
 
 TFT_eSPI tft = TFT_eSPI();

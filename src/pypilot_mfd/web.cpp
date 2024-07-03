@@ -182,10 +182,12 @@ String processor(const String& var)
     if(var == "USEINHG")  return Checked(settings.use_inHg);
     if(var == "USEDEPTHFT")  return Checked(settings.use_depth_ft);
     if(var == "LATLONFORMAT")  return settings.lat_lon_format;
+    if(var == "INVERT")  return Checked(settings.invert);
     if(var == "CONTRAST")  return String(settings.contrast);
     if(var == "BACKLIGHT")  return String(settings.backlight);
     if(var == "ROTATION")  return String(settings.rotation);
     if(var == "MIRROR")  return Checked(settings.mirror);
+    if(var == "POWERDOWN")  return Checked(settings.powerdown);
     if(var == "DISPLAYPAGES") return get_display_pages();
     if(var == "VERSION")    return String(VERSION);
     return String();
@@ -260,6 +262,7 @@ void web_setup()
     server.on("/display", HTTP_POST, [](AsyncWebServerRequest *request) {
         settings.use_360 = settings.use_fahrenheit = false;
         settings.use_inHg = settings.use_depth_ft = false;
+        settings.invert = false;
         String enabled_pages = "";
         for(int i=0; i < display_pages.size(); i++)
             display_pages[i].enabled = false;
@@ -277,6 +280,8 @@ void web_setup()
                 settings.use_depth_ft = true;
             else if(p->name() == "lat_lon_format")
                 settings.lat_lon_format = value;
+            else if(name == "invert")
+                settings.invert = true;
             else if(p->name() == "contrast")
                 settings.contrast = min(max(value.toInt(), 0L), 50L);
             else if(p->name() == "backlight")
@@ -302,6 +307,32 @@ void web_setup()
         display_auto();
         request->redirect("/");
     });
+
+    server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String data_type, range;
+        if (request->hasParam("data_type"))
+            data_type = request->getParam("data_type")->value();
+        if (request->hasParam("data_range"))
+            data_range = request->getParam("data_range")->value();
+
+        int item = -1, range = -1;
+        for(int i=0; i<DISPLAY_COUNT; i++)
+            if(display_get_item_label(i) == data_type) {
+                item = i;
+                break;
+            }
+
+        for(int i=0; i<HISTORY_RANGE_COUNT; i++)
+            if(history_get_label(i) == data_type) {
+                range = i;
+                break;
+            }
+
+        if(item >= 0 && range >= 0)
+            request->send(200, "text/plain", history_get(item, range));
+        else
+            request->send(404);
+    }
 
     server.serveStatic("/", SPIFFS, "/");
 

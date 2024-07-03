@@ -44,7 +44,7 @@ bool display_data_get(display_item_e item, float &value, String &source, uint32_
 void display_auto();
 void display_items(std::list<display_item_e> &items);
 
-String getItemLabel(display_item_e item);
+String display_get_item_label(display_item_e item);
 
 struct page_info {
     page_info(char n, String &d) : name(n), description(d), enabled(false) {}

@@ -21,6 +21,7 @@
 #include "signalk.h"
 #include "pypilot_client.h"
 #include "utils.h"
+#include "keys.h"
 
 #include "settings.h"
 
@@ -29,11 +30,7 @@ void setup() {
     Serial.println("pypilot_mfd");
 
     // bmX280_setup();
-    pinMode(2, INPUT_PULLUP);  // strap for display
-
-    for (int i = 0; i < KEY_COUNT; i++)
-        pinMode(key_pin[i], INPUT_PULLUP);
-
+    keys_setup();
     wireless_setup();
 
     mdns_setup();
@@ -58,14 +55,16 @@ void setup() {
     //esp_log_level_set("*", ESP_LOG_NONE);
 }
 
-void loop() {
+void loop()
+{
     wireless_poll();
-    read_keys();
+    keys_read();
     serial_read();
     //read_pressure_temperature();
     nmea_poll();
     signalk_poll();
     pypilot_client_poll();
+    buzzer_poll();
 
     web_poll();
 

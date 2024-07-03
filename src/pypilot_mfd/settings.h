@@ -44,10 +44,12 @@ struct settings_t {
     //display
     bool use_360, use_fahrenheit, use_inHg, use_depth_ft;
     String lat_lon_format;
+    bool invert;
     int contrast, backlight;
     bool show_status;
     int rotation; // 0-3 are set, 4 is auto
     int mirror; // 2 is auto
+    bool powerdown; // power down or just turn of screen on power button
 
     String enabled_pages;
 

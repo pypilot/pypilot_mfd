@@ -120,6 +120,9 @@
       <h5>
         <a href='/data.htm'>View Current Display Data</a>
       </h5>
+      <h5>
+        <a href='/history.htm'>View History of Display Data</a>
+      </h5>
     </div>
  
     <div class='box'>
@@ -147,6 +150,8 @@
               <option value='seconds'>Decimal Seconds</option>
             </select>
           </span>
+          <span><input type='checkbox' name='invert' id='invert' %INVERT%>
+            <label for='invert'>Invert Display</label></span>
           <span>LCD contrast <input type='number' name='contrast' style='width: 4em' value=%CONTRAST%></span>
           <span>LCD backlight <input type='number' name='backlight' style='width: 4em' value=%BACKLIGHT%></span>
             <select name='rotation' value='%ROTATION%'>
@@ -158,6 +163,9 @@
             </select>
           <span><input type='checkbox' name='mirror' id='mirror' %MIRROR%>
             <label for='mirror'>Mirror display</label>
+          </span>
+          <span><input type='checkbox' name='powerdown' id='powerdown' %POWERDOWN%>
+            <label for='powerdown'>Powerdown display</label>
           </span>
         </div>
         <div class='col1-grid'>

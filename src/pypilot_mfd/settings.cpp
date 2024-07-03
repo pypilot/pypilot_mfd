@@ -111,12 +111,14 @@ static bool settings_load_suffix(String suffix="")
     LOAD_SETTING(use_inHg, false)
     LOAD_SETTING(use_depth_ft, false)
     LOAD_SETTING_S(lat_lon_format, "minutes")
+    LOAD_SETTING(invert, false)
     LOAD_SETTING_BOUND(contrast, 0, 50, 20)
     LOAD_SETTING_BOUND(backlight, 0, 100, 50)
     
     LOAD_SETTING(show_status, true)
     LOAD_SETTING(rotation, 4)
     LOAD_SETTING(mirror, 2)
+    LOAD_SETTING(powerdown, false)
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
 
@@ -178,12 +180,14 @@ static bool settings_store_suffix(String suffix="")
     STORE_SETTING(use_inHg)
     STORE_SETTING(use_depth_ft)
     STORE_SETTING(lat_lon_format)
+    STORE_SETTING(invert)
     STORE_SETTING(contrast)
     STORE_SETTING(backlight)
     
     STORE_SETTING(show_status)
     STORE_SETTING(rotation)
     STORE_SETTING(mirror)
+    STORE_SETTING(powerdown)
 
     STORE_SETTING(enabled_pages)
 

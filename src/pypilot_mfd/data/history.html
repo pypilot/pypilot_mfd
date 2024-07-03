@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<script src="chart.js"></script>
+<script src="history.js"></script>
+<head><meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=no'>
+<title>pypilot mfd</title>
+<link rel='stylesheet' type='text/css' href='styles.css'>
+</head>
+<body>
+  <canvas id="chart" style="width:100%"></canvas>
+  <span id="time"> High:  <span id="low"> Low:   <span id="low">
+
+    <select id='data_type' name='data_type' onchange='request()'>
+      <option value='wind_speed'>Wind Speed</option>
+      <option value='barometric_pressure'>Barometric Pressure</option>
+      <option value='depth'>Depth</option>
+      <option value='gps_speed'>GPS Speed</option>
+      <option value='water_speed'>Water Speed</option>
+    </select>
+    <select id='data_range' name='data_range' onchange='request()'>
+      <option value='5m'>5 minutes</option>
+      <option value='1h'>Hour</option>
+      <option value='1d'>Day</option>
+    </select>
+</body>
+</html>
