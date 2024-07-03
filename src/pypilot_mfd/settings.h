@@ -10,7 +10,15 @@
 
 #define VERSION 0.1
 
-enum wireless_data_e {NMEA_PYPILOT, NMEA_SIGNALK, NMEA_CLIENT, NMEA_SERVER, SIGNALK};
+#define OLD
+
+#ifdef OLD
+#define KEY_UP_IO 27
+#else
+#define KEY_UP_IO 35
+#endif
+
+enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
 
 struct settings_t {
     String magic;
@@ -49,27 +57,9 @@ struct settings_t {
     String signalk_token;
 };
 
-enum wind_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
-struct wind_transmitter_t {
-    float dir, knots;
-    uint32_t t;  // last received message
+enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
 
-    // settings
-    wind_position position;
-    float offset;
-};
-
-String get_wifi_data_str();
-
-bool settings_load(String suffix="");
-bool settings_store(String suffix="");
-
-extern std::map<uint64_t, wind_transmitter_t> wind_transmitters;
+bool settings_load();
+bool settings_store();
 
 extern settings_t settings;
-extern bool wifi_ap_mode;
-
-extern float lpdir, knots;
-
-void scan_wifi_networks();
-void scan_devices();

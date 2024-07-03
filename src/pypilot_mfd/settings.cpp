@@ -34,8 +34,18 @@ static String JString(const JSONVar &j)
     return j;
 }
 
-bool settings_load(String suffix)
+static bool settings_load_suffix(String suffix="")
 {
+    settings.usb_baud_rate = 115200;
+
+    if (!SPIFFS.begin(true))
+        printf("SPIFFS Mount Failed\n");
+    else
+        listDir(SPIFFS, "/", 0);
+
+
+    //settings.channel = 6;
+
     printf("settings load\n");
 
     // start with default settings
@@ -137,7 +147,7 @@ bool settings_load(String suffix)
     return ret;
 }
 
-bool settings_store(String suffix)
+static bool settings_store_suffix(String suffix="")
 {
     JSONVar s;
 #define STORE_SETTING(NAME)    s[#NAME] = settings.NAME;
@@ -207,4 +217,17 @@ bool settings_store(String suffix)
     file.write(cdata, len);
     file.close();
     return true;
+}
+
+void settings_load()
+{
+    if (settings_load_suffix())
+        settings_store_suffix(".bak");
+    else
+        settings_load(".bak");
+}
+
+void settings_store()
+{
+    settings_store_suffix();
 }

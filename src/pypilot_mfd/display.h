@@ -11,18 +11,20 @@
 
 enum display_item_e { WIND_SPEED,
                       WIND_DIRECTION,
-                      BAROMETRIC_PRESSURE,
-                      AIR_TEMPERATURE,
-                      WATER_TEMPERATURE,
                       GPS_SPEED,
                       GPS_HEADING,
                       LATITUDE,
                       LONGITUDE,
+                      BAROMETRIC_PRESSURE,
+                      AIR_TEMPERATURE,
+                      RELATIVE_HUMIDITY,
+                      AIR_QUALITY,
                       WATER_SPEED,
+                      WATER_TEMPERATURE,
+                      DEPTH,
                       COMPASS_HEADING,
                       PITCH,
                       HEEL,
-                      DEPTH,
                       RATE_OF_TURN,
                       RUDDER_ANGLE,
                       TIME,
@@ -31,9 +33,8 @@ enum display_item_e { WIND_SPEED,
                       PYPILOT,
                       DISPLAY_COUNT };
 
-enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
-
 void display_setup();
+void display_toggle();
 void display_set_mirror_rotation(int);
 void display_change_page(int dir);
 void display_change_scale();

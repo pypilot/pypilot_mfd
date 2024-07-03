@@ -165,7 +165,7 @@ void pypilotClient::poll()
 
     if(connecting) {
         int ret = send(sock, 0, 0, 0);
-        printf("poll send0 %d\n", ret);
+        printf("pypilot client poll send0 %d\n", ret);
         if(ret < 0) {
             if(errno == EAGAIN)
                 return;

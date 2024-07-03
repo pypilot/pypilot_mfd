@@ -22,8 +22,11 @@
 #define BACKLIGHT_PIN 14
 #define NTC_PIN       35
 #define PHOTO_RESISTOR_PIN 34
+#define PWR_LED 26
 
 #include <U8g2lib.h>
+
+bool display_on = true;
 
 //#include <TFT_eSPI.h>  // Hardware-specific library
 //#include <SPI.h>
@@ -63,7 +66,7 @@ const char *source_name[] = {"ESP", "USB", "RS422", "W"};
 
 // 5m, 1 hr, 1d
 enum history_range_e {MINUTE, HOUR, DAY, RANGE_COUNT};
-uint32_t history_range_time[] = {5000, 60, 20, 24};
+uint32_t history_range_time[] = {5*60, 60*60, 24*60*60};
 
 int history_display_range;
 
@@ -91,28 +94,33 @@ struct history
 
     void put(float value, uint32_t time)
     {
-        int range_time = history_range_time[0];
+//        printf(" history put %f\n", value);
         for(int range = 0; range < RANGE_COUNT; range++) {
-            history_element &front = data[range].front();
-            uint32_t dt = time - front.time;
-            if(dt > range_time) {
+            int range_time = history_range_time[range];
+            int range_timeout = range_time * 1000 / 80;
+
+            uint32_t fronttime = data[range].empty() ? 0 : data[range].front().time;
+            uint32_t dt = time - fronttime;
+            if(dt > range_timeout) {
                 if(range > 0) {
-                    // average previous range
+                    // average previous range data
                     value = 0;
                     int count = 0;
                     for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) {
                         value += it->value;
                         count++;
+                        if(it->time < time - range_timeout)
+                            break;
                     }
                     value /= count;
                 }
                 data[range].push_front(history_element(value, time));
             }
-            range_time *= history_range_time[range+1];
 
+            // remove elements that expired
             while(!data[range].empty()) {
                 history_element &back = data[range].back();
-                if(time - back.time < range_time)
+                if(time - back.time < range_time * 1000)
                     break;
                 data[range].pop_back();
             }
@@ -155,6 +163,8 @@ uint32_t data_source_time[DATA_SOURCE_COUNT];
 
 void display_data_update(display_item_e item, float value, data_source_e source) {
     uint32_t time = millis();
+    if(isnan(value))
+        printf("invalid display data update %d %d\n", item, source);
     //printf("data_update %d %s %f\n", item, getItemLabel(item).c_str(), value);
 
     if(source > display_data[item].source) {
@@ -889,50 +899,57 @@ struct history_display : public display_item {
     void render()
     {
         int r = history_display_range;
-        uint32_t totalmillis = 1;
-        for(int i=0; i<=r+1; i++)
-            totalmillis *= history_range_time[i];
+        uint32_t totalmillis = history_range_time[r] * 1000;
 
         uint32_t time = millis();
         std::list<history_element> &data = histories[history_item].data[r];
 
         // compute range
-        float minv = INFINITY, maxv = -INFINITY;
+        float aminv = INFINITY, amaxv = -INFINITY;
         for(std::list<history_element>::iterator it = data.begin(); it!=data.end(); it++) {
-            if(it->value < minv)
-                minv = it->value;
-            else if(it->value > maxv)
-                maxv = it->value;
+            if(it->value < aminv)
+                aminv = it->value;
+            if(it->value > amaxv)
+                amaxv = it->value;
         }
         // todo: match range to nice values, render ticks, and text ticks etc
 
         // draw history data
-        float range;
+        float range, minv, maxv;
         int digits = 5;
         if(min_zero) {
             minv = 0;
-            maxv = nice_number(maxv);
+            maxv = nice_number(amaxv);
             digits = 0;
         } else {
             // extend range slightly
-            float rng = maxv - minv;
-            maxv += rng/8;
-            minv -= rng/8;
+            float rng = amaxv - aminv;
+            maxv = amaxv + rng/8;
+            minv = aminv - rng/8;
         }
         range = maxv - minv;
 
         int lxp = -1, lyp;
+        uint32_t lastt;
+        int cnt = 0;
+        uint32_t totals = totalmillis / 1000; // avoid overflowing uint32 by just using seconds`
         for(std::list<history_element>::iterator it = data.begin(); it!=data.end(); it++) {
-            int xp = w - (time - it->time) * w / totalmillis;
+            int xp = w - (time - it->time) / 1000 * w / totals;
             int yp = h- (it->value - minv) * h / range;
 
-            //printf("YP %d %d %f %f\n", h, yp, it->value, range);
-
-            if(lxp >= 0)
+            if(xp < 0)
+                break;
+            if(lxp >= 0) {
                 u8g2.drawLine(x+lxp, y+lyp, x+xp, y+yp);
+//                if(abs(lxp - xp) > 100)
+                    //printf("BADLINE ! %d %d %d %d %d %d %\n", cnt++, it->time, lastt, xp, lxp, yp, lyp);
+            }
+
             lxp = xp, lyp = yp;
+            lastt = it->time;
         }
 
+        //render scale
         u8g2.setFont(u8g2_font_helvB08_tf);
         u8g2.drawStr(x, y, String(maxv, digits).c_str());
         u8g2.drawStr(x, y+h/2-4, String((minv+maxv)/2, digits).c_str());
@@ -942,6 +959,12 @@ struct history_display : public display_item {
         int sw = u8g2.getStrWidth(history_label.c_str());
         u8g2.drawStr(x+w-sw, y, history_label.c_str());
         text.render();
+
+        if(h > 100) {
+            String minmax = "min: " + String(aminv, digits) + "  max: " + String(amaxv, digits);
+            int sw = u8g2.getStrWidth(minmax.c_str());
+            u8g2.drawStr(x+(w-sw)/2, y+15, minmax.c_str());
+        }
     }
 
     int history_item;
@@ -1371,9 +1394,7 @@ struct pageA : public page {
     grid_display *d = new grid_display(this, landscape ? 1 : 2);
     d->expanding = false;
     d->add(WIND_SPEED_G);
-    grid_display *e = new grid_display(d);
-    e->add(PRESSURE_T);
-    e->add(AIR_TEMP_T);
+    d->add(WIND_STAT_T);
   }
 };
 
@@ -1383,15 +1404,13 @@ struct pageB : public page {
     grid_display *d = new grid_display(this);
     d->expanding = false;
     d->add(WIND_DIR_T);
-    d->add(PRESSURE_T);
-    d->add(AIR_TEMP_T);
+    d->add(WIND_STAT_T);
   }
 };
 
 struct pageC : public page {
-  pageC() : page("Wind Speed and Barometric history") {
+  pageC() : page("Wind Speed history") {
     add(WIND_SPEED_H);
-    add(PRESSURE_H);
   }
 };
 
@@ -1770,7 +1789,9 @@ static void read_analog_pins()
     // set backlight level
     static bool backlight_on;
 //               printf("val %d %d %d\n", val, backlight_on, 1024*settings.backlight/100);
-    if(backlight_on && val > 3800)
+    if(!display_on)
+        backlight_on = false;
+    else if(backlight_on && val > 3800)
         backlight_on = false;
     else if(!backlight_on && val < 2800)
         backlight_on = true;
@@ -1790,6 +1811,13 @@ void display_set_mirror_rotation(int r)
         rotation = r;
 }
 
+void display_toggle()
+{
+    digitalWrite(PWR_LED, display_on);
+    display_on = !display_on;
+}
+
+
 void display_setup()
 {
     u8g2.begin();
@@ -1797,6 +1825,9 @@ void display_setup()
     u8g2.setFontPosTop();
 
     cur_page='C'-'A';
+
+    pinMode(PWR_LED, OUTPUT);
+    digitalWrite(PWR_LED, LOW);
 
     printf("setup rotation %d\n", rotation);
 
@@ -1954,6 +1985,11 @@ void display_render()
     u8g2.drawBox(0, 0, page_width, page_height);
     u8g2.setDrawColor(0);
 #endif
+
+    if(!display_on) {
+        u8g2.sendBuffer();
+        return;
+    }
     uint32_t t1 = millis();
 
     u8g2.setFont(u8g2_font_helvB14_tf);
@@ -1961,7 +1997,7 @@ void display_render()
     if (wifi_ap_mode) {
         u8g2.drawStr(0, 0, "WIFI AP");
 
-        u8g2.drawStr(0, 20, "windAP");
+        u8g2.drawStr(0, 20, "pypilot_mfd");
         u8g2.drawStr(0, 60, "http://wind.local");
 
         char buf[16];
@@ -1975,7 +2011,7 @@ void display_render()
     for(int i=0; i<DISPLAY_COUNT; i++)
         if(millis()+100-display_data[i].time > 5000) {
             //if(!isnan(display_data[i].value))
-              //  printf("timeout %ld %ld %d\n", t0, display_data[i].time, i);
+            //  printf("timeout %ld %ld %d\n", t0, display_data[i].time, i);
             display_data[i].value = NAN;  // timeout if no data 
         }
 
@@ -2002,73 +2038,73 @@ TFT_eSPI tft = TFT_eSPI();
 #define BLACK 0
 
 void display_setup() {
-  tft.init();
+    tft.init();
 
-  tft.setRotation(0);
-  tft.fillScreen(TFT_BLACK);
+    tft.setRotation(0);
+    tft.fillScreen(TFT_BLACK);
 
-  tft.setTextSize(1);
+    tft.setTextSize(1);
 }
 
 void display_render() {
-  static bool last_wifi_ap_mode;
-  if (wifi_ap_mode != last_wifi_ap_mode) {
-    tft.fillScreen(TFT_BLACK);
+    static bool last_wifi_ap_mode;
+    if (wifi_ap_mode != last_wifi_ap_mode) {
+        tft.fillScreen(TFT_BLACK);
 
 
-    last_wifi_ap_mode = wifi_ap_mode;
-  }
-  if (wifi_ap_mode) {
-    tft.setTextColor(TFT_RED, TFT_BLACK);
-    tft.drawString("WIFI AP", 0, 0, 4);
+        last_wifi_ap_mode = wifi_ap_mode;
+    }
+    if (wifi_ap_mode) {
+        tft.setTextColor(TFT_RED, TFT_BLACK);
+        tft.drawString("WIFI AP", 0, 0, 4);
 
-    tft.drawString("windAP", 0, 20, 4);
-    tft.drawString("http://wind.local", 0, 60, 2);
-    return;
-  }
+        tft.drawString("windAP", 0, 20, 4);
+        tft.drawString("http://wind.local", 0, 60, 2);
+        return;
+    }
 
-  tft.setTextColor(TFT_GREEN, TFT_BLACK);
-  char buf[16];
-  int coords[3][2] = { 0 };
-  tft.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], BLACK);
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    char buf[16];
+    int coords[3][2] = { 0 };
+    tft.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], BLACK);
 
-  tft.fillRect(xp, yp, 41, 25, BLACK);  // clear heading text area
+    tft.fillRect(xp, yp, 41, 25, BLACK);  // clear heading text area
 
-  tft.drawEllipse(67, 67, 67, 67, WHITE);
+    tft.drawEllipse(67, 67, 67, 67, WHITE);
 
-  if (lpdir >= 0) {
-    const uint8_t xc = 67, yc = 67, r = 64;
-    float wind_rad = deg2rad(lpdir);
-    int x = r * sin(wind_rad);
-    int y = -r * cos(wind_rad);
-    int s = 4;
-    int xp = s * cos(wind_rad);
-    int yp = s * sin(wind_rad);
+    if (lpdir >= 0) {
+        const uint8_t xc = 67, yc = 67, r = 64;
+        float wind_rad = deg2rad(lpdir);
+        int x = r * sin(wind_rad);
+        int y = -r * cos(wind_rad);
+        int s = 4;
+        int xp = s * cos(wind_rad);
+        int yp = s * sin(wind_rad);
 
-    coords[0][0] = xc - xp;
-    coords[0][1] = yc - yp;
-    coords[1][0] = xc + x;
-    coords[1][1] = yc + y;
-    coords[2][0] = xc + xp;
-    coords[2][1] = yc + yp;
+        coords[0][0] = xc - xp;
+        coords[0][1] = yc - yp;
+        coords[1][0] = xc + x;
+        coords[1][1] = yc + y;
+        coords[2][0] = xc + xp;
+        coords[2][1] = yc + yp;
 
-    xp = -31.0 * sin(wind_rad), yp = 20.0 * cos(wind_rad);
-    static float nxp = 0, nyp = 0;
-    nxp = (xp + 15 * nxp) / 16;
-    nyp = (yp + 15 * nyp) / 16;
-    xp = xc + nxp - 31, yp = yc + nyp - 20;
+        xp = -31.0 * sin(wind_rad), yp = 20.0 * cos(wind_rad);
+        static float nxp = 0, nyp = 0;
+        nxp = (xp + 15 * nxp) / 16;
+        nyp = (yp + 15 * nyp) / 16;
+        xp = xc + nxp - 31, yp = yc + nyp - 20;
 
-    snprintf(buf, sizeof buf, "%03d", (int)lpdir);
+        snprintf(buf, sizeof buf, "%03d", (int)lpdir);
 
-    tft.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], WHITE);
+        tft.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], WHITE);
 
-    tft.drawString(buf, xp, yp, 4);
-  }
+        tft.drawString(buf, xp, yp, 4);
+    }
 
-  float iknots;
-  float iknotf = 10 * modff(knots, &iknots);
+    float iknots;
+    float iknotf = 10 * modff(knots, &iknots);
 
-  snprintf(buf, sizeof buf, "%02d.%d", (int)iknots, (int)iknotf);
-  tft.drawString(buf, 0, 150, 6);
+    snprintf(buf, sizeof buf, "%02d.%d", (int)iknots, (int)iknotf);
+    tft.drawString(buf, 0, 150, 6);
 }
 #endif
