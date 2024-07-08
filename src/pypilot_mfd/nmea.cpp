@@ -17,6 +17,7 @@
 #include "zeroconf.h"
 #include "ais.h"
 #include "settings.h"
+#include "wireless.h"
 
 static uint8_t checksum(const char *buf, int len=-1)
 {
@@ -82,20 +83,38 @@ bool nmea_parse_line(const char *line, data_source_e source)
     const char *c1 = line+6;
     if(prefix(line, "WMV")) {
         float dir, spd;
-        char sign;
-        if(sscanf(c1, ",%f,%c,%f,N", &dir, &spd) != 3)
+        char ref;
+        if(sscanf(c1, ",%f,%c,%f,N", &dir, &ref, &spd) != 3)
             return false;
 
-        if(sign == 'L')
-            dir = -dir;
-        else if(sign != 'R')
-            return false;
-        
-        display_data_update(WIND_DIRECTION, dir, source);
-        display_data_update(WIND_SPEED, spd, source);
-        return true;
+        if(ref == 'R') {
+            display_data_update(WIND_DIRECTION, dir, source);
+            display_data_update(WIND_SPEED, spd, source);
+            return true;
+        } if(ref != 'T') {
+            display_data_update(TRUE_WIND_DIRECTION, dir, source);
+            display_data_update(TRUE_WIND_SPEED, spd, source);
+            return true;
+        }
+        return false;
     }
 
+    if(prefix(line, "MWD")) {
+        float dir, spd;
+        char ref;
+        if(sscanf(c1, ",%f,%c,", &dir, &ref) != 3)
+            return false;
+
+        const char *c5 = comma(c1, 4);
+        if(!c5) return false;
+        if(sscanf(c5, ",%f,N", &spd) != 1)
+            return false;
+        
+        display_data_update(TRUE_WIND_DIRECTION, dir, source);
+        display_data_update(TRUE_WIND_SPEED, spd, source);
+        return true;
+    }
+    
     if(prefix(line, "MDA")) {
         float pressure, temperature;
         const char *c3 = comma(c1, 2); // skip ahead 2 commas

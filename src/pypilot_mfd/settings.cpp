@@ -103,7 +103,9 @@ static bool settings_load_suffix(String suffix="")
     LOAD_SETTING(nmea_client_port, 0);
     LOAD_SETTING(nmea_server_port, 3600);
 
-    LOAD_SETTING(compensate_accelerometer, false)
+    LOAD_SETTING(compensate_wind_with_accelerometer, false)
+    LOAD_SETTING(compute_true_wind_from_gps, false)
+    LOAD_SETTING(compute_true_wind_from_water, true)
 
     //display
     LOAD_SETTING(use_360, false)
@@ -122,6 +124,42 @@ static bool settings_load_suffix(String suffix="")
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
 
+    // alarms
+    LOAD_SETTING(anchor_alarm, false)
+    LOAD_SETTING(anchor_alarm_distance, 10)
+
+    LOAD_SETTING(course_alarm, false)
+    LOAD_SETTING(course_alarm_course, 0)
+    LOAD_SETTING(course_alarm_error, 20)
+        
+    LOAD_SETTING(gps_speed_alarm, false)
+    LOAD_SETTING(gps_speed_alarm_knots, 10)
+        
+    LOAD_SETTING(wind_speed_alarm, false)
+    LOAD_SETTING(wind_speed_alarm_knots, 30)
+
+    LOAD_SETTING(weather_alarm_pressure, false)
+    LOAD_SETTING(weather_alarm_min_pressure, 980)
+    LOAD_SETTING(weather_alarm_pressure_rate, false)
+    LOAD_SETTING(weather_alarm_pressure_rate_value, 10)
+    LOAD_SETTING(weather_alarm_lightning, false)
+    LOAD_SETTING(weather_alarm_lightning_distance, 10)
+
+    LOAD_SETTING(depth_alarm, false)
+    LOAD_SETTING(depth_alarm_min, 3)
+    LOAD_SETTING(depth_alarm_rate, false)
+    LOAD_SETTING(depth_alarm_rate_value, 5)
+
+    LOAD_SETTING(ais_alarm, false)
+    LOAD_SETTING(ais_alarm_cpa, 1)
+    LOAD_SETTING(ais_alarm_tcpa, 10)
+        
+    LOAD_SETTING(pypilot_alarm_noconnection, false)
+    LOAD_SETTING(pypilot_alarm_fault, false)
+    LOAD_SETTING(pypilot_alarm_noIMU, false)
+    LOAD_SETTING(pypilot_alarm_no_motor_controller, false)
+    LOAD_SETTING(pypilot_alarm_lost_mode, false)
+
     // mdns
     LOAD_SETTING_S(pypilot_addr, "192.168.14.1")
     LOAD_SETTING_S(signalk_addr, "10.10.10.1")
@@ -135,7 +173,7 @@ static bool settings_load_suffix(String suffix="")
         for(int i=0; i<k.length(); i++) {
             String mac = k[i];
             JSONVar u = t[mac];
-
+#if 0
             wind_transmitter_t tr = {0};
             tr.position = (wind_position)(int)u["position"];
             tr.offset = (double)u["offset"];
@@ -143,6 +181,7 @@ static bool settings_load_suffix(String suffix="")
             String str = JSON.stringify(u);//["position"];
             uint64_t maci = mac_str_to_int(mac);
             wind_transmitters[maci] = tr;
+#endif
         }
     }
 
@@ -172,7 +211,9 @@ static bool settings_store_suffix(String suffix="")
     STORE_SETTING(nmea_client_port)
     STORE_SETTING(nmea_server_port)
 
-    STORE_SETTING(compensate_accelerometer)
+    STORE_SETTING(compensate_wind_with_accelerometer)
+    STORE_SETTING(compute_true_wind_from_gps)
+    STORE_SETTING(compute_true_wind_from_water)
 
     //display
     STORE_SETTING(use_360)
@@ -191,6 +232,38 @@ static bool settings_store_suffix(String suffix="")
 
     STORE_SETTING(enabled_pages)
 
+    // alarms
+    STORE_SETTING(anchor_alarm)
+    STORE_SETTING(anchor_alarm_distance)
+
+    STORE_SETTING(course_alarm)
+    STORE_SETTING(course_alarm_course)
+    STORE_SETTING(course_alarm_error)
+        
+    STORE_SETTING(gps_speed_alarm)
+    STORE_SETTING(gps_speed_alarm_knots)
+        
+    STORE_SETTING(wind_speed_alarm)
+    STORE_SETTING(wind_speed_alarm_knots)
+
+    STORE_SETTING(weather_alarm_pressure)
+    STORE_SETTING(weather_alarm_min_pressure)
+    STORE_SETTING(weather_alarm_pressure_rate)
+    STORE_SETTING(weather_alarm_pressure_rate_value)
+    STORE_SETTING(weather_alarm_lightning)
+    STORE_SETTING(weather_alarm_lightning_distance)
+
+    STORE_SETTING(depth_alarm)
+    STORE_SETTING(depth_alarm_min)
+    STORE_SETTING(depth_alarm_rate)
+    STORE_SETTING(depth_alarm_rate_value)
+
+    STORE_SETTING(pypilot_alarm_noconnection)
+    STORE_SETTING(pypilot_alarm_fault)
+    STORE_SETTING(pypilot_alarm_noIMU)
+    STORE_SETTING(pypilot_alarm_no_motor_controller)
+    STORE_SETTING(pypilot_alarm_lost_mode)
+        
     // mdns
     STORE_SETTING(pypilot_addr)
     STORE_SETTING(signalk_addr)
@@ -198,6 +271,7 @@ static bool settings_store_suffix(String suffix="")
 
     // transmitters
     JSONVar transmitters;
+    #if 0
     for(std::map<uint64_t, wind_transmitter_t>::iterator it = wind_transmitters.begin();
         it != wind_transmitters.end(); it++) {
         JSONVar t;
@@ -206,6 +280,7 @@ static bool settings_store_suffix(String suffix="")
         t["offset"] = tr.offset;
         transmitters[mac_int_to_str(it->first)] = t;
     }
+    #endif
     s["transmitters"] = transmitters;
 
     File file = SPIFFS.open(settings_filename + suffix, "w");
@@ -228,7 +303,7 @@ void settings_load()
     if (settings_load_suffix())
         settings_store_suffix(".bak");
     else
-        settings_load(".bak");
+        settings_load_suffix(".bak");
 }
 
 void settings_store()

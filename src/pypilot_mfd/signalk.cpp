@@ -74,8 +74,8 @@ static void signalk_parse_value(JSONVar value)
         
     if(path == "environment.wind.speedApparent") display_data_update(WIND_SPEED, to_knots(v), s); else
     if(path == "environment.wind.angleApparent") display_data_update(WIND_DIRECTION, rad2deg(v), s); else
-//    if(path == "environment.wind.speedTrue") display_data_update(WIND_SPEED, v, s);     else
-//    if(path == "environment.wind.angleTrue") display_data_update(WIND_DIRECTION, v, s); else
+    if(path == "environment.wind.speedTrue") display_data_update(TRUE_WIND_SPEED, v, s);     else
+    if(path == "environment.wind.angleTrue") display_data_update(TRUE_WIND_DIRECTION, v, s); else
     if(path == "environment.outside.temperature") display_data_update(AIR_TEMPERATURE, celcius(v), s); else
     if(path == "environment.outside.pressure") display_data_update(BAROMETRIC_PRESSURE, v, s); else
     if(path == "environment.depth.belowSurface") display_data_update(DEPTH, v, s); else

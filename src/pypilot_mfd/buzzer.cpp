@@ -6,8 +6,10 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-uint32_t buzzer_timeout;
-int buzzer_pattern;
+#include <Arduino.h>
+
+static uint32_t buzzer_timeout;
+static int buzzer_pattern;
 
 void buzzer_buzz(int freq, int duration, int pattern)
 {
@@ -30,7 +32,7 @@ void buzzer_poll()
         return;
 
     int d = 512; // always use 50% of 10 bit duty cycle
-    switch(pattern) {
+    switch(buzzer_pattern) {
     case 0: ledcWrite(1, 512);                            break;  // always on
     case 1: ledcWrite(1, millis() % 400 < 200 ? 512 : 0); break;  // on / off at 200ms
     case 2: ledcWrite(1, millis() % 600 < 200 ? 512 : 0); break;  // on / off at 200ms

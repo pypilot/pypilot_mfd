@@ -6,7 +6,10 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <Arduino.h>
+
 #include "settings.h"
+#include "display.h"
 #include "serial.h"
 #include "nmea.h"
 
@@ -52,7 +55,7 @@ SerialLinebuffer Serial2Buffer(Serial2, RS422_DATA);
 
 void serial_setup()
 {
-      Serial.begin(settings.usb_baud_rate == 38400 ? 38400 : 115200);
+    Serial.begin(settings.usb_baud_rate == 38400 ? 38400 : 115200);
   Serial.setTimeout(0);
 
   Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
@@ -62,7 +65,7 @@ void serial_setup()
 
 }
 
-void serial_read() {
+void serial_poll() {
     uint32_t t0 = millis();
     SerialBuffer.read(settings.input_usb);
     uint32_t t1 = millis();

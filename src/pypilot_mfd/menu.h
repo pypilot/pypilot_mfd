@@ -6,5 +6,8 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-void keys_poll();
-void keys_setup();
+void menu_select();
+void menu_setup();
+void menu_render();
+
+extern bool in_menu;

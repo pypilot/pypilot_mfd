@@ -12,8 +12,10 @@
 #include <Arduino_JSON.h>
 
 #include "settings.h"
+#include "wireless.h"
 #include "display.h"
 #include "utils.h"
+#include "history.h"
 #include "zeroconf.h"
 #include "signalk.h"
 #include "web.h"
@@ -22,8 +24,10 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 AsyncWebSocket ws_data("/ws_data");
 
+// bad put put here??
+JSONVar history_get_data(display_item_e item, history_range_e range);
 
-wind_position str2position(String p) {
+static sensor_position str2position(String p) {
     if(p == "Primary")   return PRIMARY;
     if(p == "Secondary") return SECONDARY;
     if(p == "Port")      return PORT;
@@ -39,6 +43,8 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
         String message = (char*)data;
         Serial.printf("websocket got %s\n", data);
         JSONVar input = JSON.parse(message);
+
+#if 0
         for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
             String mac = mac_int_to_str(i->first);
             wind_transmitter_t &t = i->second;
@@ -54,42 +60,8 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
                 break;
             }
         }
+#endif
     }
-}
-
-String position_str(wind_position p)
-{
-    switch(p) {
-       case PRIMARY:   return "Primary";
-       case SECONDARY: return "Secondary";
-       case PORT:      return "Port";
-       case STARBOARD: return "Starboard";
-       case IGNORED:   return "Ignored";
-    }
-    return "Invalid";
-}
-
-static String jsonSensors()
-{
-    uint32_t t = millis();
-    JSONVar windsensors;
-    for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) {
-        JSONVar jwt;
-        wind_transmitter_t &wt = i->second;
-
-        jwt["position"] = position_str(wt.position);
-        jwt["offset"] = wt.offset;
-        jwt["dir"] = wt.dir;
-        jwt["knots"] = wt.knots;
-        jwt["dt"] = t - wt.t;
-        windsensors[mac_int_to_str(i->first)] = jwt;
-    }
-
-    JSONVar sensors;
-    if(wind_transmitters.size() > 0)
-        sensors["wind"] = windsensors;
-
-    return JSON.stringify(sensors);
 }
 
 static String jsonDisplayData() {
@@ -103,7 +75,7 @@ static String jsonDisplayData() {
             ji["value"] = value;
             ji["source"] = source;
             ji["latency"] = t0-time;
-            String name = getItemLabel((display_item_e)i);
+            String name = display_get_item_label((display_item_e)i);
             displaydata[name] = ji;
         }
     return JSON.stringify(displaydata);
@@ -112,8 +84,8 @@ static String jsonDisplayData() {
 static String jsonCurrent()
 {
     JSONVar j;
-    j["direction"] = lpdir;
-    j["knots"] = knots;
+    j["direction"] = lpwind_dir;
+    j["knots"] = wind_knots;
 
     JSONVar l;
     l["wind"] = j;
@@ -125,7 +97,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
     switch (type) {
         case WS_EVT_CONNECT:
             Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-            ws.textAll(jsonSensors());
+            ws.textAll(wireless_json_sensors());
             break;
         case WS_EVT_DISCONNECT:
             Serial.printf("WebSocket client #%u disconnected\n", client->id());
@@ -170,6 +142,9 @@ String processor(const String& var)
     if(var == "OUTPUTWIFI") return Checked(settings.output_wifi);
     if(var == "USB_BAUD_RATE") return String(settings.usb_baud_rate);
     if(var == "RS422_BAUD_RATE") return String(settings.rs422_baud_rate);
+    if(var == "COMPENSATE_WIND_WITH_ACCELEROMETER") return Checked(settings.compensate_wind_with_accelerometer);
+    if(var == "COMPUTE_TRUEWIND_FROM_GPS") return Checked(settings.compute_true_wind_from_gps);
+    if(var == "COMPUTE_TRUEWIND_FROM_WATERSPEED") return Checked(settings.compute_true_wind_from_water);
     if(var == "PYPILOT_ADDR") return(pypilot_discovered==2 ? settings.pypilot_addr : "not detected");
     if(var == "SIGNALK_ADDR") return(signalk_discovered==2 ? (settings.signalk_addr + ":" + String(settings.signalk_port)) : "not detected");
     if(var == "WIFIDATA")   return get_wifi_data_str();
@@ -193,6 +168,51 @@ String processor(const String& var)
     return String();
 }
 
+
+String processor_alarms(const String& var)
+{
+    if(var == "ANCHOR_ALARM")          return Checked(settings.anchor_alarm);
+    if(var == "ANCHOR_ALARM_DISTANCE") return String(settings.anchor_alarm_distance);
+
+    if(var == "COURSE_ALARM")          return Checked(settings.course_alarm);
+    if(var == "COURSE_ALARM_COURSE")   return String(settings.course_alarm_course);
+    if(var == "COURSE_ALARM_ERROR")    return String(settings.course_alarm_error);
+
+    if(var == "GPS_SPEED_ALARM")          return Checked(settings.gps_speed_alarm);
+    if(var == "GPS_SPEED_ALARM_KNOTS")    return String(settings.gps_speed_alarm_knots);
+
+    if(var == "WIND_SPEED_ALARM")          return Checked(settings.wind_speed_alarm);
+    if(var == "WIND_SPEED_ALARM_KNOTS")    return String(settings.wind_speed_alarm_knots);
+
+    if(var == "WATER_SPEED_ALARM")          return Checked(settings.water_speed_alarm);
+    if(var == "WATER_SPEED_ALARM_KNOTS")    return String(settings.water_speed_alarm_knots);
+
+    if(var == "WEATHER_ALARM_PRESSURE")      return Checked(settings.weather_alarm_pressure);
+    if(var == "WEATHER_ALARM_MIN_PRESSURE")  return String(settings.weather_alarm_min_pressure);
+    if(var == "WEATHER_ALARM_PRESSURE_RATE")       return Checked(settings.weather_alarm_pressure_rate);
+    if(var == "WEATHER_ALARM_PRESSURE_RATE_VALUE") return String(settings.weather_alarm_pressure_rate_value);
+    if(var == "WEATHER_ALARM_LIGHTNING")          return Checked(settings.weather_lightning);
+    if(var == "WEATHER_ALARM_LIGHTNING_DISTANCE") return String(settings.weather_alarm_lightning_distance);
+
+    if(var == "DEPTH_ALARM")             return Checked(settings.depth_alarm);
+    if(var == "DEPTH_ALARM_MIN")         return String(settings.depth_alarm_min);
+    if(var == "DEPTH_ALARM_RATE")        return Checked(settings.depth_alarm_rate);
+    if(var == "DEPTH_ALARM_RATE_VALUE")  return String(settings.depth_alarm_rate_value);
+
+    if(var == "AIS_ALARM")       return Checked(settings.ais_alarm);
+    if(var == "AIS_ALARM_CPA")   return String(settings.ais_alarm_cpa);
+    if(var == "AIS_ALARM_TCPA")  return String(settings.ais_alarm_tcpa);
+
+    if(var == "PYPILOT_ALARM_NOCONNECTION")       return Checked(settings.pypilot_alarm_noconnection);
+    if(var == "PYPILOT_ALARM_FAULT")       return Checked(settings.pypilot_alarm_fault);
+    if(var == "PYPILOT_ALARM_NO_IMU")       return Checked(settings.pypilot_alarm_no_imu);
+    if(var == "PYPILOT_ALARM_NO_MOTORCONTROLLER")       return Checked(settings.pypilot_alarm_no_motor_controller);
+    if(var == "PYPILOT_ALARM_LOST_MODE")       return Checked(settings.pypilot_alarm_lost_mode);
+    
+    if(var == "VERSION")    return String(VERSION);
+    return String();
+}
+
 void web_setup()
 {
     ws.onEvent(onEvent);
@@ -202,6 +222,60 @@ void web_setup()
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(SPIFFS, "/index.html", String(), 0, processor);
+    });
+
+    server.on("/alarms", HTTP_POST, [](AsyncWebServerRequest *request) {
+        for (int i = 0; i < request->params(); i++) {
+            AsyncWebParameter* p = request->getParam(i);
+            String name = p->name(), value = p->value();
+            //printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+            if(name == "anchor_alarm")           settings.anchor_alarm = value;
+            else if(name == "anchor_alarm_distance")  settings.anchor_alarm_distance = value;
+
+            else if(name == "course_alarm")         settings.course_alarm = value;
+            else if(name == "course_alarm_course")  settings.course_alarm_course = value;
+            else if(name == "course_alarm_error")   settings.course_alarm_errr = value;
+            
+            else if(name == "gps_speed_alarm")        settings.gps_speed_alarm = value;
+            else if(name == "gps_speed_alarm_knots")  settings.gps_speed_alarm_knots = value;
+
+            else if(name == "wind_speed_alarm")        settings.wind_speed_alarm = value;
+            else if(name == "wind_speed_alarm_knots")  settings.wind_speed_alarm_knots = value;
+
+            else if(name == "water_speed_alarm")        settings.water_speed_alarm = value;
+            else if(name == "water_speed_alarm_knots")  settings.water_speed_alarm_knots = value;
+
+            else if(name == "weather_alarm_pressure")      settings.weather_alarm_pressure = value;
+            else if(name == "weather_alarm_min_pressure")  settings.weather_alarm_min_pressure = value;
+            else if(name == "weather_alarm_pressure_rate")      settings.weather_alarm_pressure_rate = value;
+            else if(name == "weather_alarm_pressure_rate_value")  settings.weather_alarm_pressure_rate_value = value;
+            else if(name == "weather_alarm_lightning")      settings.weather_alarm_lightning = value;
+            else if(name == "weather_alarm_lightning_distance")  settings.weather_alarm_lightning_distance = value;
+
+            else if(name == "depth_alarm")      settings.depth_alarm = value;
+            else if(name == "depth_alarm_min")  settings.depth_alarm_min = value;
+            else if(name == "depth_alarm_rate")      settings.depth_alarm_rate = value;
+            else if(name == "depth_alarm_rate_value")  settings.depth_alarm_rate_value = value;
+
+            else if(name == "ais_alarm")      settings.ais_alarm = value;
+            else if(name == "ais_alarm_cpa")  settings.ais_alarm_cpa = value;
+            else if(name == "ais_alarm_tcpa")      settings.ais_alarm_tcpa = value;
+            
+            else if(name == "pypilot_alarm_noconnection") settings.pypilot_alarm_noconnection = value;
+            else if(name == "pypilot_alarm_fault") settings.pypilot_alarm_fault = value;
+            else if(name == "pypilot_alarm_no_imu") settings.pypilot_alarm_no_imu = value;
+            else if(name == "pypilot_alarm_no_motor_controller") settings.pypilot_alarm_no_motor_controller_ = value;
+            else if(name == "pypilot_alarm_lost_mode") settings.pypilot_alarm_lost_mode = value;
+            
+            else printf("web post alarms unknown parameter %s %s\n", name.c_str(), value.c_str());
+        }
+        request->redirect("/alarms.html");
+        settings_store();
+    });
+
+    
+    server.on("/alarms.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms);
     });
 
     server.on("/network", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -219,12 +293,12 @@ void web_setup()
     });
 
     server.on("/scan_wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
-        scan_wifi_networks();
+        wireless_scan_networks();
         request->redirect("/");
     });
 
     server.on("/scan_sensors", HTTP_POST, [](AsyncWebServerRequest *request) {
-        scan_devices();
+        wireless_scan_devices();
         request->redirect("/");
     });
 
@@ -232,6 +306,9 @@ void web_setup()
         //printf("post data %d\n", request->params());
         settings.input_usb = settings.output_usb = false;
         settings.input_wifi = settings.output_wifi = false;
+        settings.compensate_wind_with_accelerometer = false;
+        settings.compute_true_wind_from_gps = false;
+        settings.compute_true_wind_from_water = false;
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
             String name = p->name(), value = p->value();
@@ -242,6 +319,9 @@ void web_setup()
             else if(name == "rs422_baud_rate")  settings.rs422_baud_rate = value.toInt();
             else if(name == "input_wifi")  settings.input_wifi = true;
             else if(name == "output_wifi") settings.output_wifi = true;
+            else if(name == "compensate_wind_with_accelerometer") settings.compensate_wind_with_accelerometer = true;
+            else if(name == "compute_true_wind_from_gps") settings.compute_true_wind_from_gps = true;
+            else if(name == "compute_true_wind_from_water_speed") settings.compute_true_wind_from_water = true;
             else if(name == "wifidata") {
                 if      (value == "nmea_pypilot") settings.wifi_data = NMEA_PYPILOT;
                 else if (value == "nmea_signalk") settings.wifi_data = NMEA_SIGNALK;
@@ -263,6 +343,8 @@ void web_setup()
         settings.use_360 = settings.use_fahrenheit = false;
         settings.use_inHg = settings.use_depth_ft = false;
         settings.invert = false;
+        settings.mirror = false;
+        settings.powerdown = false;
         String enabled_pages = "";
         for(int i=0; i < display_pages.size(); i++)
             display_pages[i].enabled = false;
@@ -286,6 +368,12 @@ void web_setup()
                 settings.contrast = min(max(value.toInt(), 0L), 50L);
             else if(p->name() == "backlight")
                 settings.backlight = min(max(value.toInt(), 0L), 100L);
+            else if(p->name() == "rotation")
+                settings.rotation = min(max(value.toInt(), 0L), 4L);
+            else if(p->name() == "mirror")
+                settings.mirror = true;
+            else if(p->name() == "powerdown")
+                settings.powerdown = true;
             else {
                 for(int j=0; j < display_pages.size(); j++) {
                     page_info &page = display_pages[j];
@@ -309,7 +397,7 @@ void web_setup()
     });
 
     server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
-        String data_type, range;
+        String data_type, data_range;
         if (request->hasParam("data_type"))
             data_type = request->getParam("data_type")->value();
         if (request->hasParam("data_range"))
@@ -317,22 +405,22 @@ void web_setup()
 
         int item = -1, range = -1;
         for(int i=0; i<DISPLAY_COUNT; i++)
-            if(display_get_item_label(i) == data_type) {
+            if(display_get_item_label((display_item_e)i) == data_type) {
                 item = i;
                 break;
             }
 
         for(int i=0; i<HISTORY_RANGE_COUNT; i++)
-            if(history_get_label(i) == data_type) {
+            if(history_get_label((history_range_e)i) == data_type) {
                 range = i;
                 break;
             }
 
         if(item >= 0 && range >= 0)
-            request->send(200, "text/plain", history_get(item, range));
+        ;//    request->send(200, "text/plain", history_get(item, range));
         else
             request->send(404);
-    }
+    });
 
     server.serveStatic("/", SPIFFS, "/");
 
@@ -361,7 +449,7 @@ void web_poll()
     last_client_update = t;
 
     if(ws.count())
-        ws.textAll(jsonSensors());
+        ws.textAll(wireless_json_sensors());
     ws.cleanupClients();
 
     if(ws_data.count())

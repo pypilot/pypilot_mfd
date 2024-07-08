@@ -6,15 +6,22 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <Arduino_JSON.h>
+
 // 5m, 1 hr, 1d
-uint32_t history_range_time[] = {5*60, 60*60, 24*60*60};
+#include <Wire.h>
+
+#include "display.h"
+#include "history.h"
+
+static uint32_t history_range_time[] = {5*60, 60*60, 24*60*60};
 
 int history_display_range;
 
 String history_get_label(history_range_e range)
 {
     switch(range) {
-        case MINUTE: return "5m";
+        case MINUTE_5: return "5m";
         case HOUR:   return "1h";
         case DAY:    return "1d";
     }
@@ -23,15 +30,9 @@ String history_get_label(history_range_e range)
 
 display_item_e history_items[] = { WIND_SPEED, BAROMETRIC_PRESSURE, DEPTH, GPS_SPEED, WATER_SPEED };
 
-struct history_element {
-    float value;
-    uint32_t time;
-    history_element(float _value, uint32_t _time) : value(_value), time(_time) {}
-};
-
 struct history
 {
-    std::list<history_element> data[RANGE_COUNT];
+    std::list<history_element> data[HISTORY_RANGE_COUNT];
 
     // store only high and lows
     std::list<history_element> data_high[HISTORY_RANGE_COUNT];
@@ -42,7 +43,7 @@ struct history
     void put(float value, uint32_t time)
     {
         for(int range = 0; range < HISTORY_RANGE_COUNT; range++) {
-            int range_time = history_range_time[range];
+            uint32_t range_time = history_range_time[range];
             int range_timeout = range_time * 1000 / 80;
 
             uint32_t fronttime = data[range].empty() ? 0 : data[range].front().time;
@@ -78,9 +79,9 @@ struct history
             ltime = time;
 
             // remove elements that expired
-            expire(data[range], range_time);
-            expire(data_high[range], range_time);
-            expire(data_low[range], range_time);
+            expire(data[range], time, range_time);
+            expire(data_high[range], time, range_time);
+            expire(data_low[range], time, range_time);
         }
     }
 
@@ -90,7 +91,7 @@ struct history
             history_element &back = data.back();
             if(time - back.time < range_time * 1000)
                 break;
-            data[range].pop_back();
+            data.pop_back();
         }
     }
 };
@@ -113,8 +114,8 @@ std::list<history_element> *history_find(display_item_e item, int r, uint32_t &t
     for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
         if(history_items[i] == item) {
             totalmillis = history_range_time[r] * 1000;
-            std::list<history_element> &data_high = &histories[i].data_high[r];
-            std::list<history_element> &data_low = &histories[i].data_low[r];
+            std::list<history_element> &data_high = histories[i].data_high[r];
+            std::list<history_element> &data_low = histories[i].data_low[r];
             // compute range
             high = -INFINITY;
             for(std::list<history_element>::iterator it = data_high.begin(); it!=data_high.end(); it++)
@@ -135,22 +136,48 @@ std::list<history_element> *history_find(display_item_e item, int r, uint32_t &t
 
 JSONVar history_get_data(display_item_e item, history_range_e range)
 {
-    uint32_t &totalmillis;
+    uint32_t totalmillis;
     float high, low;
-    std::list<history_element> *data = history_find(item, int range, totalmillis, high, low);
-    JSONVar data;
+    std::list<history_element> *data = history_find(item, range, totalmillis, high, low);
+    JSONVar jsondata;
+    if(! data)
+        return jsondata;
     int i = 0;
-    for(std::list<history_element>::iterator it = data.begin(); it != data.end(); it++) {
+    for(std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
         JSONVar value;
         value["value"] = it->value;
         value["time"] = it->time / 1000.0f;
-        data[i++] = value;
+        jsondata[i++] = value;
     }
     JSONVar output;
-    output["data"] = data;
+    output["data"] = jsondata;
     output["high"] = high;
     output["low"] = low;
     output["total_time"] = totalmillis / 1000.0f;
 
     return output;
+}
+
+#define I2C_EEPROM_ADDRESS 0x51
+bool has_i2c_eeprom;
+void history_setup()
+{
+    Wire.beginTransmission(I2C_EEPROM_ADDRESS);
+    has_i2c_eeprom = Wire.endTransmission() == 0;
+    if(has_i2c_eeprom)
+        printf("Detected I2C EEPROM for storing history data with power cycles\n");
+
+    // load history data,  
+}
+
+// write current history to eeprom
+void history_store()
+{
+    /*
+    for(int i=0; i<HISTORY_COUNT; i++)
+        for(int range = 0; range < HISTORY_RANGE_COUNT; range++) {
+            for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) {
+                // store history
+            }    
+            */
 }

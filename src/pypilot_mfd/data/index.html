@@ -67,10 +67,20 @@
             </select>
           </div>
           <span>WIFI data</span>
-          <span>
-            <input type='checkbox' name='input_wifi' id='input_wifi' %INPUTWIFI%><label for='input_wifi'>Input</label>
-            <input type='checkbox' name='output_wifi' id='output_wifi' %OUTPUTWIFI%><label for='output_wifi'>Output</output>
-          </span>
+          <div>
+            <span>
+              <input type='checkbox' name='input_wifi' id='input_wifi' %INPUTWIFI%><label for='input_wifi'>Input</label>
+              <input type='checkbox' name='output_wifi' id='output_wifi' %OUTPUTWIFI%><label for='output_wifi'>Output</label>
+            </span>
+          </div>
+          <span>Data Computation</span>
+          <div>
+            <span>
+              <input type='checkbox' name='compensate_wind_with_accelerometer' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%><label for='input_wifi'>Compensate wind with accelerometer</label>
+              <input type='checkbox' name='compute_true_wind_from_gps' id='compute_true_wind_from_gps' %COMPUTE_TRUEWIND_FROM_GPS%><label for='output_wifi'>Compute True Wind from GPS</label>
+              <input type='checkbox' name='compute_true_wind_from_water_speed' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%><label for='output_wifi'>Compute True Wind from Water Speed</label>
+            </span>
+          </div>
         </div>
         <div class='data-grid'>
           <input type='radio' name='wifidata' id='nmea_pypilot' value='nmea_pypilot'>

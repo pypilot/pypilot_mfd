@@ -8,11 +8,14 @@
 
 #include "Arduino.h"
 
+#include "settings.h"
+#include "wireless.h"
 #include "display.h"
+#include "menu.h"
 #include "keys.h"
 
 enum keys { KEY_PAGE_UP,
-            KEY_SCALE,
+            KEY_MENU,
             KEY_PAGE_DOWN,
             KEY_PWR,
             KEY_COUNT };
@@ -24,31 +27,34 @@ void keys_setup()
         pinMode(key_pin[i], INPUT_PULLUP);
 }
 
-void keys_read() {
+void keys_poll() {
     static uint32_t key_time, timeout = 500;
-    static bool key_pressed;
+    static int key_pressed;
+    
     uint32_t t0 = millis();
     if (key_pressed) {
         if (t0 - key_time < timeout)  // allow new presses to process
             return;                     // ignore keys down until timeout
-        key_pressed = false;
-        timeout = 300;  // faster repeat timeout
+        key_pressed = 0;
+        timeout = 200;  // faster repeat timeout
     }
 
     if (!digitalRead(key_pin[KEY_PAGE_UP])) {
         printf("KEY UP\n");
         if (!digitalRead(key_pin[KEY_PAGE_DOWN]))
-          toggle_wifi_mode();
+          wireless_toggle_mode();
         else
           display_change_page(1);
-        
     } else
     if (!digitalRead(key_pin[KEY_PAGE_DOWN])) {
         printf("KEY DOWN\n");
         display_change_page(-1);
-    } else if (!digitalRead(key_pin[KEY_SCALE])) {
+    } else if (!digitalRead(key_pin[KEY_MENU])) {
         printf("KEY SCALE\n");
-        display_change_scale();
+        if(key_pressed)
+            menu_select();
+        else
+            display_menu_scale();
     } else if (!digitalRead(0)) {
         display_toggle();
         if(settings.powerdown) {
@@ -62,6 +68,6 @@ void keys_read() {
         return;
     }
 
-    key_pressed = true;
+    key_pressed++;
     key_time = t0;
 }

@@ -7,6 +7,5 @@
  */
  
 
- void web_setup();
- void web_poll();
- 
+void web_setup();
+void web_poll();

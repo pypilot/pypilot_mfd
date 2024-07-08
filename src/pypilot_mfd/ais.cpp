@@ -12,6 +12,7 @@
 #include "ais.h"
 #include "utils.h"
 
+// decode nmea AIS packets as well as compute cpa and tcpa
 std::map<int, ship> ships;
 
 float ship::simple_x(float slon)

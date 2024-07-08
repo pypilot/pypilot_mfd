@@ -1,7 +1,7 @@
 $fn=120;
 
-use_threads = true;
-use_holes = true;
+use_threads = false;
+use_holes = false;
 
 length = 124;
 width = 97;
@@ -38,13 +38,14 @@ module box() {
         cube([board_length, board_width, height-bthickness-1]);
     
         // usb port
+        if(0) {
         translate([5,-5-board_off,0])
             cylinder(r=6.5, h=40, center=true);
         
         // rs422 port
         translate([5,13-board_off,0])
             cylinder(r=6.5, h=40, center=true);
-
+        }
         translate([0,1,height+bthickness-.8])
             scale([1, 1, .7])
                 groove();

@@ -7,4 +7,4 @@
  */
 
 void serial_setup();
-void serial_read();
+void serial_poll();

@@ -6,6 +6,10 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <Wire.h>
+
+#include "display.h"
+
 #define DEVICE_ADDRESS 0x19  // 0x32  // LIS2DW12TR
 #define LIS2DW12_CTRL 0x1F   // CTRL1 is CTRL+1
 

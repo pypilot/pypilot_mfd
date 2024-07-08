@@ -247,7 +247,6 @@ void pypilotClient::poll()
 
         sock_buffer = sock_buffer.substring(start);
         //printf("RECV1 %s\n", sock_buffer.c_str());
-
     }
 }
 

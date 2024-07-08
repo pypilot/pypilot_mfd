@@ -13,10 +13,13 @@
 
 #include "bmp280.h"
 #include "settings.h"   
+#include "draw.h"
 #include "display.h"
 #include "ais.h"
 #include "pypilot_client.h"
 #include "utils.h"
+#include "wireless.h"
+#include "menu.h"
 #include "history.h"
 #include "buzzer.h"
 
@@ -26,147 +29,8 @@
 #define PHOTO_RESISTOR_PIN 34
 #define PWR_LED 26
 
-bool display_on = true;
-
-// uncomment to declare which graphics library
-#define USE_U8G2
-//#define USE_LVGL     // color lcd
-//#define USE_TFT_ESPI // only small wind display supported (bottom of file)
-
-
-#ifdef USE_U8G2
-
-#include <U8g2lib.h>
-//U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/5, /* dc=*/12, /* reset=*/14);
-//U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/18, /* data=*/23, /* cs=*/5, /* dc=*/12, /* reset=*/14);
-U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
-//U8G2_ST75256_JLX256160_2_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
-
-
-void drawThickLine(int x1, int y1, int x2, int y2, int w)
-{
-    int ex = x2-x1, ey = y2-y1;
-    int d = sqrt(ex*ex + ey*ey);
-    if(d == 0)
-        return;
-    ex = ex*w/d/2;
-    ey = ey*w/d/2;
-
-    int ax = x1+ey, ay = y1-ex;
-    int bx = x1-ey, by = y1+ex;
-    int cx = x2+ey, cy = y2-ex;
-    int dx = x2-ey, dy = y2+ex;
-    u8g2.drawTriangle(ax, ay, bx, by, cx, cy);
-    u8g2.drawTriangle(bx, by, dx, dy, cx, cy);
-}
-
-void drawCircle(int x, int y, int r, int thick=0)
-{
-    for (int i = -thick; i <= thick; i++)
-        for (int j = -thick; j <= thick; j++)
-            u8g2.drawCircle(xc + i, yc + j, r);
-}
-
-void drawLine(int x1, int y1, int x2, int y2)
-{
-    u8g2.drawLine(x1, y1, x2, y2);
-}
-
-void drawTriangle(int x1, int y1, int x2, int y2, int x3, int y3)
-{
-    u8g2.drawTriangle(x1, y1, x2, y2, x3, y3);
-}
-
-void setFont(void *font)
-{
-    u8g2.setFont(u8g2_font_helvB08_tf);
-}
-
-int getTextWidth(const char *str)
-{
-    return u8g2.getStrWidth(str);
-}
-
-void drawText(int x, int y, const char *str)
-{
-    u8g2.drawUTF8(x, y, text.c_str());
-}
-
-const uint8_t *getFont(int &ht) {
-    if(ht < 7) return 0;
-    if(ht < 11) return ht = 7, u8g2_font_5x7_tf;
-    if (ht < 13) return ht = 11, u8g2_font_helvB08_tf;
-    if (ht < 15) return ht = 13, u8g2_font_helvB10_tf;
-    if (ht < 18) return ht = 15, u8g2_font_helvB12_tf;
-    if (ht < 24) return ht = 18, u8g2_font_helvB14_tf;
-    if (ht < 28) return ht = 24, u8g2_font_helvB18_tf;
-    if (ht < 30) return ht = 28, u8g2_font_helvB24_tf;
-    if (ht < 35) return ht = 30, u8g2_font_inb24_mf;
-    if (ht < 40) return ht = 35, u8g2_font_inb27_mf;
-    if (ht < 44) return ht = 40, u8g2_font_inb30_mf;
-    if (ht < 48) return ht = 44, u8g2_font_inb33_mf;
-    if (ht < 52) return ht = 48, u8g2_font_inb38_mf;
-    if (ht < 56) return ht = 52, u8g2_font_inb42_mf;
-    return ht = 56, u8g2_font_inb46_mf;
-}
-
-void selectFont(int &wt, int &ht, String str) {
-    // based on width and height determine best font
-    for(;;) {
-        const uint8_t *font = getFont();
-        if(!font)
-            return;
-        u8g2.setFont(ht, font);
-        
-        int width = u8g2.getUTF8Width(str.c_str());
-        if((width+label_w < wt || ht+label_h<h) && width < wt && ht < h) {
-            wt = width;
-            break;
-        }
-        ht--;
-    }
-}
-
-
-#endif
-
-
-#ifdef USE_LVGL     // color lcd
-void drawThickLine(int x1, int y1, int x2, int y2, int w)
-{
-
-}
-
-void drawCircle(int x, int y, int r, int thick)
-{
-}
-
-void drawLine(int x1, int y1, int x2, int y2)
-{
-}
-
-void drawTriangle(int x1, int y1, int x2, int y2, int x3, int y3)
-{
-}
-
-void selectFont(int &wt, int &ht, String str) {
-}
-
-void setFont(void *font)
-{
-}
-
-int getTextWidth(const char *str)
-{
-    return 0;
-}
-
-void drawText(int x, int y, const char *str)
-{
-}
-
-#endif
-
+static bool display_on = true;
+bool landscape = false;
 
 String display_get_item_label(display_item_e item)
 {
@@ -194,9 +58,13 @@ String display_get_item_label(display_item_e item)
     return "";
 }
 
-const char *source_name[] = {"ESP", "USB", "RS422", "W"};
-
-
+/* ESP is esp-now
+   USB is via usb
+   RS422 is via isolated second serial port
+   W is wifi either nmea0183 or signalk
+   C is computed from other data, eg: true wind
+*/
+const char *source_name[] = {"ESP", "USB", "RS422", "W", "C"};
 
 struct display_data_t {
     display_data_t() : time(-10000) {}
@@ -209,6 +77,34 @@ struct display_data_t {
 display_data_t display_data[DISPLAY_COUNT];
 
 uint32_t data_source_time[DATA_SOURCE_COUNT];
+
+static void compute_true_wind(float wind_dir)
+{
+    if(display_data[TRUE_WIND_DIRECTION].source != COMPUTED_DATA &&
+       !isnan(display_data[TRUE_WIND_DIRECTION].value))
+        return; // already have true wind from a better source
+
+    // first try to compute from water speed
+    float speed = NAN;
+    if(settings.compute_true_wind_from_water)
+        speed = display_data[WATER_SPEED].value;
+    if(settings.compute_true_wind_from_gps && isnan(speed))
+        speed = display_data[GPS_SPEED].value;
+
+    if(isnan(speed))
+        return;
+
+    float wind_speed = display_data[WIND_SPEED].value;
+    if(isnan(wind_speed))
+        return;
+
+    float rad = deg2rad(wind_dir); // apparent wind in radians
+    float windvx = wind_speed*sinf(rad), windvy = wind_speed*cosf(rad) - speed;
+    float true_wind_speed = hypotf(windvx, windvy);
+    float true_wind_dir = rad2deg(atan2f(windvx, windvy));
+    display_data_update(TRUE_WIND_SPEED, true_wind_speed, COMPUTED_DATA);
+    display_data_update(TRUE_WIND_DIRECTION, true_wind_dir, COMPUTED_DATA);
+}    
 
 void display_data_update(display_item_e item, float value, data_source_e source) {
     uint32_t time = millis();
@@ -228,6 +124,17 @@ void display_data_update(display_item_e item, float value, data_source_e source)
     display_data[item].time = time;
     display_data[item].source = source;
     data_source_time[source] = time;
+
+    if(item == WIND_DIRECTION) // possibly compute true wind
+        compute_true_wind(value);
+}
+
+bool display_data_get(display_item_e item, float &value)
+{
+    if(isnan(display_data[item].value))
+        return false;
+    value = display_data[item].value;
+    return true;
 }
 
 bool display_data_get(display_item_e item, float &value, String &source, uint32_t &time)
@@ -239,19 +146,6 @@ bool display_data_get(display_item_e item, float &value, String &source, uint32_
     time = display_data[item].time;
     return true;
 }
-
-struct display {
-    display()
-        : x(0), y(0), w(0), h(0), expanding(true) {}
-    display(int _x, int _y, int _w, int _h)
-        : x(_x), y(_y), w(_w), h(_h) {}
-    virtual void render() = 0;
-    virtual void fit() {}
-    virtual void getAllItems(std::list<display_item_e> &items) = 0;
-
-    int x, y, w, h;
-    bool expanding;
-};
 
 struct display_item : public display {
     display_item(display_item_e _item) : item(_item) {}
@@ -273,27 +167,42 @@ struct text_display : public display_item {
             label_w =  label_h = 0;
         } else {
             String str = getLabel();
-            label_font = u8g2_font_helvB08_tf;
-            setFont(label_font);
-            label_w = getTextWidth(str.c_str());
+            label_font = 8;
+            draw_set_font(label_font);
+            label_w = draw_text_width(str.c_str());
             label_h = 10;
 
             if(label_w > w/2 || label_h > h/2) {
-                label_font = u8g2_font_5x7_tf;
-                setFont(label_font);
-                label_w = getTextWidth(str.c_str());
+                label_font = 7;
+                draw_set_font(label_font);
+                label_w = draw_text_width(str.c_str());
                 label_h = 7;
             }
         }
     }
 
+    void selectFont(String str) {
+        // based on width and height determine best font
+        for(;;) {
+            if(!draw_set_font(ht))
+                return;
+        
+            int width = draw_text_width(str.c_str());
+            if((width+label_w < wt || ht+label_h<h) && width < wt && ht < h) {
+                wt = width;
+                break;
+            }
+            ht--;
+        }
+    }
+    
     void render() {
         // determine font size to use from text needed
         String str = getText();
 
         // try to fit text along side label
         wt = w;
-        selectFont(wt, ht, str);
+        selectFont(str);
 
         //if(ht + label_h > h && wt + label_w > w)
         //    label = false;
@@ -313,7 +222,7 @@ struct text_display : public display_item {
                 xp = x + w-wt;
         }
         //Serial.printf("draw text %s %d %d %d %d %d %d %d %d\n", str.c_str(), x, y, w, h, wt, ht, xp, yp);
-        drawText(xp, yp, str.c_str());
+        draw_text(xp, yp, str.c_str());
         if(label_h && label_w < w && label_h < h) {
             String label = getLabel();
             if(label) {
@@ -322,8 +231,8 @@ struct text_display : public display_item {
                     lx += w/2 - label_w/2;
                 else if(wt + label_w < w)
                     ly += h/2 - label_h/2;
-                setFont(label_font);
-                drawText(lx, ly, label.c_str());
+                draw_set_font(label_font);
+                draw_text(lx, ly, label.c_str());
             }
         }
     }
@@ -345,7 +254,7 @@ struct text_display : public display_item {
 
     bool use_units;
     String units;
-    const uint8_t *label_font;
+    int label_font;
     int wt, ht;
     int label_w, label_h;
     bool centered; // currently means centered over x (and no label)  maybe should change this
@@ -383,7 +292,7 @@ struct dir_angle_text_display : public angle_text_display {
 
     void render() {
         text_display::render();
-        if((settings.use_360&&has360) || centered)
+        if((settings.use_360 && has360) || centered)
             return;
         float v = display_data[item].value;
         if(isnan(v))
@@ -396,9 +305,9 @@ struct dir_angle_text_display : public angle_text_display {
         int x1 = x+w*xa, x2 = x+w*xb, x3 = x+w*(xa*2+xb)/3;
         int y1 = y+h/2, y2 = y+h*.35f, y3 = y+h*.65f;
         int t = h/20;
-        drawThickLine(x1, y1, x2, y1, t);
-        drawThickLine(x1, y1, x3, y2, t);
-        drawThickLine(x3, y3, x1, y1, t);
+        draw_thick_line(x1, y1, x2, y1, t);
+        draw_thick_line(x1, y1, x3, y2, t);
+        draw_thick_line(x3, y3, x1, y1, t);
     }
     bool has360;
 };
@@ -593,7 +502,7 @@ struct pypilot_command_display : public pypilot_text_display  {
 };
 
 struct stat_display : public text_display  {
-    stat_display(display_item_e _i) : text_display(i) {}
+    stat_display(display_item_e _i) : text_display(_i) {}
 
     virtual String getLabel() {
         return display_get_item_label(item); + " Min/Max ";
@@ -638,7 +547,7 @@ struct gauge : public display_item {
 
         int thick = r / 36;
         int r2 = r-thick-1;
-        drawCircle(xc, yc, r2, thick);
+        draw_circle(xc, yc, r2, thick);
     }
 
     void render_tick(float angle, int u, int &x0, int &y0) {
@@ -652,15 +561,16 @@ struct gauge : public display_item {
         int xp = v * c;
         int y1 = yc - r * c;
         int yp = v * s;
-        drawTriangle(x1 - xp, y1 - yp, x0, y0, x1 + xp, y1 + yp);
+        draw_triangle(x1 - xp, y1 - yp, x0, y0, x1 + xp, y1 + yp);
     }
 
     void render_ticks(bool text = false) {
         int th;
         if (w > 90)
-            setFont(u8g2_font_helvB08_tf), th = 8;
+            th = 8;
         else
-            setFont(u8g2_font_5x7_tf), th = 7;
+            th = 7;
+        draw_set_font(th);
 
         for (float angle = min_ang; angle <= max_ang; angle += ang_step) {
             int x0, y0;
@@ -688,7 +598,7 @@ struct gauge : public display_item {
             char buf[16];
             if (text) {
                 snprintf(buf, sizeof buf, "%d", abs((int)ival));
-                int tsw = getTextWidth(buf);
+                int tsw = draw_text_width(buf);
                 if(x0 > xc + w/4)
                     x0 -= tsw;
                 else if(x0 > xc - w/4)
@@ -697,7 +607,7 @@ struct gauge : public display_item {
                     y0 -= th;
                 else if(y0 > yc - h/4)
                     y0 -= th / 2;
-                drawText(x0, y0, buf);
+                draw_text(x0, y0, buf);
             }
 
             if (0&&text) {  // intermediate ticks
@@ -736,7 +646,7 @@ struct gauge : public display_item {
         text.y = yc + nyp;
         text.render();
 
-        drawTriangle(xc - xp, yc - yp, xc + x0, yc + y0, xc + xp, yc + yp);
+        draw_triangle(xc - xp, yc - yp, xc + x0, yc + y0, xc + xp, yc + yp);
     }
 
     void render_label() {
@@ -745,15 +655,16 @@ struct gauge : public display_item {
         String label1 = space1 > 0 ? label.substring(0, space1) : label;
         String label2 = space2 > 0 ? label.substring(space2) : "";
 
-        const uint8_t *fonts[] = {u8g2_font_helvB08_tf, u8g2_font_5x7_tf, 0};
+        const uint8_t fonts[] = {8, 7, 0};
         int fth[] = {10, 8, 0};
         int lw1, lw2;
         for(int i=0; i<(sizeof fonts)/(sizeof *fonts); i++) {
             if(!fonts[i])
                 return;
-            setFont(fonts[i]);
-            lw1 = getTextWidth(label1.c_str());
-            lw2 = getTextWidth(label2.c_str());
+            int ht = fonts[i];
+            draw_set_font(ht);
+            lw1 = draw_text_width(label1.c_str());
+            lw2 = draw_text_width(label2.c_str());
 
             int x1 = -w/2+lw1, y12 = -h/2+fth[i];
             int x2 = w/2-lw2;
@@ -763,15 +674,18 @@ struct gauge : public display_item {
             if(r1_2 > mr || r2_2 > mr)
                 break;
         }
-        drawText(x, y, label1.c_str());
-        drawText(x+w-lw2, y, label2.c_str());
+        draw_text(x, y, label1.c_str());
+        draw_text(x+w-lw2, y, label2.c_str());
     }
 
     virtual void render() {
         render_label();
+        draw_color(BLUE);
         render_dial();
-        render_ring();
+        draw_color(GREY);
         render_ticks(w > 60);
+        draw_color(WHITE);
+        render_ring();
     }
 
     text_display &text;
@@ -793,34 +707,17 @@ struct wind_direction_gauge : public gauge {
         // now compute true wind from apparent
         // render true wind indicator near ring
         uint32_t t = millis() - 5000;
-        if( display_data[WIND_DIRECTION].time > t &&
-            display_data[WIND_SPEED].time > t &&
-            display_data[GPS_SPEED].time > t &&
-            display_data[GPS_HEADING].time > t) {
-            float wind = display_data[WIND_SPEED].value;
-            float windd = display_data[WIND_DIRECTION].value;
-            float rad = deg2rad(windd);
-            float kts = display_data[GPS_SPEED].value;
-            float ax = cos(rad)*kts;
-            float ay = sin(rad)*kts;
-            float track = display_data[GPS_HEADING].value;
-            rad = deg2rad(track);
-            float bx = cos(rad)*kts;
-            float by = sin(rad)*kts;
-
-            float tx = ax + bx;
-            float ty = ay + by;
-
-            float tws = hypot(tx, ty);
-            float twd = atan2(ty, tx);
+        float twd = display_data[TRUE_WIND_DIRECTION].value;
+        if(!isnan(twd)) {
             float s = sin(twd), c = cos(twd);
 
             int x0 = s*r, y0 = c*r;
             int x1 = x0*8/10, y1 = y0*8/10;
             int xp = c*3, yp = s*3;
-            drawTriangle(xc + x0 - xp, yc + y0 - yp,
-                         xc + x1, yc + y1,
-                         xc + x0 + xp, yc + y0 + yp);
+            draw_color(GREEN);
+            draw_triangle(xc + x0 - xp, yc + y0 - yp,
+                          xc + x1, yc + y1,
+                          xc + x0 + xp, yc + y0 + yp);
         }
     }
 };
@@ -848,7 +745,7 @@ struct heading_gauge : public gauge {
             int x1 = (c*x - s*y)*r + xc;
             int y1 = (c*y + s*x)*r + yc;
             if(i>0)
-                drawThickLine(x1, y1, lx, ly, lw);
+                draw_thick_line(x1, y1, lx, ly, lw);
 
             lx = x1;
             ly = y1;
@@ -931,7 +828,7 @@ struct history_display : public display_item {
             digits = 0;
         } else {
             // extend range slightly
-            float rng = amaxv - aminv;
+            float rng = high - low;
             maxv = high + rng/8;
             minv = low - rng/8;
         }
@@ -942,7 +839,7 @@ struct history_display : public display_item {
         uint32_t lastt;
         int cnt = 0;
         uint32_t totals = totalmillis / 1000; // avoid overflowing uint32 by just using seconds`
-        for(std::list<history_element>::iterator it = data.begin(); it!=data.end(); it++) {
+        for(std::list<history_element>::iterator it = data->begin(); it!=data->end(); it++) {
             int xp = w - (time - it->time) / 1000 * w / totals;
             int yp = h - (it->value - minv) * h / range;
 
@@ -950,7 +847,7 @@ struct history_display : public display_item {
                 break;
             if(lxp >= 0) {
                 if(xp - lxp < 3)
-                    drawLine(x+lxp, y+lyp, x+xp, y+yp);
+                    draw_line(x+lxp, y+lyp, x+xp, y+yp);
 //              if(abs(lxp - xp) > 100)
                     //printf("BADLINE ! %d %d %d %d %d %d %\n", cnt++, it->time, lastt, xp, lxp, yp, lyp);
             }
@@ -960,25 +857,52 @@ struct history_display : public display_item {
         }
 
         //render scale
-        setFont(u8g2_font_helvB08_tf);
-        drawText(x, y, String(maxv, digits).c_str());
-        drawText(x, y+h/2-4, String((minv+maxv)/2, digits).c_str());
-        drawText(x, y+h-8, String(minv, digits).c_str());
+        int ht = 8;
+        draw_set_font(ht);
+        draw_text(x, y, String(maxv, digits).c_str());
+        draw_text(x, y+h/2-4, String((minv+maxv)/2, digits).c_str());
+        draw_text(x, y+h-8, String(minv, digits).c_str());
 
-        String history_label = getHistoryLabel((history_range_e)r);
-        int sw = getTextWidth(history_label.c_str());
-        drawText(x+w-sw, y, history_label.c_str());
+        String history_label = history_get_label((history_range_e)history_display_range);
+        int sw = draw_text_width(history_label.c_str());
+        draw_text(x+w-sw, y, history_label.c_str());
         text.render();
 
         if(h > 100) {
             String minmax = "low: " + String(low, digits) + "  high: " + String(high, digits);
-            int sw = getTextWidth(minmax.c_str());
-            drawText(x+(w-sw)/2, y+15, minmax.c_str());
+            int sw = draw_text_width(minmax.c_str());
+            draw_text(x+(w-sw)/2, y+15, minmax.c_str());
         }
     }
 
     text_display &text;
     bool min_zero, inverted;
+};
+
+/// make a grid display with wind min max??
+struct stat_display : public grid_display {
+    stat_display(display_item_e _item) : item(_item) {
+        add(new float_text_display(item, "High", high, 1))
+        add(new float_text_display(item, "Low", low, 1))
+    }
+
+    void render() {
+        uint32_t total;
+        history_find(item, history_display_range, total, high, low)
+        grid_display::render();
+
+        int ht = 8;
+        draw_set_font(ht);
+
+        // render timescale in upper right
+        String history_label = history_get_label((history_range_e)history_display_range);
+        int sw = draw_text_width(history_label.c_str());
+        draw_text(x+w-sw, y, history_label.c_str());
+        text.render();
+    }
+
+    display_item_e item;
+    float high, low;
 };
 
 struct route_display : public display_item {
@@ -987,9 +911,9 @@ struct route_display : public display_item {
         float scog = display_data[GPS_HEADING].value;
         float course_error = resolv(route_info.target_bearing - scog);
         int p = course_error/(w/20);
-        drawLine(x+w/2+p-w/8, y, x+w/2-w/4, y+h);
-        drawLine(x+w/2+p+w/8, y, x+w/2+w/4, y+h);
-        drawLine(x+w/2+p,     y, x+w/2,     y+h);
+        draw_line(x+w/2+p-w/8, y, x+w/2-w/4, y+h);
+        draw_line(x+w/2+p+w/8, y, x+w/2+w/4, y+h);
+        draw_line(x+w/2+p,     y, x+w/2,     y+h);
     }
 };
 
@@ -1020,17 +944,17 @@ struct ais_ships_display : public display_item {
     void render_ring(float rm) {
         int thick = r / 100;
         int ri = r*rm - thick*2;
-        drawCircle(xc, yc, ri, thick);
+        draw_circle(xc, yc, ri, thick);
     }
 
     void drawItem(const char *label, String text) {
         if(ty0 + tdy >= ty + th)
             return;
         int ly = ty+ty0;
-        int lw = tdyl ? 0 : getTextWidth(label);
+        int lw = tdyl ? 0 : draw_text_width(label);
         ty0 += tdyl;
 
-        int textw = getTextWidth(text.c_str());
+        int textw = draw_text_width(text.c_str());
         int scrolldist = textw - (tw-lw);
         if(scrolldist < 0)
             scrolldist = textw;
@@ -1038,28 +962,30 @@ struct ais_ships_display : public display_item {
             uint32_t mso = millis()/32;
             scrolldist = mso % scrolldist + tw-lw;
         }
-        drawText(tx+tw-scrolldist, ty+ty0, text.c_str());
+        draw_text(tx+tw-scrolldist, ty+ty0, text.c_str());
         ty0 += tdy;
 
-        drawText(tx, ly, label);
+        draw_text(tx, ly, label);
     }
 
     void render_text(ship *closest) {
-        setFont(u8g2_font_helvB08_tf);
+        int ht = 8;
+        draw_set_font(ht);
         // draw range in upper left corner
         String str = String(ships_range_table[ships_range], 1) + "NMi";
-        int textw = getTextWidth(str.c_str());
-        drawText(x+w-textw, y, str.c_str());
+        int textw = draw_text_width(str.c_str());
+        draw_text(x+w-textw, y, str.c_str());
 
-        setFont(u8g2_font_helvB10_tf);
-        drawText(x, y, "AIS");
+        ht = 10;
+        draw_set_font(ht);
+        draw_text(x, y, "AIS");
 
         ty0 = 0;
         tdy = 12;
         tdyl = tw > th ? 0 : tdy;
 
         if(!closest) {
-            drawText(tx, ty, "no target");
+            draw_text(tx, ty, "no target");
             return;
         }
 
@@ -1118,13 +1044,13 @@ struct ais_ships_display : public display_item {
             y *= r / rng;
 
             int x0 = xc + x, y0 = yc - y;
-            drawCircle(x0, y0, sr);
+            draw_circle(x0, y0, sr);
             
             float rad = deg2rad(ship.cog);
             float s = sin(rad), c = cos(rad);
             int x1 = x0 + s*rp, y1 = y0 - c*rp;
             x0 += s*sr, y0 -= c*sr;
-            drawLine(x0, y0, x1, y1);
+            draw_line(x0, y0, x1, y1);
         }
 
         render_text(closest);
@@ -1137,223 +1063,209 @@ struct ais_ships_display : public display_item {
     float range;
 };
 
-struct grid_display : public display {
-    grid_display(grid_display *parent=0, int _cols = 1, int _rows = -1)
-         : cols(_cols), rows(_rows) { if(parent) parent->add(this); }
+void grid_display::fit() {
+    if (cols == -1) {
+        rows = 1;
+        cols = items.size();
+    } else if (rows == -1) {
+        rows = items.size()/cols;
+        if(items.size()%cols)
+            rows++;
+    }
 
-    void fit() {
-        if (cols == -1) {
-            rows = 1;
-            cols = items.size();
-        } else if (rows == -1) {
-            rows = items.size()/cols;
-            if(items.size()%cols)
-                rows++;
-        }
+    if(rows == 0)
+        h = 0;
+    if(cols == 0)
+        w = 0;
+    if(!w || !h) {
+        printf("warning:  empty grid display");
+        return;
+    }
 
-        if(rows == 0)
-            h = 0;
-        if(cols == 0)
-            w = 0;
-        if(!w || !h) {
-            printf("warning:  empty grid display");
-            return;
-        }
+    // adjust items to fit in grid
+    int min_row_height = 10;
+    int min_col_width = 10;
 
-        // adjust items to fit in grid
-        int min_row_height = 10;
-        int min_col_width = 10;
-
-        int row_height[rows] = {0};
-        int col_width[cols] = {0};
-        bool col_expanding[cols] = {0};
-        int remaining_height = h, remaining_rows = 0;
-        std::list<display*>::iterator it;
+    int row_height[rows] = {0};
+    int col_width[cols] = {0};
+    bool col_expanding[cols] = {0};
+    int remaining_height = h, remaining_rows = 0;
+    std::list<display*>::iterator it;
         
-        it = items.begin();
-        for (int i = 0; i < rows && it!=items.end(); i++) {
-            row_height[i] = 0;
-            bool row_expanding = false;
-            for (int j = 0; j < cols; j++) {
-                if((*it)->h > row_height[i])
-                    row_height[i] = (*it)->h;
-                if((*it)->w > col_width[j])
-                    col_width[j] = (*it)->w;
-                if((*it)->expanding) {
-                     row_expanding = true;
-                     col_expanding[j] = true;
-                }
-                if (++it == items.end())
-                    break;
-            }
-
-            if(!row_height[i]) {
-                if (!row_expanding)
-                    row_height[i] = min_row_height;
-                else
-                    remaining_rows++;
-            }
-            remaining_height -= row_height[i];
-        }
-
-        // distribute remaining height to rows with non-text displays
-        if(remaining_rows) {
-            remaining_height /= remaining_rows;
-            for (int i = 0; i < rows; i++) {
-                if (!row_height[i])
-                    row_height[i] = remaining_height;
-            }
-        }
-
-        // distribute remaining column width
-        int remaining_width = w, remaining_cols = 0;
+    it = items.begin();
+    for (int i = 0; i < rows && it!=items.end(); i++) {
+        row_height[i] = 0;
+        bool row_expanding = false;
         for (int j = 0; j < cols; j++) {
-            if(!col_width[j]) {
-                if(!col_expanding[j])
-                    col_width[j] = min_col_width;
-                else
-                    remaining_cols++;
+            if((*it)->h > row_height[i])
+                row_height[i] = (*it)->h;
+            if((*it)->w > col_width[j])
+                col_width[j] = (*it)->w;
+            if((*it)->expanding) {
+                row_expanding = true;
+                col_expanding[j] = true;
             }
-            remaining_width -= col_width[j];
+            if (++it == items.end())
+                break;
         }
 
-        if(remaining_cols) {
-            remaining_width /= remaining_cols;
-            for (int j = 0; j < cols; j++)
-                if(!col_width[j])
-                    col_width[j] = remaining_width;
+        if(!row_height[i]) {
+            if (!row_expanding)
+                row_height[i] = min_row_height;
+            else
+                remaining_rows++;
         }
+        remaining_height -= row_height[i];
+    }
 
-        // now update expanding items with the row height and width
-        it = items.begin();
-        for (int i = 0; i < rows && it != items.end(); i++) {
-            for (int j = 0; j < cols; j++) {
-                if((*it)->expanding) {
-                    if(!(*it)->w)
-                        (*it)->w = col_width[j];
-                    if(!(*it)->h)
-                        (*it)->h = row_height[i];
-                    (*it)->fit(); // recursively fit
-                }
-                it++;
-                if (it == items.end())
-                    break;
-            }
+    // distribute remaining height to rows with non-text displays
+    if(remaining_rows) {
+        remaining_height /= remaining_rows;
+        for (int i = 0; i < rows; i++) {
+            if (!row_height[i])
+                row_height[i] = remaining_height;
         }
+    }
 
-        // now redistribute any free space back to non-expanding items
+    // distribute remaining column width
+    int remaining_width = w, remaining_cols = 0;
+    for (int j = 0; j < cols; j++) {
+        if(!col_width[j]) {
+            if(!col_expanding[j])
+                col_width[j] = min_col_width;
+            else
+                remaining_cols++;
+        }
+        remaining_width -= col_width[j];
+    }
 
-        // first find the row/col widths required from fit expanding items
-        for (int i = 0; i < rows; i++)
-            row_height[i] = 0;
+    if(remaining_cols) {
+        remaining_width /= remaining_cols;
         for (int j = 0; j < cols; j++)
-            col_width[j] = 0;
-        it = items.begin();
-        for (int i = 0; i < rows && it != items.end(); i++) {
-            for (int j = 0; j < cols; j++) {
-                if((*it)->h > row_height[i])
-                    row_height[i] = (*it)->h;
-                if((*it)->w > col_width[j])
-                    col_width[j] = (*it)->w;
-                it++;
-                if (it == items.end())
-                    break;
-            }
-        }
+            if(!col_width[j])
+                col_width[j] = remaining_width;
+    }
 
-        // now distribute remaining space into empty cols
-        remaining_width = w, remaining_cols = cols;
-        for (int j = 0; j < cols; j++)
-            if(col_width[j]) {
-                remaining_width -= col_width[j];
-                remaining_cols--;
-            }
-
-        if(remaining_cols) {
-            remaining_width /= remaining_cols;
-            for (int j = 0; j < cols; j++)
-                if(!col_width[j])
-                    col_width[j] = remaining_width;
-        } else
-            w -= remaining_width;
-
-        // now distribute remaining space into empty rows
-        remaining_height = h, remaining_rows = rows;
-        for (int i = 0; i < rows; i++)
-            if(row_height[i]) {
-                remaining_height -= row_height[i];
-                remaining_rows--;
-            }
-
-        if(remaining_rows) {
-            remaining_height /= remaining_rows;
-            for (int i = 0; i < rows; i++)
-                if(!row_height[i])
-                    row_height[i] = remaining_height;
-        } else
-            h -= remaining_height;
-
-        // now expand any items remaining to fit space and update coordinates
-        int item_y = y;
-        it = items.begin();
-        for (int i = 0; i < rows && it != items.end(); i++) {
-            int item_x = x;
-            for (int j = 0; j < cols; j++) {
-                (*it)->x = item_x;
-                (*it)->y = item_y;
+    // now update expanding items with the row height and width
+    it = items.begin();
+    for (int i = 0; i < rows && it != items.end(); i++) {
+        for (int j = 0; j < cols; j++) {
+            if((*it)->expanding) {
                 if(!(*it)->w)
                     (*it)->w = col_width[j];
                 if(!(*it)->h)
                     (*it)->h = row_height[i];
                 (*it)->fit(); // recursively fit
-                it++;
-                if (it == items.end())
-                    break;
-                item_x += col_width[j];
             }
-            item_y += row_height[i];
+            it++;
+            if (it == items.end())
+                break;
         }
-        /*
-        printf("FIT cols ");
-        for (int i = 0; i <  cols; i++)
-            printf("%d ", col_width[i]);
-        printf("\n");
-
-        printf("FIT rows ");
-        for (int i = 0; i < rows; i++)
-            printf("%d ", row_height[i]);
-        printf("\n");
-        */
     }
 
-    void render() {
+    // now redistribute any free space back to non-expanding items
+
+    // first find the row/col widths required from fit expanding items
+    for (int i = 0; i < rows; i++)
+        row_height[i] = 0;
+    for (int j = 0; j < cols; j++)
+        col_width[j] = 0;
+    it = items.begin();
+    for (int i = 0; i < rows && it != items.end(); i++) {
+        for (int j = 0; j < cols; j++) {
+            if((*it)->h > row_height[i])
+                row_height[i] = (*it)->h;
+            if((*it)->w > col_width[j])
+                col_width[j] = (*it)->w;
+            it++;
+            if (it == items.end())
+                break;
+        }
+    }
+
+    // now distribute remaining space into empty cols
+    remaining_width = w, remaining_cols = cols;
+    for (int j = 0; j < cols; j++)
+        if(col_width[j]) {
+            remaining_width -= col_width[j];
+            remaining_cols--;
+        }
+
+    if(remaining_cols) {
+        remaining_width /= remaining_cols;
+        for (int j = 0; j < cols; j++)
+            if(!col_width[j])
+                col_width[j] = remaining_width;
+    } else
+        w -= remaining_width;
+
+    // now distribute remaining space into empty rows
+    remaining_height = h, remaining_rows = rows;
+    for (int i = 0; i < rows; i++)
+        if(row_height[i]) {
+            remaining_height -= row_height[i];
+            remaining_rows--;
+        }
+
+    if(remaining_rows) {
+        remaining_height /= remaining_rows;
+        for (int i = 0; i < rows; i++)
+            if(!row_height[i])
+                row_height[i] = remaining_height;
+    } else
+        h -= remaining_height;
+
+    // now expand any items remaining to fit space and update coordinates
+    int item_y = y;
+    it = items.begin();
+    for (int i = 0; i < rows && it != items.end(); i++) {
+        int item_x = x;
+        for (int j = 0; j < cols; j++) {
+            (*it)->x = item_x;
+            (*it)->y = item_y;
+            if(!(*it)->w)
+                (*it)->w = col_width[j];
+            if(!(*it)->h)
+                (*it)->h = row_height[i];
+            (*it)->fit(); // recursively fit
+            it++;
+            if (it == items.end())
+                break;
+            item_x += col_width[j];
+        }
+        item_y += row_height[i];
+    }
+    /*
+      printf("FIT cols ");
+      for (int i = 0; i <  cols; i++)
+      printf("%d ", col_width[i]);
+      printf("\n");
+
+      printf("FIT rows ");
+      for (int i = 0; i < rows; i++)
+      printf("%d ", row_height[i]);
+      printf("\n");
+    */
+}
+
+    void grid_display::render() {
         for (std::list<display *>::iterator it = items.begin(); it != items.end(); it++)
             (*it)->render();
     }
 
-    void add(display *item) {
+    void grid_display::add(display *item) {
         items.push_back(item);
     }
 
-    void getAllItems(std::list<display_item_e> &items_) {
+    void grid_display::getAllItems(std::list<display_item_e> &items_) {
         for (std::list<display *>::iterator it = items.begin(); it != items.end(); it++)
             (*it)->getAllItems(items_);
     }
 
-    int cols, rows;
-    std::list<display *> items;
-};
-
 int page_width = 160;
 int page_height = 240;
 
-static bool landscape = false;
-struct page : public grid_display {
-    page(String _description)
-    : description(_description) { w = page_width; h = page_height; cols = landscape ? 2 : 1; }
-
-    String description;
-};
+page::page(String _description) : description(_description) { w = page_width; h = page_height; cols = landscape ? 2 : 1; }
 
 // mnemonics for all possible displays
 #define WIND_DIR_T     new dir_angle_text_display(WIND_DIRECTION, true)
@@ -1361,10 +1273,11 @@ struct page : public grid_display {
 #define WIND_SPEED_T   new speed_text_display(WIND_SPEED)
 #define WIND_SPEED_G   new speed_gauge(WIND_SPEED_T)
 #define WIND_SPEED_H   new history_display(WIND_SPEED_T)
-#define WIND_STAT_TD   new wind_stat_display(WIND_STAT_T)
+#define WIND_SPEED_S   new stat_display(WIND_SPEED)
 
 #define PRESSURE_T     new pressure_text_display()
 #define PRESSURE_H     new history_display(PRESSURE_T, false)
+//#define PRESSURE_S     new stat_display(BAROMETRIC_PRESSURE)
 #define AIR_TEMP_T     new temperature_text_display(AIR_TEMPERATURE)
 
 #define COMPASS_T      new angle_text_display(COMPASS_HEADING)
@@ -1379,12 +1292,14 @@ struct page : public grid_display {
 #define GPS_SPEED_T    new speed_text_display(GPS_SPEED)
 #define GPS_SPEED_G    new speed_gauge(GPS_SPEED_T)
 #define GPS_SPEED_H    new history_display(GPS_SPEED_T)
+#define GPS_SPEED_S    new stat_display(GPS_SPEED)
 #define LATITUDE_T     new position_text_display(LATITUDE)
 #define LONGITUDE_T    new position_text_display(LONGITUDE)
 #define TIME_T         new time_text_display()
 
 #define DEPTH_T        new depth_text_display()
 #define DEPTH_H        new history_display(DEPTH_T)
+//#define DEPTH_S        new stat_display(DEPTH)
 
 #define RUDDER_ANGLE_T new dir_angle_text_display(RUDDER_ANGLE)
 #define RUDDER_ANGLE_G new rudder_angle_gauge(RUDDER_ANGLE_T)
@@ -1392,17 +1307,18 @@ struct page : public grid_display {
 #define WATER_SPEED_T  new speed_text_display(WATER_SPEED)
 #define WATER_SPEED_G  new speed_gauge(WATER_SPEED_T)
 #define WATER_SPEED_H  new history_display( WATER_SPEED_T)
+#define WATER_SPEED_S  new stat_display(WATER_SPEED)
 #define WATER_TEMP_T   new temperature_text_display(WATER_TEMPERATURE)
 
 #define AIS_SHIPS_DISPLAY new ais_ships_display()
 
 struct pageA : public page {
-  pageA() : page("Wind gauges with pressure") {
+  pageA() : page("Wind gauges with stats") {
     add(WIND_DIR_G);
     grid_display *d = new grid_display(this, landscape ? 1 : 2);
     d->expanding = false;
     d->add(WIND_SPEED_G);
-    d->add(WIND_STAT_T);
+    d->add(WIND_STAT_D);
   }
 };
 
@@ -1412,7 +1328,7 @@ struct pageB : public page {
     grid_display *d = new grid_display(this);
     d->expanding = false;
     d->add(WIND_DIR_T);
-    d->add(WIND_STAT_T);
+    d->add(WIND_STAT_D);
   }
 };
 
@@ -1433,8 +1349,8 @@ struct pageD : public page {
 
     grid_display *t = new grid_display(this, landscape ? 3 : 1);
     t->expanding = false;
-    t->add(PRESSURE_T);
-    t->add(AIR_TEMP_T);
+    //t->add(PRESSURE_T);
+    //t->add(AIR_TEMP_T);
     t->add(COMPASS_T);
     if(landscape)
         t->add(RATE_OF_TURN_T);
@@ -1453,7 +1369,6 @@ struct pageE : public page {
     d->add(RATE_OF_TURN_T);
     d->add(PITCH_T);
     d->add(HEEL_T);
-//    d->add(PRESSURE_T);
   }
 };
 
@@ -1487,8 +1402,7 @@ struct pageH : public page {
     grid_display *d = new grid_display(this);
     d->expanding = false;
     d->add(GPS_HEADING_T);
-    d->add(LATITUDE_T);
-    d->add(LONGITUDE_T);
+    d->add(GPS_SPEED_S);
     d->add(TIME_T);
   }
 };
@@ -1624,14 +1538,11 @@ struct pageR : public page {
 };
 
 struct pageS : public page {
-  pageS() : page("lots of gauges") {
-    cols = landscape ? 3 : 2;
-    add(WIND_DIR_G);
-    add(WIND_SPEED_G);
-    add(COMPASS_G);
-    add(RUDDER_ANGLE_G);
-    add(GPS_HEADING_G);
-    add(GPS_SPEED_G);
+  pageS() : page("water and gps speed text") {
+    add(WATER_SPEED_T);
+    add(WATER_SPEED_S);
+    add(GPS_SPEED_T);
+    add(GPS_SPEED_S);
   }
 };
 
@@ -1739,7 +1650,7 @@ std::vector<page_info> display_pages;
 
 String ps = "page";
 char page_chr = 'A';
-void add(page* p) {
+static void add(page* p) {
     p->fit();
     pages.push_back(p);
     display_pages.push_back(page_info(page_chr, p->description));
@@ -1830,18 +1741,8 @@ void display_toggle()
 void display_setup()
 {
     pinMode(2, INPUT_PULLUP);  // strap for display
+
 #ifdef USE_U8G2    
-    u8g2.begin();
-    u8g2.enableUTF8Print();
-    u8g2.setFontPosTop();
-
-    cur_page='C'-'A';
-
-    pinMode(PWR_LED, OUTPUT);
-    digitalWrite(PWR_LED, LOW);
-
-    printf("setup rotation %d\n", rotation);
-
     switch(rotation) {
         case 0:
         case 2:
@@ -1856,23 +1757,12 @@ void display_setup()
             landscape = false;
         break;
     }
-
-    if(settings.mirror == 2)
-        settings.mirror = digitalRead(2);
-
-    if(settings.mirror)
-        rotation ^= 2;
-    switch(rotation) {
-        case 0: u8g2.setDisplayRotation(U8G2_R0); break;
-        case 1: u8g2.setDisplayRotation(U8G2_R1); break;
-        case 2: u8g2.setDisplayRotation(U8G2_R2); break;
-        case 3: u8g2.setDisplayRotation(U8G2_R3); break;
-    };        
-
-    settings.mirror = 0;
-    if(settings.mirror)
-        u8g2.setFlipMode(true);
 #endif
+    pinMode(PWR_LED, OUTPUT);
+    digitalWrite(PWR_LED, LOW);
+
+    draw_setup(rotation);
+    cur_page='C'-'A';
 
     for(int i=0; i<pages.size(); i++)
         delete pages[i];
@@ -1943,45 +1833,49 @@ void display_change_page(int dir)
     printf("warning, all pages disabled, enabling first page"); 
 }
 
-void display_change_scale()
+void display_menu_scale()
 {
-    if(++history_display_range == RANGE_COUNT)
-        history_display_range = 0;
+    if(in_menu)
+        menu_select();
+    else {
+        if(++history_display_range == HISTORY_RANGE_COUNT)
+            history_display_range = 0;
 
-    if(++ships_range >= (sizeof ships_range_table) / (sizeof *ships_range_table))
-        ships_range = 0;
+        if(++ships_range >= (sizeof ships_range_table) / (sizeof *ships_range_table))
+            ships_range = 0;
+    }
 }
 
 static void render_status()
 {
-#ifdef USE_U8G2
-    u8g2.setFont(u8g2_font_helvB08_tf);
+    int ht = 8;
+    draw_set_font(ht);
+
     int y = page_height;
     char wifi[] = "WIFI";
     if (WiFi.status() == WL_CONNECTED)
-        drawText(0, y, wifi);
+        draw_text(0, y, wifi);
 
-    int x = getTextWidth(wifi) + 15;
+    int x = draw_text_width(wifi) + 15;
     // show data source
     uint32_t t0 = millis();
     
     for(int i = 0; i<DATA_SOURCE_COUNT; i++) {
         uint32_t dt = t0 - data_source_time[i];
         if(dt < 5000) {
-            drawText(x, y, source_name[i]);
-            x += getTextWidth(source_name[i]) + 5;
+            draw_text(x, y, source_name[i]);
+            x += draw_text_width(source_name[i]) + 5;
             if(i==WIFI_DATA)
-                drawText(x, y, get_wifi_data_str().c_str());
+                draw_text(x, y, get_wifi_data_str().c_str());
         }
     }
 
     // show page letter
     char letter[] = "A";
     letter[0] += cur_page;
-    int w = getTextWidth(letter);
+    int w = draw_text_width(letter);
 
-    drawText(page_width - w, y, letter);
-#endif
+    draw_text(page_width - w, y, letter);
 }
 
 void data_timeout()
@@ -1994,94 +1888,58 @@ void data_timeout()
         }
 }
 
-#ifdef USE_U8G2
-void display_render()
+#ifdef USE_U8G2 || USE_LVGL
+
+void display_poll()
 {
+    uint32_t t0 = millis();
+    static uint32_t last_render;
+    if(t0-last_render < 200)
+        return;
+    last_render = t0;
+
+    
     read_analog_pins();
 
-    u8g2.setContrast(160 + settings.contrast);
-    uint32_t t0 = millis();
-
+    draw_clear(display_on);
     if(!display_on) {
-        u8g2.clearBuffer();
-        u8g2.sendBuffer();
+        draw_send_buffer();
         return;
     }
 
-    if(settings.invert) {
-        u8g2.setDrawColor(1);
-        u8g2.drawBox(0, 0, page_width, page_height);
-        u8g2.setDrawColor(0);
-    } else {
-        u8g2.clearBuffer();
-        u8g2.setDrawColor(1);
-    }
-    
+    draw_color(WHITE);
     uint32_t t1 = millis();
 
-    setFont(u8g2_font_helvB14_tf);
-
     if (wifi_ap_mode) {
-        drawText(0, 0, "WIFI AP");
+        int ht = 14;
+        draw_set_font(ht);
+        draw_text(0, 0, "WIFI AP");
 
-        drawText(0, 20, "pypilot_mfd");
-        drawText(0, 60, "http://wind.local");
+        draw_text(0, 20, "pypilot_mfd");
+        draw_text(0, 60, "http://wind.local");
 
         char buf[16];
         snprintf(buf, sizeof buf, "Version %.2f", VERSION);
-        drawText(0, 100, buf);
+        draw_text(0, 100, buf);
         
-        u8g2.sendBuffer();
+        draw_send_buffer();
         return;
     }
 
     data_timeout();
     uint32_t t2 = millis();
 
-    pages[cur_page]->render();
+    if(in_menu)
+        menu_render();
+    else
+        pages[cur_page]->render();
+
     if(settings.show_status)
         render_status();
 
     uint32_t t3 = millis();
 
-    u8g2.sendBuffer();
-
-    uint32_t t4 = millis();
-    //Serial.printf("render took %d %d %d %d\n", t1-t0, t2-t1, t3-t2, t4-t3);
-}
-#endif
-
-#ifdef USE_LVGL
-void display_render()
-{
-    read_analog_pins();
-
-    if(!display_on) {
-        return;
-    }
-
-    if(settings.invert) {
-        //???
-    }
-    
-    uint32_t t1 = millis();
-    if (wifi_ap_mode) {
-        // show wifi info
-        return;
-    }
-
-    data_timeout();
-
-    uint32_t t2 = millis();
-
-    pages[cur_page]->render();
-    if(settings.show_status)
-        render_status();
-
-    uint32_t t3 = millis();
-
-    //u8g2.sendBuffer();
-
+    draw_send_buffer();
     uint32_t t4 = millis();
     //Serial.printf("render took %d %d %d %d\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
@@ -2106,12 +1964,10 @@ void display_setup() {
     tft.setTextSize(1);
 }
 
-void display_render() {
+void display_poll() {
     static bool last_wifi_ap_mode;
     if (wifi_ap_mode != last_wifi_ap_mode) {
         tft.fillScreen(TFT_BLACK);
-
-
         last_wifi_ap_mode = wifi_ap_mode;
     }
     if (wifi_ap_mode) {
@@ -2132,9 +1988,9 @@ void display_render() {
 
     tft.drawEllipse(67, 67, 67, 67, WHITE);
 
-    if (lpdir >= 0) {
+    if (lpwind_dir >= 0) {
         const uint8_t xc = 67, yc = 67, r = 64;
-        float wind_rad = deg2rad(lpdir);
+        float wind_rad = deg2rad(lpwind_dir);
         int x = r * sin(wind_rad);
         int y = -r * cos(wind_rad);
         int s = 4;
@@ -2154,7 +2010,7 @@ void display_render() {
         nyp = (yp + 15 * nyp) / 16;
         xp = xc + nxp - 31, yp = yc + nyp - 20;
 
-        snprintf(buf, sizeof buf, "%03d", (int)lpdir);
+        snprintf(buf, sizeof buf, "%03d", (int)lpwind_dir);
 
         tft.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], WHITE);
 
@@ -2162,7 +2018,7 @@ void display_render() {
     }
 
     float iknots;
-    float iknotf = 10 * modff(knots, &iknots);
+    float iknotf = 10 * modff(wind_knots, &iknots);
 
     snprintf(buf, sizeof buf, "%02d.%d", (int)iknots, (int)iknotf);
     tft.drawString(buf, 0, 150, 6);

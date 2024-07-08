@@ -18,7 +18,7 @@
 #define KEY_UP_IO 35
 #endif
 
-enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
+enum wireless_data_e {NMEA_PYPILOT, NMEA_SIGNALK, NMEA_CLIENT, NMEA_SERVER, SIGNALK};
 
 struct settings_t {
     String magic;
@@ -39,12 +39,16 @@ struct settings_t {
 
     uint16_t transmitter_count;
 
-    bool compensate_accelerometer;
+    bool compensate_wind_with_accelerometer;
+    bool compute_true_wind_from_gps;
+    bool compute_true_wind_from_water;
 
     //display
     bool use_360, use_fahrenheit, use_inHg, use_depth_ft;
     String lat_lon_format;
+
     bool invert;
+    String color_scheme;
     int contrast, backlight;
     bool show_status;
     int rotation; // 0-3 are set, 4 is auto
@@ -53,6 +57,45 @@ struct settings_t {
 
     String enabled_pages;
 
+    // alarms
+    bool anchor_alarm;
+    int anchor_alarm_distance; // meters
+
+    bool course_alarm;
+    int course_alarm_course;
+    int course_alarm_error;
+
+    bool gps_speed_alarm;
+    int gps_speed_alarm_knots;
+
+    bool wind_speed_alarm;
+    int wind_speed_alarm_knots;
+
+    bool water_speed_alarm;
+    int water_speed_alarm_knots;
+    
+    bool weather_alarm_pressure;
+    int weather_alarm_min_pressure;
+    bool weather_alarm_pressure_rate;
+    int weather_alarm_pressure_rate_value; // in mbar/min
+    bool weather_alarm_lightning;
+    int weather_alarm_lightning_distance; // in NMi
+
+    bool depth_alarm;
+    int depth_alarm_min;
+    bool depth_alarm_rate;
+    int depth_alarm_rate_value; // in m/min
+
+    bool ais_alarm;
+    int ais_alarm_cpa;  // in NMi
+    int ais_alarm_tcpa; // in minutes
+    
+    bool pypilot_alarm_noconnection;
+    bool pypilot_alarm_fault;
+    bool pypilot_alarm_no_imu;
+    bool pypilot_alarm_no_motor_controller;
+    bool pypilot_alarm_lost_mode;
+    
     // cache mdns 
     String pypilot_addr, signalk_addr;
     int signalk_port;
@@ -61,7 +104,7 @@ struct settings_t {
 
 enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
 
-bool settings_load();
-bool settings_store();
+void settings_load();
+void settings_store();
 
 extern settings_t settings;
