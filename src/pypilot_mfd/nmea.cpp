@@ -60,7 +60,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
     //printf("parse line %d %s\n", source, line);
     // check checksum
     int len=strlen(line);
-    if(len < 10 && len < 180)
+    if(len < 10 || len > 180)
         return false;
 
     // ensure line starts with $ or !

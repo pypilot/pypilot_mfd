@@ -31,6 +31,8 @@ struct SerialLinebuffer {
                 return data;
             }
             buf += (char)c;
+            if(buf.length() > 180)
+                buf = "";
         }
     }
 
