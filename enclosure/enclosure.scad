@@ -1,6 +1,6 @@
-$fn=120;
+    $fn=120;
 
-use_threads = true;
+use_threads = true     ;
 use_holes = false;
 
 length = 124;
@@ -35,10 +35,10 @@ module box() {
         translate([-board_length/2,-board_width/2,bthickness])
         cube([board_length, board_width, height+bthickness]);
         translate([-board_length/2,-board_width/2-board_off,bthickness])
-        cube([board_length, board_width, height-bthickness-1]);
+        cube([board_length, board_width, height-bthickness-2]);
     
         // usb port
-        if(1) {
+        if(use_holes) {
         translate([5,-5-board_off,0])
             cylinder(r=6.5, h=40, center=true);
         
@@ -55,14 +55,12 @@ module box() {
         translate([0,+1,-1])
         screws();
         
-        if(use_holes)
-            holes();
         // keypad ribbon
         translate([connoff,pane[1]/2-9,4])
           cube([conn[0], conn[1], height]);
         // wifi antenna area
         translate([10,pane[1]/2-9,5])
-          cube([45, 8, height-pane[2]-3   ]);
+          cube([45, 5, height-pane[2]-3   ]);
         
         translate([-board_length/2-thickness-3, 0, height/2])
         rotate([0, -90, 0])
@@ -100,49 +98,24 @@ module corner_groove() {
             circle(r=gasket_d/2);
 }
 
-module holea()
-{
-        translate([0,0,height/2])
-            rotate([90,0,0])
-                cylinder(r=height/2-2, h=width+1, center=true);
-}
-
-module holeb()
-{
-        translate([0,0,height/2])
-            rotate([0,90,0])
-                cylinder(r=height/2-2, h=length+1, center=true);
-}
-
-module holes()
-{
-    translate([32,0,0])
-        holea();
-    translate([-32,0,0])
-        holea();
-        holea();
-    translate([0,16,0])
-        holeb();
-    translate([0,-16,0])
-        holeb();
-}
-
 module screw(r) {
     translate([0,0,28])
      cylinder(r1=r, r2=4, h=3);
      cylinder(r=r, h=28);
-     cylinder(r=3.5, h=4, $fn=6);
+     cylinder(r=3.3, h=4, $fn=6);
 }
 
-module screws(r=1.6) {
+module screws(r=1.65) {
     all() {
-        translate([length/2+thickness*.55, 0, -.1])
+        translate([length/2+thickness*.57, 0, -.1])
+        rotate(30)
             screw(r);
-        translate([length/2+thickness*.55, width*.35, -.1])
+        translate([length/2+thickness*.57, width*.35, -.1])
+            rotate(30)
             screw(r);
-        translate([length*.4,width/2+thickness*.55, -.1])
+        translate([length*.4,width/2+thickness*.57, -.1])
             screw(r);
-        translate([length*.15, width/2+thickness*.55, -.1])
+        translate([length*.15, width/2+thickness*.57, -.1])
             screw(r);
     }
 }
@@ -167,7 +140,7 @@ module support()
         translate([length*.2, width/2])
             cylinder(r=sr, h=5);
         translate([-length*.6, -width/2])
-            cylinder(r=sr, h=4);
+            cylinder(r=sr, h=5);
    }
        hull() {
         translate([length*.7, width/2])
