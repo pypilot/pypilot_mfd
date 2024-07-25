@@ -17,9 +17,10 @@
 
 bool in_menu;
 
-
 void selectFont(int &wt, int &ht, String str) {
     // based on width and height determine best font
+    if(ht > 40) ht = 40;
+
     int height = ht;
     for(;;) {
         if(!draw_set_font(ht))
@@ -35,22 +36,19 @@ void selectFont(int &wt, int &ht, String str) {
 }
 
 struct menu_label : public display {
-    menu_label(String _str) : label(_str) { /* expanding = false */ }
+    menu_label(String _str, int _h=0) : label(_str) { expanding = false; h=_h; }
     void render() {
         // try to fit text along side label
         int wt = w, ht = h;
         selectFont(wt, ht, label.c_str());
 
         // center text
-        int yp = y - ht/2;
-        int xp = x - wt/2;
+        int yp = y + h/2 - ht/2;
+        int xp = x + w/2 - wt/2;
         draw_text(xp, yp, label.c_str());
     }
 
-    const uint8_t *label_font;
     int wt, ht;
-    int label_w, label_h;
-    bool centered; // currently means centered over x (and no label)  maybe should change this
     String label;
 };
 
@@ -78,8 +76,8 @@ struct menu : public page
         position = 0;
         cols = 1; // 1 column for menu
         have_back = false;
-        add(new menu_label(n));
-        menu_items = new grid_display(this, landscape ? 1 : 2);
+        add(new menu_label(n, h/4));
+        menu_items = new grid_display(this, 1);
     }
 
     void add_item(menu_item *item) {
@@ -93,15 +91,18 @@ struct menu : public page
 
     void render() {
         if(!have_back) {
-            add(new menu_item_menu("Back", parent));
+            add_item(new menu_item_menu("Back", parent));
             have_back = true;
+            fit();
         }
         page::render();
         std::list<display*>::iterator it = menu_items->items.begin();
         std::advance(it, position);
         display *selected = *it;
+        draw_invert(1);
         // todo: invert or draw box?
-        draw_line(selected->x, selected->y, selected->x+selected->w, selected->y+selected->h);
+        draw_box(selected->x, selected->y, selected->w, selected->h);
+        draw_invert(0);
     }
 
     void select() {
@@ -122,12 +123,21 @@ struct menu : public page
 
 struct menu_item_bool : public menu_item
 {
-    menu_item_bool(String n, bool &s) : menu_item(n), setting(s) {}
+    menu_item_bool(String n, bool &s) : menu_item(n), setting(s) { }
     bool &setting;
     void render() {
-        menu_label::render();
+        // try to fit text along side label
+        int wt = w - h, ht = h;
+        selectFont(wt, ht, label.c_str());
+//        printf("select font %d %d %d %d %s\n", w, h, wt, ht, label.c_str());
+
+        // center text
+        int yp = y + h/2 - ht/2;
+        int xp = x + h + (w-h)/2 - wt/2;
+        draw_text(xp, yp, label.c_str());
+
         if(setting)
-            draw_circle(x, y, 12, 2);
+            draw_circle(x+h/2+2, y+h/2, h/2-5, 2);
     }
 
     void select() { setting = !setting; }
@@ -239,6 +249,7 @@ struct speed_alarm_display : public display
 {
     speed_alarm_display(alarm_e _alarm) : alarm(_alarm) {}
 
+    // render both history and gauge showing alarm min/max
     void render() {
         switch(alarm) {
         case GPS_SPEED_ALARM:
@@ -254,20 +265,21 @@ struct speed_alarm_display : public display
 
 struct speed_alarm_menu : public alarm_menu
 {
-    speed_alarm_menu(alarm_e alarm, bool &speed_alarm, int &speed) : alarm_menu(alarm) {
+    speed_alarm_menu(alarm_e alarm, bool &speed_alarm, int &min_speed, int &max_speed) : alarm_menu(alarm) {
         add(new speed_alarm_display(alarm));
         add_item(new menu_item_bool("Enable", speed_alarm));
-        add_item(new menu_item_int("Max Speed", speed, 10, 40, 5));
+        add_item(new menu_item_int("Min Speed", min_speed, 0, 40, 1));
+        add_item(new menu_item_int("Max Speed", max_speed, 1, 40, 1));
     }
 };
 
 struct weather_alarm_menu : public alarm_menu
 {
     weather_alarm_menu() : alarm_menu(WEATHER_ALARM)    {
-        add_item(new menu_item_bool("Enable Min", settings.weather_alarm_pressure));
+        add_item(new menu_item_bool("Enable Min Pressure", settings.weather_alarm_pressure));
         add_item(new menu_item_int("Pressure", settings.weather_alarm_min_pressure, 900, 1020, 5));
-        add_item(new menu_item_bool("Enable Falling", settings.weather_alarm_pressure_rate));
-        add_item(new menu_item_int("Falling Rate (mbar/min)", settings.weather_alarm_pressure_rate_value, 1, 10, 1));
+        add_item(new menu_item_bool("Enable Falling Pressure", settings.weather_alarm_pressure_rate));
+        add_item(new menu_item_int("Falling Pressure Rate (mbar/min)", settings.weather_alarm_pressure_rate_value, 1, 10, 1));
         add_item(new menu_item_bool("Enable Lightning", settings.weather_alarm_lightning));
         add_item(new menu_item_int("Lightning Distance NMi", settings.weather_alarm_lightning_distance, 1, 20, 1));        
     }
@@ -279,7 +291,7 @@ struct depth_alarm_menu : public alarm_menu
         add_item(new menu_item_bool("Enable Min", settings.depth_alarm));
         add_item(new menu_item_int("Depth (m)", settings.depth_alarm_min, 1, 30, 1));
         add_item(new menu_item_bool("Depth Rate", settings.depth_alarm_rate));
-        add_item(new menu_item_int("Depth in (M/min)", settings.depth_alarm_rate_value, 1, 0, 1));
+        add_item(new menu_item_int("Depth in (M/min)", settings.depth_alarm_rate_value, 1, 10, 1));
     }
 };
 
@@ -288,7 +300,7 @@ struct pypilot_alarm_menu : public alarm_menu
     pypilot_alarm_menu() : alarm_menu(PYPILOT_ALARM)    {
         add_item(new menu_item_bool("No Connection", settings.pypilot_alarm_noconnection));
         add_item(new menu_item_bool("Over Temperature", settings.pypilot_alarm_fault));
-        add_item(new menu_item_bool("No IMU", settings.pypilot_alarm_noIMU));
+        add_item(new menu_item_bool("No IMU", settings.pypilot_alarm_no_imu));
         add_item(new menu_item_bool("No Motor Controller", settings.pypilot_alarm_no_motor_controller));
         add_item(new menu_item_bool("Lost Mode", settings.pypilot_alarm_lost_mode));
 /*
@@ -335,15 +347,24 @@ void menu_alarm(alarm_e alarm)
     curmenu = alarm_menus[alarm];
     in_menu = true;
 }
-    
+
+void menu_page(int dir)
+{
+    int count = curmenu->menu_items->items.size();
+    int pos = curmenu->position + dir;
+    if(pos < 0)
+        pos = count - 1;
+    else if(pos >= count)
+        pos = 0;
+    curmenu->position = pos;
+}
+
 void menu_select()
 {
-    if(!in_menu) {
-        in_menu = true;
-        return;
-    }
     curmenu->select();
     in_menu = !!curmenu;
+    if(!in_menu)
+        settings_store();
 }
 
 void menu_render()
@@ -354,14 +375,21 @@ void menu_render()
     curmenu->render();
 }
 
+void menu_reset()
+{
+    curmenu = NULL;
+    in_menu = false;
+}
+
 void menu_setup()
 {
     menu *alarms = new menu("Alarms");
+    alarms->cols = landscape ? 2 : 1;
     alarms->add_menu(new anchor_alarm_menu);
     alarms->add_menu(new course_alarm_menu);
-    alarms->add_menu(new speed_alarm_menu(GPS_SPEED_ALARM, settings.gps_speed_alarm, settings.gps_speed_alarm_knots));
-    alarms->add_menu(new speed_alarm_menu(WIND_SPEED_ALARM, settings.wind_speed_alarm, settings.wind_speed_alarm_knots));
-    alarms->add_menu(new speed_alarm_menu(WATER_SPEED_ALARM, settings.water_speed_alarm, settings.water_speed_alarm_knots));
+    alarms->add_menu(new speed_alarm_menu(GPS_SPEED_ALARM, settings.gps_speed_alarm, settings.gps_min_speed_alarm_knots, settings.gps_max_speed_alarm_knots));
+    alarms->add_menu(new speed_alarm_menu(WIND_SPEED_ALARM, settings.wind_speed_alarm, settings.wind_min_speed_alarm_knots, settings.wind_max_speed_alarm_knots));
+    alarms->add_menu(new speed_alarm_menu(WATER_SPEED_ALARM, settings.water_speed_alarm, settings.water_min_speed_alarm_knots, settings.water_max_speed_alarm_knots));
     alarms->add_menu(new weather_alarm_menu);
     alarms->add_menu(new depth_alarm_menu);
     alarms->add_menu(new pypilot_alarm_menu);
@@ -370,7 +398,7 @@ void menu_setup()
     settings_menu->add_item(new menu_item_bool("use 360 degrees", settings.use_360));
     settings_menu->add_item(new menu_item_bool("use fahrenheit", settings.use_fahrenheit));
     settings_menu->add_item(new menu_item_bool("use in Hg", settings.use_inHg));
-    settings_menu->add_item(new menu_item_bool("use depth_ft", settings.use_depth_ft));
+    settings_menu->add_item(new menu_item_bool("use depth ft", settings.use_depth_ft));
     std::vector<String> fmts{"degrees", "minutes", "seconds"};
     settings_menu->add_menu(new menu_choice("lat/lon format", fmts, settings.lat_lon_format));
 
@@ -385,7 +413,6 @@ void menu_setup()
 #endif
     //display->add_item(new menu_item_bool("Mirror", settings.mirror));
     display->add_item(new menu_item_bool("Show Status", settings.show_status));
-    
 
     main_menu = new menu("Main Menu");
     main_menu->add_menu(alarms);

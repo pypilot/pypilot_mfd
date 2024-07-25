@@ -25,7 +25,7 @@ struct wind_transmitter_t : sensor_transmitter_t {
 };
 
 struct air_transmitter_t : sensor_transmitter_t {
-  float pressure, temperature, rel_humidity, air_quality;
+  float pressure, temperature, rel_humidity, air_quality, battery_voltage;
 };
 
 struct water_transmitter_t : sensor_transmitter_t {

@@ -81,7 +81,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
         return ais_parse_line(line, source);
 
     const char *c1 = line+6;
-    if(prefix(line, "WMV")) {
+    if(prefix(line, "MWV")) {
         float dir, spd;
         char ref;
         if(sscanf(c1, ",%f,%c,%f,N", &dir, &ref, &spd) != 3)
@@ -112,6 +112,32 @@ bool nmea_parse_line(const char *line, data_source_e source)
         
         display_data_update(TRUE_WIND_DIRECTION, dir, source);
         display_data_update(TRUE_WIND_SPEED, spd, source);
+        return true;
+    }
+
+    if(prefix(line, "VWR") || prefix(line, "VWT")) {
+        float dir, spd;
+        char ref;
+        if(sscanf(c1, ",%f,%c,", &dir, &ref) != 3)
+            return false;
+
+        if(ref == 'L')
+            dir = -dir;
+        else if(ref != 'R')
+            return false;
+
+        const char *c5 = comma(c1, 4);
+        if(!c5) return false;
+        if(sscanf(c5, ",%f,N", &spd) != 1)
+            return false;
+
+        if(line[5] == 'T') {
+            display_data_update(WIND_DIRECTION, dir, source);
+            display_data_update(WIND_SPEED, spd, source);
+        } else {
+            display_data_update(TRUE_WIND_DIRECTION, dir, source);
+            display_data_update(TRUE_WIND_SPEED, spd, source);
+        }
         return true;
     }
     
@@ -622,6 +648,7 @@ static void write_nmea_server(const char *buf)
 
 void nmea_send(const char *buf)
 {
+    return;
     if(wifi_ap_mode)
         return;
     char buf2[64];

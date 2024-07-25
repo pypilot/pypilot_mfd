@@ -16,36 +16,39 @@
 #include "settings.h"
 #include "wireless.h"
 #include "accel.h"
+#include "menu.h"
 #include "buzzer.h"
 #include "utils.h"
 #include "keys.h"
 #include "alarm.h"
 
-
-void setup() {
+void setup()
+{
+    //delay(1000);
+    uint32_t t0 = millis();
     serial_setup();
-    Serial.println("pypilot_mfd");
+    printf("pypilot_mfd\n");
+    accel_setup();
 
     keys_setup();
+
+    settings_load();
     wireless_setup();
 
     mdns_setup();
     web_setup();
-    accel_setup();
-    printf("web setup complete\n");
-    //delay(200);  ///  remove this??
 
     int ss = CONFIG_ARDUINO_LOOP_STACK_SIZE;
     if (ss < 16384)
         printf("WARNING STACK TOO SMALL\n");
     printf("Stack Size %d\n", ss);
 
-    Serial.println("setup complete");
-
     alarm_setup();
+
     accel_read();
     display_setup();
-    printf("display setup complete\n");
+    menu_setup();
+    printf("display setup complete in %d, %d\n", t0, millis()-t0);
 
     //esp_log_level_set("*", ESP_LOG_NONE);
 }
@@ -55,14 +58,14 @@ void loop()
     uint32_t t0 = millis();
     wireless_poll();
     keys_poll();
-    serial_poll();
+//    serial_poll();
     nmea_poll();
-    signalk_poll();
-    pypilot_client_poll();
+//    signalk_poll();
+//    pypilot_client_poll();
     alarm_poll();
     buzzer_poll();
 
-    web_poll();
+//    web_poll();
 
     display_poll();
 

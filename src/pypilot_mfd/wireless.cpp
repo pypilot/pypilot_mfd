@@ -39,16 +39,17 @@ struct transmitters {
     T &update(uint8_t mac[6], bool &primary, float dir = 0) {
         uint64_t mac_int = mac_as_int(mac);
         uint32_t t = millis();
-        primary = cur_primary == mac_int;
         T& wt = macs[mac_int];
         if (macs.size() == 1)
             wt.position = PRIMARY;  // if there are no known transmitters assign it as primary, more likely to ignore another boat nearby
         if (!isnan(dir)) {
             if ((wt.position == PRIMARY) || (wt.position == SECONDARY && !cur_primary) || (wt.position == PORT && (dir > 200 && dir < 340)) || (wt.position == STARBOARD && (dir > 20 && dir < 160)))
                 cur_primary = mac_int;
-            if (primary)
-                cur_primary_time = t;
         }
+
+        primary = cur_primary == mac_int;
+        if (primary)
+            cur_primary_time = t;
         wt.t = t;
         if (t - cur_primary_time > 1000)
             cur_primary = 0;
@@ -84,7 +85,7 @@ struct air_packet_t {
     int16_t temperature;    // in 100th/deg C
     uint16_t rel_humidity;  // in 100th %
     uint16_t air_quality;   // in 100th %
-    uint16_t voltage; // in 100th of volts
+    uint16_t battery_voltage; // in 100th of volts
     uint16_t crc16;
 } __attribute__((packed));
 
@@ -121,6 +122,7 @@ void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 static void setup_wifi() {
     //wifi_ap_mode=true;
+    //printf("wifi mode %d\n", wifi_ap_mode);
     if (wifi_ap_mode) {
         //Set device in AP mode to begin with
         WiFi.mode(WIFI_AP);
@@ -140,7 +142,9 @@ static void setup_wifi() {
         Serial.println(WiFi.softAPmacAddress());
 
     } else {
-        WiFi.mode(WIFI_AP_STA);
+        //WiFi.mode(WIFI_AP_STA);
+        WiFi.mode(WIFI_STA);
+
         WiFi.onEvent(WiFiStationGotIP, SYSTEM_EVENT_STA_GOT_IP);
 
         if (settings.ssid) {
@@ -216,8 +220,10 @@ uint8_t rb_start, rb_end;
 SemaphoreHandle_t esp_now_sem;
 
 static void DataRecvWind(struct esp_now_data_t &data) {
-    if (data.len != sizeof(wind_packet_t))
+    if (data.len != sizeof(wind_packet_t)) {
         printf("received invalid wind packet %d\n", data.len);
+        return;
+    }
 
     uint16_t crc = crc16(data.data, data.len - 2);
     wind_packet_t *packet = (wind_packet_t *)data.data;
@@ -271,7 +277,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     wt.dir = resolv(dir + wt.offset);
     wt.knots = wind_knots;
 
-    if (!primary)
+    if (!primary) // this is not the primary sensor so we are done
         return;
 
     lowpass_direction(wt.dir);
@@ -292,6 +298,8 @@ static void DataRecvWind(struct esp_now_data_t &data) {
             signalk_send("environment.wind.angleApparent", M_PI / 180.0f * lpwind_dir);
         signalk_send("environment.wind.speedApparent", wind_knots * .514444f);
     }
+
+    //printf("WIND DATA %f %f\n", wind_knots, lpwind_dir);
 
     display_data_update(WIND_SPEED, wind_knots, ESP_DATA);
     if (!isnan(lpwind_dir))
@@ -316,6 +324,7 @@ static void DataRecvAir(struct esp_now_data_t &data) {
     wt.rel_humidity = packet->rel_humidity * .01f;
     wt.temperature = packet->temperature * .01f;
     wt.air_quality = packet->air_quality * .01f;
+    wt.battery_voltage = packet->battery_voltage * .01f;
 
     if (!primary)
         return;
@@ -328,15 +337,17 @@ static void DataRecvAir(struct esp_now_data_t &data) {
     nmea_send(buf);
 
     if (settings.wifi_data == SIGNALK) {
-        signalk_send("environment.pressure", wt.pressure * 100000);
-        signalk_send("environment.relativeHumidity", wt.rel_humidity / 100);
-        signalk_send("environment.temperature", wt.temperature);
+        signalk_send("environment.outside.pressure", wt.pressure * 100000);
+        signalk_send("environment.outside.relativeHumidity", wt.rel_humidity / 100);
+        signalk_send("environment.outside.temperature", wt.temperature);
+        signalk_send("electrical.batteries.house.voltage", wt.battery_voltage);
     }
 
     display_data_update(BAROMETRIC_PRESSURE, wt.pressure, ESP_DATA);
     display_data_update(RELATIVE_HUMIDITY, wt.rel_humidity, ESP_DATA);
     display_data_update(AIR_TEMPERATURE, wt.temperature, ESP_DATA);
     display_data_update(AIR_QUALITY, wt.air_quality, ESP_DATA);
+    display_data_update(BATTERY_VOLTAGE, wt.battery_voltage, ESP_DATA);
 }
 
 static void DataRecvWater(struct esp_now_data_t &data) {
@@ -420,9 +431,10 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
         esp_now_data_t &pos = esp_now_rb[rb_start];
         memcpy(pos.mac, mac_addr, 6);
         pos.len = data_len;
-        if (data_len <= MAX_DATA_LEN)
+        if (data_len <= MAX_DATA_LEN) {
             memcpy(pos.data, data, data_len);
-        rb_start++;
+            rb_start++;
+        }
         xSemaphoreGive(esp_now_sem);
     } else
         printf("unable to get esp now semaphore");
@@ -453,6 +465,7 @@ static void InitESPNow() {
 }
 
 static void receive_esp_now() {
+    //printf("receive_esp_now %d %d\n", rb_start, rb_end);
     while (rb_start != rb_end) {
         if (xSemaphoreTake(esp_now_sem, (TickType_t)10) != pdTRUE)
             return;
@@ -515,6 +528,8 @@ void wireless_poll() {
 
     receive_esp_now();
 
+    if(!scanning)
+        return;
     uint32_t t = millis();
     if (t - scanning < 5000)
         return;
@@ -580,6 +595,7 @@ void wireless_toggle_mode() {
 }
 
 void wireless_setup() {
+    printf("wireless setup\n");
     memset(&chip, 0, sizeof(chip));
     for (int ii = 0; ii < 6; ++ii)
         chip.peer_addr[ii] = (uint8_t)0xff;
@@ -593,9 +609,8 @@ void wireless_setup() {
     // Init ESPNow with a fallback logic
     esp_now_sem = xSemaphoreCreateMutex();
 
-    InitESPNow();
-
     setup_wifi();
+    InitESPNow();
 }
 
 String position_str(sensor_position p)

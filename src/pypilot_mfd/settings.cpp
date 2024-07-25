@@ -38,10 +38,12 @@ static bool settings_load_suffix(String suffix="")
 {
     settings.usb_baud_rate = 115200;
 
-    if (!SPIFFS.begin(true))
+    if (!SPIFFS.begin(true)) {
         printf("SPIFFS Mount Failed\n");
-    else
-        listDir(SPIFFS, "/", 0);
+        return false;
+    }
+    
+    //    listDir(SPIFFS, "/", 0);
 
 
     //settings.channel = 6;
@@ -133,10 +135,16 @@ static bool settings_load_suffix(String suffix="")
     LOAD_SETTING(course_alarm_error, 20)
         
     LOAD_SETTING(gps_speed_alarm, false)
-    LOAD_SETTING(gps_speed_alarm_knots, 10)
-        
+    LOAD_SETTING(gps_min_speed_alarm_knots, 0)
+    LOAD_SETTING(gps_max_speed_alarm_knots, 10)
+
     LOAD_SETTING(wind_speed_alarm, false)
-    LOAD_SETTING(wind_speed_alarm_knots, 30)
+    LOAD_SETTING(wind_min_speed_alarm_knots, 0)
+    LOAD_SETTING(wind_max_speed_alarm_knots, 30)
+
+    LOAD_SETTING(water_speed_alarm, false)
+    LOAD_SETTING(water_min_speed_alarm_knots, 0)
+    LOAD_SETTING(water_max_speed_alarm_knots, 10)
 
     LOAD_SETTING(weather_alarm_pressure, false)
     LOAD_SETTING(weather_alarm_min_pressure, 980)
@@ -156,7 +164,7 @@ static bool settings_load_suffix(String suffix="")
         
     LOAD_SETTING(pypilot_alarm_noconnection, false)
     LOAD_SETTING(pypilot_alarm_fault, false)
-    LOAD_SETTING(pypilot_alarm_noIMU, false)
+    LOAD_SETTING(pypilot_alarm_no_imu, false)
     LOAD_SETTING(pypilot_alarm_no_motor_controller, false)
     LOAD_SETTING(pypilot_alarm_lost_mode, false)
 
@@ -241,10 +249,16 @@ static bool settings_store_suffix(String suffix="")
     STORE_SETTING(course_alarm_error)
         
     STORE_SETTING(gps_speed_alarm)
-    STORE_SETTING(gps_speed_alarm_knots)
-        
+    STORE_SETTING(gps_min_speed_alarm_knots)
+    STORE_SETTING(gps_max_speed_alarm_knots)
+
     STORE_SETTING(wind_speed_alarm)
-    STORE_SETTING(wind_speed_alarm_knots)
+    STORE_SETTING(wind_min_speed_alarm_knots)
+    STORE_SETTING(wind_max_speed_alarm_knots)
+
+    STORE_SETTING(water_speed_alarm)
+    STORE_SETTING(water_min_speed_alarm_knots)
+    STORE_SETTING(water_max_speed_alarm_knots)
 
     STORE_SETTING(weather_alarm_pressure)
     STORE_SETTING(weather_alarm_min_pressure)
@@ -260,7 +274,7 @@ static bool settings_store_suffix(String suffix="")
 
     STORE_SETTING(pypilot_alarm_noconnection)
     STORE_SETTING(pypilot_alarm_fault)
-    STORE_SETTING(pypilot_alarm_noIMU)
+    STORE_SETTING(pypilot_alarm_no_imu)
     STORE_SETTING(pypilot_alarm_no_motor_controller)
     STORE_SETTING(pypilot_alarm_lost_mode)
         

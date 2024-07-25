@@ -621,7 +621,7 @@ struct gauge : public display_item {
         // draw actual arrow toward wind direction
         float val = display_data[item].value;
         if (isnan(val)) {
-            printf("ISNAN%f\n", val);
+            //printf("ISNAN%f\n", val);
             return;
         }
 
@@ -879,6 +879,7 @@ struct history_display : public display_item {
     bool min_zero, inverted;
 };
 
+/*
 /// make a grid display with wind min max??
 struct stat_display : public grid_display {
     stat_display(display_item_e _item) : item(_item) {
@@ -904,7 +905,7 @@ struct stat_display : public grid_display {
     display_item_e item;
     float high, low;
 };
-
+*/
 struct route_display : public display_item {
     route_display() : display_item(ROUTE_INFO) {}
     void render() {
@@ -1318,7 +1319,7 @@ struct pageA : public page {
     grid_display *d = new grid_display(this, landscape ? 1 : 2);
     d->expanding = false;
     d->add(WIND_SPEED_G);
-    d->add(WIND_STAT_D);
+    d->add(WIND_SPEED_S);
   }
 };
 
@@ -1328,7 +1329,7 @@ struct pageB : public page {
     grid_display *d = new grid_display(this);
     d->expanding = false;
     d->add(WIND_DIR_T);
-    d->add(WIND_STAT_D);
+    d->add(WIND_SPEED_S);
   }
 };
 
@@ -1737,7 +1738,6 @@ void display_toggle()
     display_on = !display_on;
 }
 
-
 void display_setup()
 {
     pinMode(2, INPUT_PULLUP);  // strap for display
@@ -1804,12 +1804,18 @@ void display_setup()
 
 void display_change_page(int dir)
 {
+    if(in_menu) {
+        menu_page(dir);
+        buzzer_buzz(800, 20, 0);
+        return;
+    }
+
     if(dir == 0) {
         if(display_pages[cur_page].enabled)
             return;
         dir = 1;
     } else
-        buzzer_buzz(1000, 100, 0);
+        buzzer_buzz(500, 20, 0);
 
     int looped = 0;
     while(looped < 2) {

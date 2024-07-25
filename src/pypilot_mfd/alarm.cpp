@@ -10,6 +10,7 @@
 
 #include "alarm.h"
 #include "display.h"
+#include "ais.h"
 #include "pypilot_client.h"
 #include "utils.h"
 #include "settings.h"
@@ -90,7 +91,7 @@ static void alarm_poll_course()
         trigger(COURSE_ALARM);
 }    
 
-static void alarm_poll_speed(bool enabled, int speed_limit, display_item_e item, alarm_e alarm)
+static void alarm_poll_speed(bool enabled, int min_speed_limit, int max_speed_limit, display_item_e item, alarm_e alarm)
 {
     if(!enabled)
         return;
@@ -99,7 +100,7 @@ static void alarm_poll_speed(bool enabled, int speed_limit, display_item_e item,
     if(!display_data_get(item, speed))
         trigger(alarm, true);
 
-    if(speed > speed_limit)
+    if(speed < min_speed_limit && speed > max_speed_limit)
         trigger(alarm);
 }
 
@@ -142,13 +143,14 @@ static void alarm_poll_ais()
     if(!settings.ais_alarm)
         return;
 
+    uint32_t t = millis();
     for(std::map<int, ship>::iterator it = ships.begin(); it != ships.end(); it++) {
-        ship &ship = it->second;
+        ship &s = it->second;
 
-        if(t-ship.timestamp > 5*60) // out of date
+        if(t-s.timestamp > 5*60) // out of date
             return;
 
-        if(ship.cpa < settings.ais_alarm_cpa && ship.tcpa < settings.ais_alarm_tcpa*60)
+        if(s.cpa < settings.ais_alarm_cpa && s.tcpa < settings.ais_alarm_tcpa*60)
             trigger(AIS_ALARM);
     }
 }
@@ -171,13 +173,12 @@ void alarm_poll()
 {
     alarm_poll_anchor();
     alarm_poll_course();
-    alarm_poll_speed(settings.gps_speed_alarm, settings.gps_speed_alarm_knots,
-                     GPS_SPEED, GPS_SPEED_ALARM);
-    alarm_poll_speed(settings.wind_speed_alarm, settings.wind_speed_alarm_knots,
-                     WIND_SPEED, WIND_SPEED_ALARM);
-    alarm_poll_speed(settings.water_speed_alarm, settings.water_speed_alarm_knots,
-                     WATER_SPEED, WATER_SPEED_ALARM);
-
+    alarm_poll_speed(settings.gps_speed_alarm, settings.gps_min_speed_alarm_knots,
+                     settings.gps_max_speed_alarm_knots, GPS_SPEED, GPS_SPEED_ALARM);
+    alarm_poll_speed(settings.wind_speed_alarm, settings.wind_min_speed_alarm_knots,
+                     settings.wind_max_speed_alarm_knots, WIND_SPEED, WIND_SPEED_ALARM);
+    alarm_poll_speed(settings.water_speed_alarm, settings.water_min_speed_alarm_knots,
+                     settings.water_max_speed_alarm_knots, WATER_SPEED, WATER_SPEED_ALARM);
     alarm_poll_weather();
     alarm_poll_depth();
     alarm_poll_ais();

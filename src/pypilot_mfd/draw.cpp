@@ -73,6 +73,11 @@ void draw_line(int x1, int y1, int x2, int y2)
     u8g2.drawLine(x1, y1, x2, y2);
 }
 
+void draw_box(int x, int y, int w, int h)
+{
+    u8g2.drawBox(x, y, w, h);
+}
+
 void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3)
 {
     u8g2.drawTriangle(x1, y1, x2, y2, x3, y3);
@@ -120,6 +125,11 @@ void draw_color(color_e color)
     // ignored since monochrome
 }
 
+void draw_invert(bool on)
+{
+    u8g2.setDrawColor(on ? 2 : settings.invert ? 0 : 1);
+}
+
 void draw_clear(bool display_on)
 {
     u8g2.setContrast(160 + settings.contrast);
@@ -131,8 +141,9 @@ void draw_clear(bool display_on)
 
     if(settings.invert) {
         u8g2.setDrawColor(1);
-        // need to get display width height
-        //u8g2.drawBox(0, 0, page_width, page_height);
+        int w = u8g2.getDisplayWidth();
+        int h = u8g2.getDisplayHeight();
+        u8g2.drawBox(0, 0, w, h);
         u8g2.setDrawColor(0);
     } else {
         u8g2.clearBuffer();

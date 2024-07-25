@@ -21,53 +21,81 @@ enum keys { KEY_PAGE_UP,
             KEY_COUNT };
 int key_pin[KEY_COUNT] = { KEY_UP_IO, 32, 33, 0 };
 
-void keys_setup()
-{
-    for (int i = 0; i < KEY_COUNT; i++)
-        pinMode(key_pin[i], INPUT_PULLUP);
+static uint32_t key_times[KEY_COUNT];
+uint32_t timeout = 500;
+bool repeated;
+
+static void IRAM_ATTR isr(void* arg) {
+    int i = (int)arg;
+    key_times[i] = millis();
 }
 
-void keys_poll() {
-    static uint32_t key_time, timeout = 500;
-    static int key_pressed;
-    
-    uint32_t t0 = millis();
-    if (key_pressed) {
-        if (t0 - key_time < timeout)  // allow new presses to process
-            return;                     // ignore keys down until timeout
-        key_pressed = 0;
-        timeout = 200;  // faster repeat timeout
+void keys_setup()
+{
+    for (int i = 0; i < KEY_COUNT; i++) {
+        pinMode(key_pin[i], INPUT_PULLUP);
+        attachInterruptArg(key_pin[i], isr, (void*)i, FALLING);
     }
+}
 
-    if (!digitalRead(key_pin[KEY_PAGE_UP])) {
-        printf("KEY UP\n");
-        if (!digitalRead(key_pin[KEY_PAGE_DOWN]))
-          wireless_toggle_mode();
-        else
+static bool pressed(int key, bool repeat=true)
+{
+    if(digitalRead(key_pin[key])) {
+        if(key_times[key]) {
+            key_times[key] = 0;
+            if(!repeated)
+                return true;
+            repeated = false;
+            timeout = 500;
+        }
+    } else {
+        if(repeat && key_times[key] && millis() - key_times[key] > timeout) {
+            repeated = true;
+            key_times[key] += timeout;
+            timeout = 300; // faster repeat
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool held(int key)
+{
+    if(!digitalRead(key_pin[key]) && key_times[key] && millis() - key_times[key] > 500) {
+        key_times[key] = 0;
+        repeated = true;
+        return true;
+    }
+    return false;
+}
+
+void keys_poll()
+{
+/*
+    if (!digitalRead(key_pin[KEY_PAGE_UP]) && !digitalRead(key_pin[KEY_PAGE_DOWN]))
+        wireless_toggle_mode();
+    else
+    if (pressed(KEY_PAGE_UP)) {
           display_change_page(1);
     } else
-    if (!digitalRead(key_pin[KEY_PAGE_DOWN])) {
+    */
+    if (pressed(KEY_PAGE_DOWN)) {
         printf("KEY DOWN\n");
         display_change_page(-1);
-    } else if (!digitalRead(key_pin[KEY_MENU])) {
+    } else if (pressed(KEY_MENU, false)) {
         printf("KEY SCALE\n");
-        if(key_pressed)
-            menu_select();
-        else
             display_menu_scale();
-    } else if (!digitalRead(0)) {
+    } else if (held(KEY_MENU)) {
+        printf("KEY MENU\n");
+            in_menu = !in_menu;
+    } else if (pressed(KEY_PWR, false)) {
         display_toggle();
+        menu_reset();
         if(settings.powerdown) {
             while(!digitalRead(0)); // wait for button to release
             esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, LOW);
             printf("going to sleep");
             esp_deep_sleep_start();
         }
-    } else {
-        timeout = 500;
-        return;
     }
-
-    key_pressed++;
-    key_time = t0;
 }

@@ -117,6 +117,8 @@ static String item_to_signalk_path(display_item_e item)
     switch(item) {
         case WIND_SPEED:          return "environment.wind.speedApparent";
         case WIND_DIRECTION:      return "environment.wind.angleApparent";
+        case TRUE_WIND_SPEED:     return "environment.wind.speedTrue";
+        case TRUE_WIND_DIRECTION: return "environment.wind.angleTrue";
         case AIR_TEMPERATURE:     return "environment.outside.temperature";
         case BAROMETRIC_PRESSURE: return "environment.outside.pressure";
         case DEPTH:               return "environment.depth.belowSurface";

@@ -179,19 +179,22 @@ String processor_alarms(const String& var)
     if(var == "COURSE_ALARM_ERROR")    return String(settings.course_alarm_error);
 
     if(var == "GPS_SPEED_ALARM")          return Checked(settings.gps_speed_alarm);
-    if(var == "GPS_SPEED_ALARM_KNOTS")    return String(settings.gps_speed_alarm_knots);
+    if(var == "GPS_MIN_SPEED_ALARM_KNOTS")    return String(settings.gps_min_speed_alarm_knots);
+    if(var == "GPS_MAX_SPEED_ALARM_KNOTS")    return String(settings.gps_max_speed_alarm_knots);
 
     if(var == "WIND_SPEED_ALARM")          return Checked(settings.wind_speed_alarm);
-    if(var == "WIND_SPEED_ALARM_KNOTS")    return String(settings.wind_speed_alarm_knots);
+    if(var == "WIND_MIN_SPEED_ALARM_KNOTS")    return String(settings.wind_min_speed_alarm_knots);
+    if(var == "WIND_MAX_SPEED_ALARM_KNOTS")    return String(settings.wind_max_speed_alarm_knots);
 
     if(var == "WATER_SPEED_ALARM")          return Checked(settings.water_speed_alarm);
-    if(var == "WATER_SPEED_ALARM_KNOTS")    return String(settings.water_speed_alarm_knots);
+    if(var == "WATER_MIN_SPEED_ALARM_KNOTS")    return String(settings.water_min_speed_alarm_knots);
+    if(var == "WATER_MAX_SPEED_ALARM_KNOTS")    return String(settings.water_max_speed_alarm_knots);
 
     if(var == "WEATHER_ALARM_PRESSURE")      return Checked(settings.weather_alarm_pressure);
     if(var == "WEATHER_ALARM_MIN_PRESSURE")  return String(settings.weather_alarm_min_pressure);
     if(var == "WEATHER_ALARM_PRESSURE_RATE")       return Checked(settings.weather_alarm_pressure_rate);
     if(var == "WEATHER_ALARM_PRESSURE_RATE_VALUE") return String(settings.weather_alarm_pressure_rate_value);
-    if(var == "WEATHER_ALARM_LIGHTNING")          return Checked(settings.weather_lightning);
+    if(var == "WEATHER_ALARM_LIGHTNING")          return Checked(settings.weather_alarm_lightning);
     if(var == "WEATHER_ALARM_LIGHTNING_DISTANCE") return String(settings.weather_alarm_lightning_distance);
 
     if(var == "DEPTH_ALARM")             return Checked(settings.depth_alarm);
@@ -225,47 +228,67 @@ void web_setup()
     });
 
     server.on("/alarms", HTTP_POST, [](AsyncWebServerRequest *request) {
+        settings.anchor_alarm = false;
+        settings.course_alarm = false;
+        settings.gps_speed_alarm = false;
+        settings.wind_speed_alarm = false;
+        settings.water_speed_alarm = false;
+        settings.weather_alarm_pressure = false;
+        settings.weather_alarm_pressure_rate = false;
+        settings.weather_alarm_lightning = false;
+        settings.depth_alarm = false;
+        settings.depth_alarm_rate = false;
+        settings.ais_alarm = false;
+        settings.pypilot_alarm_noconnection = false;
+        settings.pypilot_alarm_fault = false;
+        settings.pypilot_alarm_no_imu = false;
+        settings.pypilot_alarm_no_motor_controller = false;
+        settings.pypilot_alarm_lost_mode = false;
+
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
             String name = p->name(), value = p->value();
             //printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            if(name == "anchor_alarm")           settings.anchor_alarm = value;
-            else if(name == "anchor_alarm_distance")  settings.anchor_alarm_distance = value;
+            if(name == "anchor_alarm")           settings.anchor_alarm = true;
+            else if(name == "anchor_alarm_distance")  settings.anchor_alarm_distance = value.toInt();
 
-            else if(name == "course_alarm")         settings.course_alarm = value;
-            else if(name == "course_alarm_course")  settings.course_alarm_course = value;
-            else if(name == "course_alarm_error")   settings.course_alarm_errr = value;
+            else if(name == "course_alarm")         settings.course_alarm = true;
+            else if(name == "course_alarm_course")  settings.course_alarm_course = value.toInt();
+            else if(name == "course_alarm_error")   settings.course_alarm_error = value.toInt();
             
-            else if(name == "gps_speed_alarm")        settings.gps_speed_alarm = value;
-            else if(name == "gps_speed_alarm_knots")  settings.gps_speed_alarm_knots = value;
+            else if(name == "gps_speed_alarm")        settings.gps_speed_alarm = true;
+            else if(name == "gps_min_speed_alarm_knots")  settings.gps_min_speed_alarm_knots = value.toInt();
+            else if(name == "gps_max_speed_alarm_knots")  settings.gps_max_speed_alarm_knots = value.toInt();
 
-            else if(name == "wind_speed_alarm")        settings.wind_speed_alarm = value;
-            else if(name == "wind_speed_alarm_knots")  settings.wind_speed_alarm_knots = value;
+            else if(name == "wind_speed_alarm")        settings.wind_speed_alarm = true;
+            else if(name == "wind_min_speed_alarm_knots")  settings.wind_min_speed_alarm_knots = value.toInt();
+            else if(name == "wind_max_speed_alarm_knots")  settings.wind_max_speed_alarm_knots = value.toInt();
 
-            else if(name == "water_speed_alarm")        settings.water_speed_alarm = value;
-            else if(name == "water_speed_alarm_knots")  settings.water_speed_alarm_knots = value;
+            else if(name == "water_speed_alarm")        settings.water_speed_alarm = true;
+            else if(name == "water_min_speed_alarm_knots")  settings.water_min_speed_alarm_knots = value.toInt();
+            else if(name == "water_max_speed_alarm_knots")  settings.water_max_speed_alarm_knots = value.toInt();
 
-            else if(name == "weather_alarm_pressure")      settings.weather_alarm_pressure = value;
-            else if(name == "weather_alarm_min_pressure")  settings.weather_alarm_min_pressure = value;
-            else if(name == "weather_alarm_pressure_rate")      settings.weather_alarm_pressure_rate = value;
-            else if(name == "weather_alarm_pressure_rate_value")  settings.weather_alarm_pressure_rate_value = value;
-            else if(name == "weather_alarm_lightning")      settings.weather_alarm_lightning = value;
-            else if(name == "weather_alarm_lightning_distance")  settings.weather_alarm_lightning_distance = value;
+            else if(name == "weather_alarm_pressure")      settings.weather_alarm_pressure = true;
+            else if(name == "weather_alarm_min_pressure")  settings.weather_alarm_min_pressure = value.toInt();
+            else if(name == "weather_alarm_pressure_rate")      settings.weather_alarm_pressure_rate = true;
+            else if(name == "weather_alarm_pressure_rate_value")  settings.weather_alarm_pressure_rate_value = value.toInt();
+            else if(name == "weather_alarm_lightning")      settings.weather_alarm_lightning = true;
+            else if(name == "weather_alarm_lightning_distance")  settings.weather_alarm_lightning_distance = value.toInt();
 
-            else if(name == "depth_alarm")      settings.depth_alarm = value;
-            else if(name == "depth_alarm_min")  settings.depth_alarm_min = value;
-            else if(name == "depth_alarm_rate")      settings.depth_alarm_rate = value;
-            else if(name == "depth_alarm_rate_value")  settings.depth_alarm_rate_value = value;
+            else if(name == "depth_alarm")      settings.depth_alarm = true;
+            else if(name == "depth_alarm_min")  settings.depth_alarm_min = value.toInt();
+            else if(name == "depth_alarm_rate")      settings.depth_alarm_rate = true;
+            else if(name == "depth_alarm_rate_value")  settings.depth_alarm_rate_value = value.toInt();
 
-            else if(name == "ais_alarm")      settings.ais_alarm = value;
-            else if(name == "ais_alarm_cpa")  settings.ais_alarm_cpa = value;
-            else if(name == "ais_alarm_tcpa")      settings.ais_alarm_tcpa = value;
+            else if(name == "ais_alarm")      settings.ais_alarm = true;
+            else if(name == "ais_alarm_cpa")  settings.ais_alarm_cpa = value.toInt();
+            else if(name == "ais_alarm_tcpa")      settings.ais_alarm_tcpa = value.toInt();
             
-            else if(name == "pypilot_alarm_noconnection") settings.pypilot_alarm_noconnection = value;
-            else if(name == "pypilot_alarm_fault") settings.pypilot_alarm_fault = value;
-            else if(name == "pypilot_alarm_no_imu") settings.pypilot_alarm_no_imu = value;
-            else if(name == "pypilot_alarm_no_motor_controller") settings.pypilot_alarm_no_motor_controller_ = value;
-            else if(name == "pypilot_alarm_lost_mode") settings.pypilot_alarm_lost_mode = value;
+            else if(name == "pypilot_alarm_noconnection") settings.pypilot_alarm_noconnection = true;
+            else if(name == "pypilot_alarm_fault") settings.pypilot_alarm_fault = true;
+            else if(name == "pypilot_alarm_no_imu") settings.pypilot_alarm_no_imu = true;
+            else if(name == "pypilot_alarm_no_motor_controller") settings.pypilot_alarm_no_motor_controller = true;
+            else if(name == "pypilot_alarm_lost_mode") settings.pypilot_alarm_lost_mode = true;
             
             else printf("web post alarms unknown parameter %s %s\n", name.c_str(), value.c_str());
         }
@@ -273,7 +296,6 @@ void web_setup()
         settings_store();
     });
 
-    
     server.on("/alarms.html", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms);
     });

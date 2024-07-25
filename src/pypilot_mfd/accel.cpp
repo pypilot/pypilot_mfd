@@ -10,34 +10,60 @@
 
 #include "display.h"
 
-#define DEVICE_ADDRESS 0x19  // 0x32  // LIS2DW12TR
+// support either address..  due to poor quality, both are placed on the pcb and hopefully one works
+#define DEVICE_ADDRESS0 0x19  // 0x32  // LIS2DW12TR
+#define DEVICE_ADDRESS1 0x18  // 0x32  // LIS2DW12TR
 #define LIS2DW12_CTRL 0x1F   // CTRL1 is CTRL+1
 
+static uint8_t device_address;
+bool detect_address(uint8_t address)
+{
+    Wire.beginTransmission(DEVICE_ADDRESS0);
+    int error = Wire.endTransmission();
+    if(error == 0) {
+        printf("found LIS2DW12 at %x\n", address);
+        device_address = address;
+        return true;
+    }
+    return false;
+}
+
 void accel_setup() {
-    // init communication with accelerometer
     Wire.begin();
-    Wire.beginTransmission(0x19);
+
+    // detect address
+    if(!detect_address(DEVICE_ADDRESS0) && !detect_address(DEVICE_ADDRESS1)) {
+        printf("failed to detect LIS2DW12 at either address!\n");
+        return;
+    }
+    
+    // init communication with accelerometer
+    Wire.beginTransmission(device_address);
     Wire.write(LIS2DW12_CTRL + 1);
     Wire.write(0x44);  // high performance
     Wire.endTransmission();
 
-    Wire.beginTransmission(0x19);
+    Wire.beginTransmission(device_address);
     Wire.write(LIS2DW12_CTRL + 6);
     Wire.write(0x10);  // set +/- 4g FS, LP filter ODR/2
     Wire.endTransmission();
 
     // enable block data update (bit 3) and auto register address increment (bit 2)
-    Wire.beginTransmission(0x19);
+    Wire.beginTransmission(device_address);
     Wire.write(LIS2DW12_CTRL + 2);
     Wire.write(0x08 | 0x04);
     Wire.endTransmission();
 }
 
 void accel_read() {
-    Wire.beginTransmission(0x19);
+    if(!device_address)
+        return;
+
+    Wire.beginTransmission(device_address);
     Wire.write(0x28);
     Wire.endTransmission();
-    Wire.requestFrom(0x19, 6);
+
+    Wire.requestFrom(device_address, 6);
     int i = 0;
     uint8_t data[6] = { 0 };
     while (Wire.available() && i < 6)
@@ -51,9 +77,9 @@ void accel_read() {
 
     int rotation;
     if (abs(x) > abs(y)) {
-        rotation = x < 0 ? 0 : 2;
+        rotation = x < 0 ? 2 : 0;
     } else
-        rotation = y < 0 ? 3 : 1;
+        rotation = y < 0 ? 1 : 3;
 
     display_set_mirror_rotation(rotation);
     printf("accel %d %d %d\n", rotation, x, y);

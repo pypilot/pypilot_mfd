@@ -66,13 +66,16 @@ struct settings_t {
     int course_alarm_error;
 
     bool gps_speed_alarm;
-    int gps_speed_alarm_knots;
+    int gps_min_speed_alarm_knots;
+    int gps_max_speed_alarm_knots;
 
     bool wind_speed_alarm;
-    int wind_speed_alarm_knots;
+    int wind_min_speed_alarm_knots;
+    int wind_max_speed_alarm_knots;
 
     bool water_speed_alarm;
-    int water_speed_alarm_knots;
+    int water_min_speed_alarm_knots;
+    int water_max_speed_alarm_knots;
     
     bool weather_alarm_pressure;
     int weather_alarm_min_pressure;
