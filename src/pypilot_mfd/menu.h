@@ -6,7 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-void menu_page(int dir);
+void menu_arrows(int dir);
 void menu_select();
 void menu_setup();
 void menu_reset();

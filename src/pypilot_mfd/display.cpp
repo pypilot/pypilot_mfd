@@ -1742,6 +1742,8 @@ void display_setup()
 {
     pinMode(2, INPUT_PULLUP);  // strap for display
 
+    printf("display_setup %d\n", rotation);
+
 #ifdef USE_U8G2    
     switch(rotation) {
         case 0:
@@ -1804,9 +1806,11 @@ void display_setup()
 
 void display_change_page(int dir)
 {
+    if(rotation == 3)
+        dir = -dir;
+
     if(in_menu) {
-        menu_page(dir);
-        buzzer_buzz(800, 20, 0);
+        menu_arrows(dir);
         return;
     }
 

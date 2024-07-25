@@ -77,9 +77,9 @@ void accel_read() {
 
     int rotation;
     if (abs(x) > abs(y)) {
-        rotation = x < 0 ? 2 : 0;
+        rotation = x < 0 ? 0 : 2;
     } else
-        rotation = y < 0 ? 1 : 3;
+        rotation = y < 0 ? 3 : 1;
 
     display_set_mirror_rotation(rotation);
     printf("accel %d %d %d\n", rotation, x, y);

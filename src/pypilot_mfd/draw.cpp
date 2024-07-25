@@ -25,13 +25,14 @@ void draw_setup(int rotation)
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    printf("setup rotation %d\n", rotation);
-
-    if(settings.mirror == 2)
+    if(settings.mirror == 2) {
         settings.mirror = digitalRead(2);
+        settings.mirror = 0;
+    }
 
     if(settings.mirror)
         rotation ^= 2;
+
     switch(rotation) {
         case 0: u8g2.setDisplayRotation(U8G2_R0); break;
         case 1: u8g2.setDisplayRotation(U8G2_R1); break;
@@ -39,7 +40,6 @@ void draw_setup(int rotation)
         case 3: u8g2.setDisplayRotation(U8G2_R3); break;
     };        
 
-    settings.mirror = 0;
     if(settings.mirror)
         u8g2.setFlipMode(true);
 }

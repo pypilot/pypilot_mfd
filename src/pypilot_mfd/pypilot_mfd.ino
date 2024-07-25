@@ -24,7 +24,7 @@
 
 void setup()
 {
-    //delay(1000);
+//    delay(1500);
     uint32_t t0 = millis();
     serial_setup();
     printf("pypilot_mfd\n");

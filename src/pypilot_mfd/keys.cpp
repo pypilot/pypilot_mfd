@@ -13,6 +13,7 @@
 #include "display.h"
 #include "menu.h"
 #include "keys.h"
+#include "buzzer.h"
 
 enum keys { KEY_PAGE_UP,
             KEY_MENU,
@@ -84,10 +85,13 @@ void keys_poll()
         display_change_page(-1);
     } else if (pressed(KEY_MENU, false)) {
         printf("KEY SCALE\n");
-            display_menu_scale();
+        display_menu_scale();
     } else if (held(KEY_MENU)) {
         printf("KEY MENU\n");
-            in_menu = !in_menu;
+        if(in_menu)
+            settings_store();
+        buzzer_buzz(in_menu ? 1000 : 600, 50, 0);
+        in_menu = !in_menu;
     } else if (pressed(KEY_PWR, false)) {
         display_toggle();
         menu_reset();

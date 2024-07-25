@@ -19,3 +19,4 @@ uint64_t mac_str_to_int(String mac);
 String mac_int_to_str(uint64_t i);
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
+String millis_to_str(uint32_t dt);

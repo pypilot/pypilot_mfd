@@ -23,13 +23,13 @@ void buzzer_buzz(int freq, int duration, int pattern)
 
 void buzzer_poll()
 {
+    if(!buzzer_timeout)
+        return;
     if(buzzer_timeout < millis()) {
         buzzer_timeout = 0;
         ledcDetachPin(4);
-    }
-
-    if(!buzzer_timeout)
         return;
+    }
 
     int d = 512; // always use 50% of 10 bit duty cycle
     switch(buzzer_pattern) {

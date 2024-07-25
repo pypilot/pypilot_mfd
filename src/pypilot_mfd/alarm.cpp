@@ -31,17 +31,29 @@ String alarm_name(alarm_e alarm)
     }
 }
 
-uint32_t last_alarm_trigger;
-static void trigger(alarm_e alarm, bool lostdata=false)
+static uint32_t last_alarm_trigger[ALARM_COUNT];
+static String alarm_reason[ALARM_COUNT];
+static void trigger(alarm_e alarm, String reason="")
 {
+    printf("alarm trigger %d\n", alarm);
     uint32_t t = millis();
-    if(t - last_alarm_trigger < 5000)
+    if(t - last_alarm_trigger[alarm] < 5000)
         return;
 
-    buzzer_buzz(lostdata ? 2000 : 4000, 1000, alarm % 4);
-    last_alarm_trigger = t;
+    buzzer_buzz(reason.length() ? 4000 : 2000, 1000, alarm % 4);
+    last_alarm_trigger[alarm] = t;
+    alarm_reason[alarm] = reason.length() ? reason : "no data";
 
     menu_switch_alarm(alarm);
+}
+
+uint32_t alarm_last(alarm_e alarm, String &reason)
+{
+    uint32_t lt = last_alarm_trigger[alarm];
+    if(!lt)
+        return 0;
+    reason = alarm_reason[alarm];
+    return millis() - lt;
 }
 
 static float anchor_lat, anchor_lon;
@@ -68,14 +80,14 @@ static void alarm_poll_anchor()
     float lat, lon;
     if(!display_data_get(LATITUDE, lat)||!display_data_get(LONGITUDE, lon)) {
         printf("Failed to get lat/lon when anchor alarm set");
-        trigger(ANCHOR_ALARM, true);
+        trigger(ANCHOR_ALARM);
     }
 
     distance_bearing(lat, lon, anchor_lat, anchor_lon, &anchor_dist, 0);
     anchor_dist *= 1852; // convert NMi to meters
 
     if(anchor_dist < settings.anchor_alarm_distance)
-        trigger(ANCHOR_ALARM);
+        trigger(ANCHOR_ALARM, "radius");
 }    
 
 static void alarm_poll_course()
@@ -85,10 +97,10 @@ static void alarm_poll_course()
 
     float heading;
     if(!display_data_get(GPS_HEADING, heading))
-        trigger(COURSE_ALARM, true);
+        trigger(COURSE_ALARM);
 
     if(resolv(heading, settings.course_alarm_course) > settings.course_alarm_error)
-        trigger(COURSE_ALARM);
+        trigger(COURSE_ALARM, "course");
 }    
 
 static void alarm_poll_speed(bool enabled, int min_speed_limit, int max_speed_limit, display_item_e item, alarm_e alarm)
@@ -98,10 +110,14 @@ static void alarm_poll_speed(bool enabled, int min_speed_limit, int max_speed_li
 
     float speed;
     if(!display_data_get(item, speed))
-        trigger(alarm, true);
-
-    if(speed < min_speed_limit && speed > max_speed_limit)
         trigger(alarm);
+
+    printf("alarm poll speed %f %d %d\n", speed, min_speed_limit, max_speed_limit);
+
+    if(speed < min_speed_limit)
+        trigger(alarm, "min speed");
+    else if(speed > max_speed_limit)
+        trigger(alarm, "max speed");
 }
 
 static void alarm_poll_weather()
@@ -109,9 +125,9 @@ static void alarm_poll_weather()
     if(settings.weather_alarm_pressure) {
         float pressure;
         if(!display_data_get(BAROMETRIC_PRESSURE, pressure))
-            trigger(WEATHER_ALARM, true);
-        if(pressure < settings.weather_alarm_min_pressure)
             trigger(WEATHER_ALARM);
+        if(pressure < settings.weather_alarm_min_pressure)
+            trigger(WEATHER_ALARM, "absolute pressure");
     }
 
     // todo  baro pressure rate
@@ -122,9 +138,9 @@ static void alarm_poll_depth()
     if(settings.depth_alarm) {
         float depth;
         if(!display_data_get(DEPTH, depth))
-            trigger(DEPTH_ALARM, true);
-        if(depth < settings.depth_alarm_min)
             trigger(DEPTH_ALARM);
+        if(depth < settings.depth_alarm_min)
+            trigger(DEPTH_ALARM, "min depth");
     }
 
     if(settings.depth_alarm_rate) {
@@ -151,7 +167,7 @@ static void alarm_poll_ais()
             return;
 
         if(s.cpa < settings.ais_alarm_cpa && s.tcpa < settings.ais_alarm_tcpa*60)
-            trigger(AIS_ALARM);
+            trigger(AIS_ALARM, "SHIPS!");
     }
 }
 
@@ -160,12 +176,12 @@ static void alarm_poll_pypilot()
     float pypilot;
     if(settings.pypilot_alarm_noconnection)
         if(!display_data_get(PYPILOT, pypilot))
-            trigger(PYPILOT_ALARM, true);
+            trigger(PYPILOT_ALARM);
 
     if(settings.pypilot_alarm_fault) {
         String x = pypilot_client_value("servo.flags");
         if(x.endsWith("FAULT"))
-            trigger(PYPILOT_ALARM);
+            trigger(PYPILOT_ALARM, x);
     }
 }
 

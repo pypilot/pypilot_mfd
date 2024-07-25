@@ -136,6 +136,7 @@ void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
         file = root.openNextFile();
     }
 }
+
 void readFile(fs::FS &fs, const char * path){
     Serial.printf("Reading file: %s\r\n", path);
 
@@ -150,4 +151,25 @@ void readFile(fs::FS &fs, const char * path){
         Serial.write(file.read());
     }
     file.close();
+}
+
+String millis_to_str(uint32_t dt)
+{
+    float t = dt/1000.0f;
+    int parts[][2] = {{'d', 24}, {'h', 60}, {'m', 60}};
+    String l;
+    
+    int count = (sizeof parts)/(sizeof *parts);
+    for(int i=0; i<count; i++) {
+        int d = parts[i][1];
+        for(int j=i+1; j<count; j++)
+            d *= parts[j][1];
+        if(t < d)
+            continue;
+        int v = t / d;
+        t -= d*v;
+        l += String(v) + (char)parts[i][0] + ' ';       
+    }
+
+    return l + String(t, 1) + "s";
 }
