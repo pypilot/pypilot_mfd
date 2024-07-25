@@ -1068,18 +1068,16 @@ F 4 "C78399" V 1750 2400 50  0001 C CNN "LCSC"
 	0    1    1    0   
 $EndComp
 Wire Wire Line
-	1300 2950 3650 2950
-Wire Wire Line
 	1300 2150 1300 2750
 $Comp
 L Connector_Generic:Conn_01x04 J1
 U 1 1 65C11F07
-P 1100 2850
-F 0 "J1" H 1018 3167 50  0000 C CNN
-F 1 "usb" H 1018 3076 50  0000 C CNN
-F 2 "pypilot_mfd_footprints:PinSocket_1x04_P2.54mm_Vertical" H 1100 2850 50  0001 C CNN
-F 3 "~" H 1100 2850 50  0001 C CNN
-	1    1100 2850
+P 550 2850
+F 0 "J1" H 468 3167 50  0000 C CNN
+F 1 "usb" H 468 3076 50  0000 C CNN
+F 2 "pypilot_mfd_footprints:PinSocket_1x04_P2.54mm_Vertical" H 550 2850 50  0001 C CNN
+F 3 "~" H 550 2850 50  0001 C CNN
+	1    550  2850
 	-1   0    0    -1  
 $EndComp
 Wire Wire Line
@@ -1109,8 +1107,6 @@ F 3 "" H 2100 2750 50  0001 C CNN
 	1    2100 2750
 	1    0    0    -1  
 $EndComp
-Wire Wire Line
-	1300 2850 3650 2850
 $Comp
 L power:+5V #PWR0105
 U 1 1 65BD0396
@@ -1136,12 +1132,12 @@ $EndComp
 $Comp
 L power:GND #PWR0101
 U 1 1 65BB7F3D
-P 1300 3050
-F 0 "#PWR0101" H 1300 2800 50  0001 C CNN
-F 1 "GND" H 1305 2877 50  0001 C CNN
-F 2 "" H 1300 3050 50  0001 C CNN
-F 3 "" H 1300 3050 50  0001 C CNN
-	1    1300 3050
+P 750 3050
+F 0 "#PWR0101" H 750 2800 50  0001 C CNN
+F 1 "GND" H 755 2877 50  0001 C CNN
+F 2 "" H 750 3050 50  0001 C CNN
+F 3 "" H 750 3050 50  0001 C CNN
+	1    750  3050
 	1    0    0    -1  
 $EndComp
 $Comp
@@ -1904,4 +1900,70 @@ Text GLabel 9750 1800 0    50   Input ~ 0
 BACKLIGHT
 Text GLabel 10600 750  2    50   Input ~ 0
 BACKLIGHT
+$Comp
+L Regulator_Switching:LMR16006YQ U?
+U 1 1 66A5599F
+P 4900 1000
+F 0 "U?" H 4900 1467 50  0000 C CNN
+F 1 "LMR50410" H 4900 1376 50  0000 C CNN
+F 2 "Package_TO_SOT_SMD:SOT-23-6" H 4900 500 50  0001 C CIN
+F 3 "http://www.ti.com/lit/ds/symlink/lmr16006y-q1.pdf" H 4500 1450 50  0001 C CNN
+F 4 "C2877621" H 4900 1000 50  0001 C CNN "LCSC"
+	1    4900 1000
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR?
+U 1 1 66A5EFD9
+P 6700 5900
+F 0 "#PWR?" H 6700 5650 50  0001 C CNN
+F 1 "GND" H 6705 5727 50  0001 C CNN
+F 2 "" H 6700 5900 50  0001 C CNN
+F 3 "" H 6700 5900 50  0001 C CNN
+	1    6700 5900
+	1    0    0    -1  
+$EndComp
+$Comp
+L Power_Protection:SN65220 U?
+U 1 1 66A8561E
+P 1600 3350
+F 0 "U?" H 1600 3575 50  0000 C CNN
+F 1 "SN65220" H 1600 3484 50  0000 C CNN
+F 2 "Package_TO_SOT_SMD:SOT-23-6" H 1950 3200 50  0001 L CNN
+F 3 "http://www.ti.com/lit/ds/symlink/sn65220.pdf" H 1600 3500 50  0001 C CNN
+	1    1600 3350
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2200 3350 2200 2850
+Connection ~ 2200 2850
+Wire Wire Line
+	2200 2850 3650 2850
+Wire Wire Line
+	1000 3350 1000 2950
+Wire Wire Line
+	1000 2950 750  2950
+Wire Wire Line
+	1000 2950 3650 2950
+Connection ~ 1000 2950
+Wire Wire Line
+	1700 3650 1600 3650
+Wire Wire Line
+	1300 2750 750  2750
+Wire Wire Line
+	750  2850 2200 2850
+$Comp
+L power:GND #PWR?
+U 1 1 66ACDFD9
+P 1600 3650
+F 0 "#PWR?" H 1600 3400 50  0001 C CNN
+F 1 "GND" H 1605 3477 50  0001 C CNN
+F 2 "" H 1600 3650 50  0001 C CNN
+F 3 "" H 1600 3650 50  0001 C CNN
+	1    1600 3650
+	1    0    0    -1  
+$EndComp
+Connection ~ 1600 3650
+Wire Wire Line
+	1600 3650 1500 3650
 $EndSCHEMATC
