@@ -22,7 +22,7 @@
 #include "nmea.h"
 #include "signalk.h"
 #include "zeroconf.h"
-//#include "web.h"
+#include "alarm.h"
 
 bool wifi_ap_mode = false;
 settings_t settings;
@@ -405,6 +405,8 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
     bool primary;
     lightning_uv_transmitter_t &wt = lightning_uv_transmitters.update(data.mac, primary);
     wt.distance = packet->distance * .01f;
+
+    lightning_distance = wt.distance;
 
     if (!primary)
         return;

@@ -59,6 +59,7 @@ struct settings_t {
 
     // alarms
     bool anchor_alarm;
+    float anchor_lat, anchor_lon;
     int anchor_alarm_distance; // meters
 
     bool course_alarm;

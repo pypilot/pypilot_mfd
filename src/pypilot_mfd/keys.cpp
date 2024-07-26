@@ -62,8 +62,7 @@ static bool pressed(int key, bool repeat=true)
 
 static bool held(int key)
 {
-    if(!digitalRead(key_pin[key]) && key_times[key] && millis() - key_times[key] > 500) {
-        key_times[key] = 0;
+    if(!repeated && !digitalRead(key_pin[key]) && key_times[key] && millis() - key_times[key] > 500) {
         repeated = true;
         return true;
     }
@@ -72,14 +71,6 @@ static bool held(int key)
 
 void keys_poll()
 {
-/*
-    if (!digitalRead(key_pin[KEY_PAGE_UP]) && !digitalRead(key_pin[KEY_PAGE_DOWN]))
-        wireless_toggle_mode();
-    else
-    if (pressed(KEY_PAGE_UP)) {
-          display_change_page(1);
-    } else
-    */
     if (pressed(KEY_PAGE_DOWN)) {
         printf("KEY DOWN\n");
         display_change_page(-1);
@@ -101,5 +92,7 @@ void keys_poll()
             printf("going to sleep");
             esp_deep_sleep_start();
         }
+    } else if (held(KEY_PWR)) {
+        ESP.restart();
     }
 }

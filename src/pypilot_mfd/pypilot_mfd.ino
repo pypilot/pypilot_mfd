@@ -58,14 +58,14 @@ void loop()
     uint32_t t0 = millis();
     wireless_poll();
     keys_poll();
-//    serial_poll();
+    serial_poll();
     nmea_poll();
-//    signalk_poll();
-//    pypilot_client_poll();
+    signalk_poll();
+    pypilot_client_poll();
     alarm_poll();
     buzzer_poll();
 
-//    web_poll();
+    web_poll();
 
     display_poll();
 

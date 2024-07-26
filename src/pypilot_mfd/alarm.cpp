@@ -35,7 +35,7 @@ static uint32_t last_alarm_trigger[ALARM_COUNT];
 static String alarm_reason[ALARM_COUNT];
 static void trigger(alarm_e alarm, String reason="")
 {
-    printf("alarm trigger %d\n", alarm);
+    //printf("alarm trigger %d\n", alarm);
     uint32_t t = millis();
     if(t - last_alarm_trigger[alarm] < 5000)
         return;
@@ -56,20 +56,16 @@ uint32_t alarm_last(alarm_e alarm, String &reason)
     return millis() - lt;
 }
 
-static float anchor_lat, anchor_lon;
-float anchor_dist;
+float alarm_anchor_dist;
+float lightning_distance;
     
 void alarm_anchor_reset() {
     String source;
     uint32_t time;
-    if(!display_data_get(LATITUDE, anchor_lat, source, time))
+    if(!display_data_get(LATITUDE, settings.anchor_lat, source, time))
         printf("Failed to get anchor");
-    if(!display_data_get(LONGITUDE, anchor_lon, source, time))
+    if(!display_data_get(LONGITUDE, settings.anchor_lon, source, time))
         printf("Failed to get anchor");
-}
-
-float course;
-void alarm_course_reset() {
 }
 
 static void alarm_poll_anchor()
@@ -83,10 +79,10 @@ static void alarm_poll_anchor()
         trigger(ANCHOR_ALARM);
     }
 
-    distance_bearing(lat, lon, anchor_lat, anchor_lon, &anchor_dist, 0);
-    anchor_dist *= 1852; // convert NMi to meters
+    distance_bearing(lat, lon, settings.anchor_lat, settings.anchor_lon, &alarm_anchor_dist, 0);
+    alarm_anchor_dist *= 1852; // convert NMi to meters
 
-    if(anchor_dist < settings.anchor_alarm_distance)
+    if(alarm_anchor_dist < settings.anchor_alarm_distance)
         trigger(ANCHOR_ALARM, "radius");
 }    
 
@@ -112,7 +108,7 @@ static void alarm_poll_speed(bool enabled, int min_speed_limit, int max_speed_li
     if(!display_data_get(item, speed))
         trigger(alarm);
 
-    printf("alarm poll speed %f %d %d\n", speed, min_speed_limit, max_speed_limit);
+   // printf("alarm poll speed %f %d %d\n", speed, min_speed_limit, max_speed_limit);
 
     if(speed < min_speed_limit)
         trigger(alarm, "min speed");
@@ -130,7 +126,35 @@ static void alarm_poll_weather()
             trigger(WEATHER_ALARM, "absolute pressure");
     }
 
-    // todo  baro pressure rate
+    if(settings.weather_alarm_pressure_rate) {
+        float pressure;
+        if(!display_data_get(BAROMETRIC_PRESSURE, pressure))
+            trigger(WEATHER_ALARM);
+
+        static float pressure_rate, pressure_prev;
+        static uint32_t prevt;
+        uint32_t t = millis();
+        float dt = (t - prevt)/1000.f;
+        prevt = t;
+
+        if(dt > 50000)
+            pressure_rate = 0;
+        else {
+            float rate = (pressure_prev-pressure)/dt*60;
+            pressure_rate = .1*(rate) + .9*pressure_rate;
+        }
+        pressure_prev = pressure;
+        if(pressure_rate > settings.weather_alarm_pressure_rate_value)
+            trigger(WEATHER_ALARM, "pressure rate");
+    }
+
+    if(settings.weather_alarm_lightning) {
+        if(lightning_distance && lightning_distance < settings.weather_alarm_lightning_distance) {
+            trigger(WEATHER_ALARM, "lightning");
+            lightning_distance = 0;
+        }
+    }
+
 }
 
 static void alarm_poll_depth()
@@ -144,28 +168,44 @@ static void alarm_poll_depth()
     }
 
     if(settings.depth_alarm_rate) {
-        float depth_rate;
-/* TODO :  depth rate of change
+        float depth;
         if(!display_data_get(DEPTH, depth))
-            trigger(DEPTH_ALARM, true);
-        if(rate < settings.depth_alarm_rate_value)
             trigger(DEPTH_ALARM);
-            */
+
+        static float depth_rate, depth_prev;
+        static uint32_t prevt;
+        uint32_t t = millis();
+        float dt = (t - prevt)/1000.f;
+        prevt = t;
+
+        if(dt > 10000)
+            depth_rate = 0;
+        else {
+            float rate = (depth_prev-depth)/dt*60;
+            depth_rate = .1*(rate) + .9*depth_rate;
+        }
+        depth_prev = depth;
+        if(depth_rate > settings.depth_alarm_rate_value)
+            trigger(DEPTH_ALARM, "depth rate");
     }
 }
 
+float alarm_ship_tcpa;
 static void alarm_poll_ais()
 {
     if(!settings.ais_alarm)
         return;
 
     uint32_t t = millis();
+    alarm_ship_tcpa = INFINITY;
     for(std::map<int, ship>::iterator it = ships.begin(); it != ships.end(); it++) {
         ship &s = it->second;
 
         if(t-s.timestamp > 5*60) // out of date
             return;
 
+        if(s.tcpa < alarm_ship_tcpa)
+            alarm_ship_tcpa = s.tcpa;
         if(s.cpa < settings.ais_alarm_cpa && s.tcpa < settings.ais_alarm_tcpa*60)
             trigger(AIS_ALARM, "SHIPS!");
     }
@@ -174,14 +214,35 @@ static void alarm_poll_ais()
 static void alarm_poll_pypilot()
 {
     float pypilot;
-    if(settings.pypilot_alarm_noconnection)
+    if(settings.pypilot_alarm_noconnection) {
         if(!display_data_get(PYPILOT, pypilot))
             trigger(PYPILOT_ALARM);
+        pypilot_client_strobe();
+    }
 
     if(settings.pypilot_alarm_fault) {
         String x = pypilot_client_value("servo.flags");
         if(x.endsWith("FAULT"))
             trigger(PYPILOT_ALARM, x);
+        pypilot_client_strobe();
+    }
+
+    if(settings.pypilot_alarm_no_imu) {
+        if(pypilot_client_value("imu.frequency", 0) == "0")
+            trigger(PYPILOT_ALARM, "no imu");
+        pypilot_client_strobe();
+    }
+
+    if(settings.pypilot_alarm_no_motor_controller) {
+        if(pypilot_client_value("servo.controller") == "none")
+            trigger(PYPILOT_ALARM, "no motor controller");
+        pypilot_client_strobe();
+    }
+
+    if(settings.pypilot_alarm_lost_mode) {
+        if(pypilot_client_value("ap.lostmode") == "true")
+            trigger(PYPILOT_ALARM, "lost mode"); 
+        pypilot_client_strobe();
     }
 }
 

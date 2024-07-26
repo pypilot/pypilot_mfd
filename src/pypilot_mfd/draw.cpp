@@ -63,6 +63,10 @@ void draw_thick_line(int x1, int y1, int x2, int y2, int w)
 
 void draw_circle(int x, int y, int r, int thick)
 {
+    if(r <= 0) {
+        thick += r-1;
+        r = 1;
+    }
     for (int i = -thick; i <= thick; i++)
         for (int j = -thick; j <= thick; j++)
             u8g2.drawCircle(x + i, y + j, r);

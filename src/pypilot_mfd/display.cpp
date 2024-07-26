@@ -1718,7 +1718,7 @@ static void read_analog_pins()
         backlight_on = true;
 
     if(backlight_on)
-        ledcWrite(0, 1023*settings.backlight/100);
+        ledcWrite(0, 1023-1023*settings.backlight/100);
     else
         ledcWrite(0, 1023);
 }
@@ -1806,7 +1806,7 @@ void display_setup()
 
 void display_change_page(int dir)
 {
-    if(rotation == 3)
+    if(rotation == 2 || rotation == 3)
         dir = -dir;
 
     if(in_menu) {

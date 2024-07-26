@@ -160,14 +160,12 @@ String processor(const String& var)
     if(var == "INVERT")  return Checked(settings.invert);
     if(var == "CONTRAST")  return String(settings.contrast);
     if(var == "BACKLIGHT")  return String(settings.backlight);
-    if(var == "ROTATION")  return String(settings.rotation);
     if(var == "MIRROR")  return Checked(settings.mirror);
     if(var == "POWERDOWN")  return Checked(settings.powerdown);
     if(var == "DISPLAYPAGES") return get_display_pages();
     if(var == "VERSION")    return String(VERSION);
     return String();
 }
-
 
 String processor_alarms(const String& var)
 {
@@ -193,7 +191,7 @@ String processor_alarms(const String& var)
     if(var == "WEATHER_ALARM_PRESSURE")      return Checked(settings.weather_alarm_pressure);
     if(var == "WEATHER_ALARM_MIN_PRESSURE")  return String(settings.weather_alarm_min_pressure);
     if(var == "WEATHER_ALARM_PRESSURE_RATE")       return Checked(settings.weather_alarm_pressure_rate);
-    if(var == "WEATHER_ALARM_PRESSURE_RATE_VALUE") return String(settings.weather_alarm_pressure_rate_value);
+    if(var == "WEATHER_ALARM_PRESSURE_RATE_VAL") return String(settings.weather_alarm_pressure_rate_value);
     if(var == "WEATHER_ALARM_LIGHTNING")          return Checked(settings.weather_alarm_lightning);
     if(var == "WEATHER_ALARM_LIGHTNING_DISTANCE") return String(settings.weather_alarm_lightning_distance);
 
@@ -390,8 +388,6 @@ void web_setup()
                 settings.contrast = min(max(value.toInt(), 0L), 50L);
             else if(p->name() == "backlight")
                 settings.backlight = min(max(value.toInt(), 0L), 100L);
-            else if(p->name() == "rotation")
-                settings.rotation = min(max(value.toInt(), 0L), 4L);
             else if(p->name() == "mirror")
                 settings.mirror = true;
             else if(p->name() == "powerdown")

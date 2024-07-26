@@ -73,14 +73,12 @@
               <input type='checkbox' name='output_wifi' id='output_wifi' %OUTPUTWIFI%><label for='output_wifi'>Output</label>
             </span>
           </div>
-          <span>Data Computation</span>
-          <div>
-            <span>
-              <input type='checkbox' name='compensate_wind_with_accelerometer' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%><label for='input_wifi'>Compensate wind with accelerometer</label>
-              <input type='checkbox' name='compute_true_wind_from_gps' id='compute_true_wind_from_gps' %COMPUTE_TRUEWIND_FROM_GPS%><label for='output_wifi'>Compute True Wind from GPS</label>
-              <input type='checkbox' name='compute_true_wind_from_water_speed' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%><label for='output_wifi'>Compute True Wind from Water Speed</label>
-            </span>
-          </div>
+        </div>
+        <div class='col1-grid'>
+          <span>Computation</span>          
+          <span><input type='checkbox' name='compensate_wind_with_accelerometer' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%><label for='input_wifi'>Compensate wind with accelerometer</label></span>
+          <span><input type='checkbox' name='compute_true_wind_from_gps' id='compute_true_wind_from_gps' %COMPUTE_TRUEWIND_FROM_GPS%><label for='output_wifi'>Compute True Wind from GPS</label></span>
+          <span><input type='checkbox' name='compute_true_wind_from_water_speed' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%><label for='output_wifi'>Compute True Wind from Water Speed</label></span>
         </div>
         <div class='data-grid'>
           <input type='radio' name='wifidata' id='nmea_pypilot' value='nmea_pypilot'>
@@ -127,12 +125,9 @@
         if (wifi_data)
             wifi_data.checked = true;
       </script>
-      <h5>
-        <a href='/data.htm'>View Current Display Data</a>
-      </h5>
-      <h5>
-        <a href='/history.htm'>View History of Display Data</a>
-      </h5>
+      <h4><a href='/data.html'>View Current Display Data</a></h4>
+      <h4><a href='/history.html'>View History of Display Data</a></h4>
+      <h4><a href='/alarms.html'>Configure Alarms</a></h4>
     </div>
  
     <div class='box'>
@@ -164,13 +159,6 @@
             <label for='invert'>Invert Display</label></span>
           <span>LCD contrast <input type='number' name='contrast' style='width: 4em' value=%CONTRAST%></span>
           <span>LCD backlight <input type='number' name='backlight' style='width: 4em' value=%BACKLIGHT%></span>
-            <select name='rotation' value='%ROTATION%'>
-              <option value=0>0</option>
-              <option value=1>1</option>
-              <option value=2>2</option>
-              <option value=3>3</option>
-              <option value=4>Auto</option>
-            </select>
           <span><input type='checkbox' name='mirror' id='mirror' %MIRROR%>
             <label for='mirror'>Mirror display</label>
           </span>

@@ -17,4 +17,6 @@ void alarm_setup();
 
 void menu_switch_alarm(enum alarm_e alarm);
 
-extern float anchor_dist;
+extern float alarm_anchor_dist;
+extern float lightning_distance;
+extern float alarm_ship_tcpa;

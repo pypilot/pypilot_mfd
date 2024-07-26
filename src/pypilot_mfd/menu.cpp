@@ -18,7 +18,7 @@
 
 bool in_menu;
 
-void selectFont(int &wt, int &ht, String str) {
+static bool selectFont(int &wt, int &ht, String str) {
     // based on width and height determine best font
     if(ht > 40) ht = 40;
 
@@ -30,10 +30,11 @@ void selectFont(int &wt, int &ht, String str) {
         int width = draw_text_width(str.c_str());
         if(width < wt && ht < height) {
             wt = width;
-            break;
+            return true;
         }
         ht--;
     }
+    return false;
 }
 
 struct menu_label : public display {
@@ -42,14 +43,11 @@ struct menu_label : public display {
         h=_h;
     }
 
-    void fit() {
-        // try to fit text along side label
-    }
-
     void render() {
         ht = h;  // it will never get bigger
         int wt = w;
-        selectFont(wt, ht, label.c_str());
+        if(!selectFont(wt, ht, label.c_str()))
+            return;
 
         // center text
         int yp = y + h/2 - ht/2;
@@ -73,16 +71,15 @@ struct menu_page : public page
     menu_page(String n) : page(n) {}
     virtual void select() = 0;
     virtual void arrows(int dir) = 0;
+    virtual void reset() {}
 };
 static menu_page *curmenu = 0;
-
-struct menu;
 
 struct menu_item_menu : public menu_item
 {
     menu_item_menu(String _name, menu_page *_menu) : menu_item(_name), item_menu(_menu) {}
 
-    void select() { curmenu = item_menu; }
+    void select() { curmenu->reset(); curmenu = item_menu; }
     menu_page *item_menu;
 };
 
@@ -141,6 +138,8 @@ struct menu : public menu_page
     }
 
     void arrows(int dir) {
+        if(landscape)
+            dir = -dir;
         buzzer_buzz(800, 50, 0);
         int count = menu_items->items.size();
         int pos = position - dir;
@@ -150,6 +149,8 @@ struct menu : public menu_page
             pos = 0;
         position = pos;
     }
+
+    void reset() { position = 0; }
 
     bool have_back;
     uint8_t position;
@@ -163,16 +164,17 @@ struct menu_item_setting : public menu_item
     void render() {
         // try to fit text along side label
         int wt = w - h, ht = h;
-        selectFont(wt, ht, label.c_str());
-//        printf("select font %d %d %d %d %s\n", w, h, wt, ht, label.c_str());
+        if(!selectFont(wt, ht, label.c_str()))
+            return;
 
         // center text
         int yp = y + h/2 - ht/2;
         int xp = x + h + (w-h)/2 - wt/2;
         draw_text(xp, yp, label.c_str());
 
+        printf("circle %d\n", h);
         if(isset())
-            draw_circle(x+h/2+2, y+h/2, h/2-5, 2);
+            draw_circle(x+h/2+2, y+h/2, h/3-2, 2);
     }
 
     virtual bool isset() = 0;
@@ -190,17 +192,16 @@ struct setting_int : public menu_page
 {
     setting_int(menu_page *_back, String n, int &s, int _min, int _max, int _step) :
         menu_page(n), back(_back), setting(s), min(_min), max(_max), step(_step) {
-            cols = 1; // 1 column for menu
-            add(new menu_label(n, h/4));
-            label = new menu_label(n, h/4);
-            add(label);
-            fit();
-        }
+        cols = 1; // 1 column for menu
+        add(new menu_label(n, h/4));
+        label = new menu_label(n, h/4);
+        add(label);
+        fit();
+    }
 
     void render() {
-        printf("reder setting!!\n");
         label->label = String(setting);
-        menu_page::render();
+         menu_page::render();
     }
 
     void arrows(int dir) {
@@ -235,16 +236,89 @@ struct menu_item_int : public menu_item
     menu_item_int(menu_page *back, String n, int &s, int _min, int _max, int _step) :
         menu_item(n),
         setting(back, n, s, _min, _max, _step) {}
+
+    void render() {
+        String s = String(setting.setting);
+        String l = s + " " + label;
+
+        int wt = w - h, ht = h;
+        if(!selectFont(wt, ht, l.c_str()))
+            return;
+
+        // align text
+        int yp = y + h/2 - ht/2;
+        draw_text(x, yp, s.c_str());
+        int width = draw_text_width(label.c_str());
+        draw_text(x+w-width, yp, label.c_str());
+    }
+
     void select() { curmenu = &setting; }
     setting_int setting;
 };
     
 static std::map <alarm_e, menu*> alarm_menus;
 
+struct alarm_display : public grid_display
+{
+    alarm_display(alarm_e alarm_) : alarm(alarm_),
+    current_label("Current:"), last_label("Last alarm:"), reason_label("Reason:"),
+    current(" N/A "), last(" never ever "), reason("  ") {
+        cols=2;
+        if(alarm != PYPILOT_ALARM) {
+            add(&current_label);
+            add(&current);
+        }
+        add(&last_label);
+        add(&last);
+        add(&reason_label);
+        add(&reason);
+    }
+
+    void render() {
+        float c;
+        display_item_e item = DISPLAY_COUNT;
+        switch(alarm) {
+        case ANCHOR_ALARM: c = alarm_anchor_dist;   break;
+        case COURSE_ALARM: item = GPS_HEADING;      break;
+        case GPS_SPEED_ALARM: item = GPS_SPEED;     break;
+        case WIND_SPEED_ALARM: item = WIND_SPEED;   break;
+        case WATER_SPEED_ALARM: item = WATER_SPEED; break;
+        case WEATHER_ALARM: item = BAROMETRIC_PRESSURE; break;
+        case DEPTH_ALARM: item = DEPTH;             break;
+        case AIS_ALARM:   c = alarm_ship_tcpa;      break;
+        case PYPILOT_ALARM:    c = NAN;             break;
+        }
+
+        if(c != DISPLAY_COUNT) {
+            if(display_data_get(item, c))
+                current.label = String(c, 2);
+            else
+                current.label = " N/A ";
+        }
+
+        String s_reason;
+        float dt = alarm_last(alarm, s_reason);
+        if(!dt) {
+            last.label = "never";
+            reason.label = "";
+        } else {
+            last.label = millis_to_str(dt);
+            reason.label = s_reason;
+        }
+
+        grid_display::render();
+    }
+
+    alarm_e alarm;
+    menu_label current_label, last_label, reason_label;
+    menu_label current, last, reason;
+};
+
 struct alarm_menu : public menu
 {
     alarm_menu(enum alarm_e _alarm) : menu(alarm_name(_alarm)), alarm(_alarm)
     {
+        insert(new alarm_display(alarm));
         alarm_menus[_alarm] = this;
     }
     alarm_e alarm;
@@ -253,31 +327,57 @@ struct alarm_menu : public menu
 void menu_switch_alarm(enum alarm_e alarm)
 {
     curmenu = alarm_menus[alarm];
+    curmenu->reset(); // reset menu position
     in_menu = true;
 }
             
 struct anchor_alarm_display : public display
 {
     void render() {
-        int thickness = w/80;
-        draw_circle(x+w/2, y+h/2, w/2, thickness);
+        int thickness = w/120;
+        int r;
+        if(h < w)
+            r = h;
+        else
+            r = w;
+        r -= thickness;
+        draw_circle(x+w/2, y+h/2, r/2, thickness);
 
-        // render boat and history
-        int ht = 12;
-        draw_set_font(ht);
-        String s = "Dist " + String(anchor_dist);
-        draw_text(x, y, s.c_str());
+        // now draw the boat in the circle
+        float lat, lon;
+        if(!display_data_get(LATITUDE, lat) || !display_data_get(LONGITUDE, lon)) {
+            printf("Failed to get lat/lon when anchor alarm set");
+            return;
+        }
+
+        double slat = settings.anchor_lat, slon = settings.anchor_lon;
+        double x = cosf(deg2rad(lat))*resolv(lon-slon) * 60;
+        double y = (lat-slat)*60;
+
+        // x and y are in miles, normalize to anchor range
+        x *= settings.anchor_alarm_distance / 1852;
+        y *= settings.anchor_alarm_distance / 1852;
+
+        x *= r, y *= r; // convert to pixels;
+        draw_circle(x, y, thickness, thickness);
+    }
+};
+
+struct menu_item_anchor_alarm_enable : public menu_item_bool
+{
+    menu_item_anchor_alarm_enable() : menu_item_bool("Enable", settings.anchor_alarm) {}
+
+    void select() {
+        menu_item_bool::select();
+        alarm_anchor_reset();
     }
 };
 
 struct anchor_alarm_menu : public alarm_menu
 {
     anchor_alarm_menu() : alarm_menu(ANCHOR_ALARM) {
-        add(new anchor_alarm_display);
-        grid_display *d = new grid_display(this);
-        d->expanding = false;
-        add(d);
-        add_item(new menu_item_bool("Enable", settings.anchor_alarm));
+        insert(new anchor_alarm_display);
+        add_item(new menu_item_anchor_alarm_enable);
         add_item(new menu_item_int(this, "Range", settings.anchor_alarm_distance, 10, 100, 10));
     }
 };
@@ -293,12 +393,12 @@ struct course_alarm_display : public display
         float course;
         if(display_data_get(GPS_HEADING, course)) {
             float course_error = course - course_alarm;
+            xp = tanf(deg2rad(course_error))*h;
             draw_line(x+w/2, y+h, x+w/2+xp, y);
         }
         // render course and course alarm text
         String cs = String(course, 1);
         draw_text(x, y, cs.c_str());
-//        draw_text(x, y, course_alarm);
     }
 };
 
@@ -319,69 +419,18 @@ struct menu_item_course_alarm_enable : public menu_item_bool
 struct course_alarm_menu : public alarm_menu
 {
     course_alarm_menu() : alarm_menu(COURSE_ALARM) {
-        
-        add(new course_alarm_display);
+        insert(new course_alarm_display);
         add_item(new menu_item_course_alarm_enable);
-        add_item(new menu_item_int(this, "Course Error", settings.course_alarm_course, 10, 40, 5));
+        add_item(new menu_item_int(this, "Course Error", settings.course_alarm_course, 5, 90, 5));
     }
-};
-
-struct speed_alarm_display : public grid_display
-{
-    speed_alarm_display(alarm_e alarm_) : alarm(alarm_),
-    current_label("Current:"), last_label("Last alarm:"), reason_label("Reason:"),
-    current(" N/A "), last(" never ever "), reason("  ") {
-        cols=2;
-        add(&current_label);
-        add(&current);
-        add(&last_label);
-        add(&last);
-        add(&reason_label);
-        add(&reason);
-    }
-
-    void render() {
-        float c;
-        display_item_e item;
-        switch(alarm) {
-        case GPS_SPEED_ALARM: item = GPS_SPEED;
-            break;
-        case WIND_SPEED_ALARM: item = WIND_SPEED;
-            break;
-        case WATER_SPEED_ALARM: item = WATER_SPEED;
-            break;
-        }
-
-        if(display_data_get(item, c))
-            current.label = String(c, 2);
-        else
-            current.label = " N/A ";
-
-        String s_reason;
-        float dt = alarm_last(alarm, s_reason);
-        if(!dt) {
-            last.label = "never";
-            reason.label = "";
-        } else {
-            last.label = millis_to_str(dt);
-            reason.label = s_reason;
-        }
-
-        grid_display::render();
-    }
-
-    alarm_e alarm;
-    menu_label current_label, last_label, reason_label;
-    menu_label current, last, reason;
 };
 
 struct speed_alarm_menu : public alarm_menu
 {
     speed_alarm_menu(alarm_e alarm, bool &speed_alarm, int &min_speed, int &max_speed) : alarm_menu(alarm) {
-        insert(new speed_alarm_display(alarm));
         add_item(new menu_item_bool("Enable", speed_alarm));
-        add_item(new menu_item_int(this, "Min Speed", min_speed, 0, 40, 1));
-        add_item(new menu_item_int(this, "Max Speed", max_speed, 1, 40, 1));
+        add_item(new menu_item_int(this, "Min Speed", min_speed, 0, 10, 1));
+        add_item(new menu_item_int(this, "Max Speed", max_speed, 1, 100, 1));
     }
 };
 
@@ -389,11 +438,11 @@ struct weather_alarm_menu : public alarm_menu
 {
     weather_alarm_menu() : alarm_menu(WEATHER_ALARM)    {
         add_item(new menu_item_bool("Enable Min Pressure", settings.weather_alarm_pressure));
-        add_item(new menu_item_int(this, "Pressure", settings.weather_alarm_min_pressure, 900, 1020, 5));
+        add_item(new menu_item_int(this, "Pressure", settings.weather_alarm_min_pressure, 900, 1100, 5));
         add_item(new menu_item_bool("Enable Falling Pressure", settings.weather_alarm_pressure_rate));
         add_item(new menu_item_int(this, "Falling Pressure Rate (mbar/min)", settings.weather_alarm_pressure_rate_value, 1, 10, 1));
         add_item(new menu_item_bool("Enable Lightning", settings.weather_alarm_lightning));
-        add_item(new menu_item_int(this, "Lightning Distance NMi", settings.weather_alarm_lightning_distance, 1, 20, 1));        
+        add_item(new menu_item_int(this, "Lightning Distance NMi", settings.weather_alarm_lightning_distance, 1, 50, 1));        
     }
 };
     
@@ -449,13 +498,6 @@ struct menu_choice : public menu
     }
 };
 
-// switch to the menu that triggerd the alarm
-void menu_alarm(alarm_e alarm)
-{
-    curmenu = alarm_menus[alarm];
-    in_menu = true;
-}
-
 void menu_arrows(int dir)
 {
     curmenu->arrows(dir);
@@ -489,7 +531,7 @@ void menu_reset()
 void menu_setup()
 {
     menu *alarms = new menu("Alarms");
-    alarms->cols = landscape ? 2 : 1;
+    alarms->menu_items->cols = landscape ? 2 : 1;
     alarms->add_menu(new anchor_alarm_menu);
     alarms->add_menu(new course_alarm_menu);
     alarms->add_menu(new speed_alarm_menu(GPS_SPEED_ALARM, settings.gps_speed_alarm, settings.gps_min_speed_alarm_knots, settings.gps_max_speed_alarm_knots));
@@ -509,7 +551,7 @@ void menu_setup()
 
     menu *display = new menu("Display");
     display->add_item(new menu_item_int(display, "Backlight", settings.backlight, 0, 100, 1));
-    display->add_item(new menu_item_int(display, "Contrast", settings.contrast, 0, 100, 1));
+    display->add_item(new menu_item_int(display, "Contrast", settings.contrast, 0, 50, 1));
 #ifdef USE_U8G2
     display->add_item(new menu_item_bool("Invert", settings.invert));
 #else

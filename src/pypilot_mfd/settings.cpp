@@ -77,6 +77,7 @@ static bool settings_load_suffix(String suffix="")
     }
 
 #define LOAD_SETTING(NAME, DEFAULT)   if(s.hasOwnProperty(#NAME)) settings.NAME = s[#NAME]; else settings.NAME = DEFAULT;
+#define LOAD_SETTING_F(NAME, DEFAULT)   if(s.hasOwnProperty(#NAME)) settings.NAME = (double)s[#NAME]; else settings.NAME = DEFAULT;
 #define LOAD_SETTING_S(NAME, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = JString(s[#NAME]); else settings.NAME = DEFAULT;
 #define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = (TYPE)(int)s[#NAME]; else settings.NAME = DEFAULT;
 
@@ -128,30 +129,32 @@ static bool settings_load_suffix(String suffix="")
 
     // alarms
     LOAD_SETTING(anchor_alarm, false)
+    LOAD_SETTING_F(anchor_lat, 0)
+    LOAD_SETTING_F(anchor_lon, 0)
     LOAD_SETTING(anchor_alarm_distance, 10)
 
     LOAD_SETTING(course_alarm, false)
-    LOAD_SETTING(course_alarm_course, 0)
-    LOAD_SETTING(course_alarm_error, 20)
+    LOAD_SETTING_BOUND(course_alarm_course, 0, 0, 360)
+    LOAD_SETTING_BOUND(course_alarm_error, 20, 5, 90)
         
     LOAD_SETTING(gps_speed_alarm, false)
-    LOAD_SETTING(gps_min_speed_alarm_knots, 0)
-    LOAD_SETTING(gps_max_speed_alarm_knots, 10)
+    LOAD_SETTING_BOUND(gps_min_speed_alarm_knots, 0, 0, 10)
+    LOAD_SETTING_BOUND(gps_max_speed_alarm_knots, 10, 1, 100)
 
     LOAD_SETTING(wind_speed_alarm, false)
-    LOAD_SETTING(wind_min_speed_alarm_knots, 0)
-    LOAD_SETTING(wind_max_speed_alarm_knots, 30)
+    LOAD_SETTING_BOUND(wind_min_speed_alarm_knots, 0, 0, 100)
+    LOAD_SETTING_BOUND(wind_max_speed_alarm_knots, 30, 1, 100)
 
     LOAD_SETTING(water_speed_alarm, false)
-    LOAD_SETTING(water_min_speed_alarm_knots, 0)
-    LOAD_SETTING(water_max_speed_alarm_knots, 10)
+    LOAD_SETTING_BOUND(water_min_speed_alarm_knots, 0, 0, 10)
+    LOAD_SETTING_BOUND(water_max_speed_alarm_knots, 10, 1, 100)
 
     LOAD_SETTING(weather_alarm_pressure, false)
-    LOAD_SETTING(weather_alarm_min_pressure, 980)
+    LOAD_SETTING_BOUND(weather_alarm_min_pressure, 980, 900, 1100)
     LOAD_SETTING(weather_alarm_pressure_rate, false)
-    LOAD_SETTING(weather_alarm_pressure_rate_value, 10)
+    LOAD_SETTING_BOUND(weather_alarm_pressure_rate_value, 10, 1, 100)
     LOAD_SETTING(weather_alarm_lightning, false)
-    LOAD_SETTING(weather_alarm_lightning_distance, 10)
+    LOAD_SETTING_BOUND(weather_alarm_lightning_distance, 10, 1, 50)
 
     LOAD_SETTING(depth_alarm, false)
     LOAD_SETTING(depth_alarm_min, 3)
@@ -242,6 +245,8 @@ static bool settings_store_suffix(String suffix="")
 
     // alarms
     STORE_SETTING(anchor_alarm)
+    STORE_SETTING(anchor_lat)
+    STORE_SETTING(anchor_lon)
     STORE_SETTING(anchor_alarm_distance)
 
     STORE_SETTING(course_alarm)
