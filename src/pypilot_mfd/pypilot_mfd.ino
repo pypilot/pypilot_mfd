@@ -24,17 +24,14 @@
 
 void setup()
 {
-//    delay(1500);
+    //delay(1500);
     uint32_t t0 = millis();
     serial_setup();
     printf("pypilot_mfd\n");
     accel_setup();
-
     keys_setup();
-
     settings_load();
     wireless_setup();
-
     mdns_setup();
     web_setup();
 
@@ -44,7 +41,6 @@ void setup()
     printf("Stack Size %d\n", ss);
 
     alarm_setup();
-
     accel_read();
     display_setup();
     menu_setup();
@@ -64,9 +60,7 @@ void loop()
     pypilot_client_poll();
     alarm_poll();
     buzzer_poll();
-
     web_poll();
-
     display_poll();
 
     // sleep remainder of second

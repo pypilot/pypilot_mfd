@@ -10,7 +10,7 @@
 
 #define VERSION 0.1
 
-#define OLD
+//#define OLD
 
 #ifdef OLD
 #define KEY_UP_IO 27

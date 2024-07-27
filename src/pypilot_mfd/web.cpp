@@ -41,7 +41,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
     if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
         data[len] = 0;
         String message = (char*)data;
-        Serial.printf("websocket got %s\n", data);
+        printf("websocket got %s\n", data);
         JSONVar input = JSON.parse(message);
 
 #if 0
@@ -96,11 +96,11 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 {
     switch (type) {
         case WS_EVT_CONNECT:
-            Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+            printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
             ws.textAll(wireless_json_sensors());
             break;
         case WS_EVT_DISCONNECT:
-            Serial.printf("WebSocket client #%u disconnected\n", client->id());
+            printf("WebSocket client #%u disconnected\n", client->id());
             break;
         case WS_EVT_DATA:
             handleWebSocketMessage(arg, data, len);
@@ -131,7 +131,7 @@ String Checked(bool value) {
 
 String processor(const String& var)
 {
-    //Serial.println(var);
+    //println(var);
     if(var == "WIFI_NETWORKS") return wifi_networks_html;
     if(var == "SSID")       return settings.ssid;
     if(var == "PSK")        return settings.psk;
@@ -299,7 +299,7 @@ void web_setup()
     });
 
     server.on("/network", HTTP_POST, [](AsyncWebServerRequest *request) {
-        //Serial.printf("post network\n");
+        //printf("post network\n");
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
             String name = p->name(), value = p->value();
@@ -443,7 +443,7 @@ void web_setup()
     server.serveStatic("/", SPIFFS, "/");
 
     server.begin();
-    Serial.println("web server listening");
+    printf_P(F("web server listening\n"));
 }
 
 void web_poll()
@@ -457,7 +457,7 @@ void web_poll()
 
     String s = jsonCurrent();
     if(s) {
-        //Serial.println("ws: " + s);
+        //println("ws: " + s);
         ws.textAll(s);
     }
 

@@ -81,7 +81,7 @@ static bool settings_load_suffix(String suffix="")
 #define LOAD_SETTING_S(NAME, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = JString(s[#NAME]); else settings.NAME = DEFAULT;
 #define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.hasOwnProperty(#NAME)) settings.NAME = (TYPE)(int)s[#NAME]; else settings.NAME = DEFAULT;
 
-#define LOAD_SETTING_BOUND(NAME, MIN, MAX, DEFAULT) \
+#define LOAD_SETTING_BOUND(NAME, DEFAULT, MIN, MAX) \
     LOAD_SETTING(NAME, DEFAULT) \
     if(settings.NAME < MIN) settings.NAME = MIN; \
     if(settings.NAME > MAX) settings.NAME = MAX; \
@@ -117,8 +117,8 @@ static bool settings_load_suffix(String suffix="")
     LOAD_SETTING(use_depth_ft, false)
     LOAD_SETTING_S(lat_lon_format, "minutes")
     LOAD_SETTING(invert, false)
-    LOAD_SETTING_BOUND(contrast, 0, 50, 20)
-    LOAD_SETTING_BOUND(backlight, 0, 100, 50)
+    LOAD_SETTING_BOUND(contrast, 20, 0, 50)
+    LOAD_SETTING_BOUND(backlight, 10, 0, 20)
     
     LOAD_SETTING(show_status, true)
     LOAD_SETTING(rotation, 4)

@@ -84,7 +84,7 @@ bool bm_write(uint8_t addr, uint8_t val)
 
 void bmX280_setup()
 {
-    Serial.println(F("bmX280 setup"));
+    printf("bmX280 setup\n");
 
     // NOTE:  local version of twi does not enable pullup as
     // bmX_280 device is 3.3v and arduino runs at 5v
@@ -113,7 +113,7 @@ void bmX280_setup()
     }
 
     if(!bm_read(0x88, 24, d)) {
-        Serial.println(F("bmp280 failed to read calibration"));
+        printf("bmp280 failed to read calibration\n");
         have_bmp280 = 0;
     }
       
@@ -133,7 +133,7 @@ void bmX280_setup()
     
     // b00011111  // configure
     if(!bm_write(0xf4, 0xff)) {
-        Serial.println(F("bmp280 F2"));
+        printf("bmp280 F2\n");
         have_bmp280 = 0;
     }
 }
@@ -181,7 +181,7 @@ void read_pressure_temperature()
     uint8_t buf[6] = {0};
 
     if(!bm_read(0xf7, 6, buf) && have_bmp280)
-        Serial.println(F("bmp280 failed to read 6 bytes from bmp280"));
+        printf("bmp280 failed to read 6 bytes from bmp280\n");
 
     int32_t p, t;
     
@@ -190,7 +190,7 @@ void read_pressure_temperature()
     
     if(t == 0 || p == 0) {
         if(have_bmp280)
-            Serial.println(F("bmp280 zero read"));
+            printf("bmp280 zero read\n");
         have_bmp280 = 0;
     }
 

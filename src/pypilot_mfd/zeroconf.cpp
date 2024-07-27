@@ -13,6 +13,7 @@
 
 #include "settings.h"
 #include "zeroconf.h"
+#include "utils.h"
 
 static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
 static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
@@ -27,18 +28,18 @@ void mdns_analyze_results(String service_name, mdns_result_t * results)
     int i = 1, t;
     while(r) {
         
-        Serial.printf("%d: Interface: %s, Type: %s\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
+        printf("%d: Interface: %s, Type: %s\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
         if(r->instance_name){
-            Serial.printf("  PTR : %s\n", r->instance_name);
+            printf("  PTR : %s\n", r->instance_name);
         }
         if(r->hostname){
-            Serial.printf("  SRV : %s.local:%u\n", r->hostname, r->port);
+            printf("  SRV : %s.local:%u\n", r->hostname, r->port);
         }
         if(r->txt_count){
-            Serial.printf("  TXT : [%u] ", r->txt_count);
+            printf("  TXT : [%u] ", r->txt_count);
             for(t=0; t<r->txt_count; t++) {
                 String key = r->txt[t].key, val = r->txt[t].value;
-               // Serial.printf("%s=%s; ", key.c_str(), val.c_str());
+               // printf("%s=%s; ", key.c_str(), val.c_str());
                 if(service_name == "_http" && key == "swname" && val == "signalk-server") {
                     if(r->addr) {
                         char addr[64];
@@ -83,12 +84,12 @@ void mdns_analyze_results(String service_name, mdns_result_t * results)
 
 void find_mdns_service(const char * service_name, const char * proto)
 {
-    Serial.printf("Query PTR: %s.%s.local\n", service_name, proto);
+    printf("Query PTR: %s.%s.local\n", service_name, proto);
 
     mdns_result_t * results = NULL;
     esp_err_t err = mdns_query_ptr(service_name, proto, 3000, 20,  &results);
     if(err){
-        Serial.println("Query Failed");
+        printf_P(F("Query Failed"));
         return;
     }
 
@@ -124,7 +125,7 @@ void mdns_setup()
                     tskIDLE_PRIORITY,/* Priority at which the task is created. */
                     &xHandle );     
     if(!MDNS.begin("pypilot_mfd")) {
-        Serial.println("Error starting mDNS");
+        printf_P(F("Error starting mDNS"));
         return;
     }
 

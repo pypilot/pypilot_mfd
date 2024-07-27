@@ -71,7 +71,7 @@ bool pypilotClient::connect(String h, int port)
                 
     sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (sock < 0) {
-        Serial.printf("Unable to create socket: errno %d", errno);
+        printf("Unable to create socket: errno %d", errno);
         sock = 0;
         return false;
     }

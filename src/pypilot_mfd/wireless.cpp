@@ -130,16 +130,14 @@ static void setup_wifi() {
         const char *SSID = "pypilot_mfd";
         bool result = WiFi.softAP(SSID, 0, settings.channel);
         if (!result)
-            Serial.println("AP Config failed.");
+            printf("AP Config failed.\n");
         else
-            Serial.println("AP Config Success. Broadcasting with AP: " + String(SSID));
+            printf("AP Config Success. Broadcasting with AP: %s\n", SSID);
 
-        Serial.print("Soft-AP IP address = ");
-        Serial.println(WiFi.softAPIP());
+        printf("Soft-AP IP address = %s\n", WiFi.softAPIP().toString().c_str());
 
         // This is the mac address of the Slave in AP Mode
-        Serial.print("AP MAC: ");
-        Serial.println(WiFi.softAPmacAddress());
+        printf("AP MAC: ", WiFi.softAPmacAddress().c_str());
 
     } else {
         //WiFi.mode(WIFI_AP_STA);
@@ -148,7 +146,7 @@ static void setup_wifi() {
         WiFi.onEvent(WiFiStationGotIP, SYSTEM_EVENT_STA_GOT_IP);
 
         if (settings.ssid) {
-            Serial.printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
+            printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
 
             // setting a custom "country" locks the wifi in a particular channel
             wifi_country_t myWiFi;
@@ -198,7 +196,7 @@ void lowpass_direction(float dir) {
         ldir += 360;
     else if (ldir - lpwind_dir > 180)
         ldir -= 360;
-    //  Serial.printf("%x %f %f\n", packet->id, ldir, lpwind_dir);
+    //  printf("%x %f %f\n", packet->id, ldir, lpwind_dir);
 
     const float lp = .2;
     if (isnan(lpwind_dir))
@@ -228,7 +226,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     uint16_t crc = crc16(data.data, data.len - 2);
     wind_packet_t *packet = (wind_packet_t *)data.data;
     if (crc != packet->crc16) {
-        Serial.printf("espnow wind data packet crc failed %x %x\n", crc, packet->crc16);
+        printf("espnow wind data packet crc failed %x %x\n", crc, packet->crc16);
         return;
     }
 
@@ -314,7 +312,7 @@ static void DataRecvAir(struct esp_now_data_t &data) {
     uint16_t crc = crc16(data.data, data.len - 2);
     air_packet_t *packet = (air_packet_t *)data.data;
     if (crc != packet->crc16) {
-        Serial.printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
+        printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
         return;
     }
 
@@ -357,7 +355,7 @@ static void DataRecvWater(struct esp_now_data_t &data) {
     uint16_t crc = crc16(data.data, data.len - 2);
     water_packet_t *packet = (water_packet_t *)data.data;
     if (crc != packet->crc16) {
-        Serial.printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
+        printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
         return;
     }
 
@@ -398,7 +396,7 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
     uint16_t crc = crc16(data.data, data.len - 2);
     lightning_uv_packet_t *packet = (lightning_uv_packet_t *)data.data;
     if (crc != packet->crc16) {
-        Serial.printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
+        printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
         return;
     }
 
@@ -424,10 +422,9 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    Serial.print("Last Packet Recv from: "); Serial.print (macStrt);
-    //Serial.print(" Last Packet Recv Data: "); Serial.print(*data);
-    Serial.print(" Last Packet Recv Data Len: "); Serial.print(data_len);
-    Serial.println("");
+    printf("Last Packet Recv from: %s", macStrt);
+    //print(" Last Packet Recv Data: "); print(*data);
+    printf(" Last Packet Recv Data Len: %s\n", data_len);
 #endif
     if (xSemaphoreTake(esp_now_sem, (TickType_t)10) == pdTRUE) {
         esp_now_data_t &pos = esp_now_rb[rb_start];
@@ -444,12 +441,12 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
 
 // Init ESP Now with fallback
 static void InitESPNow() {
-    printf("InitESPNow %d\n", chip.channel);
+    printf_P(F("InitESPNow %d\n"), chip.channel);
     esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
     if (esp_now_init() == ESP_OK) {
-        Serial.println("ESPNow Init Success");
+        printf_P(F("ESPNow Init Success\n"));
     } else {
-        Serial.println("ESPNow Init Failed");
+        printf_P(F("ESPNow Init Failed\n"));
         ESP.restart();  // restart cpu on failure
     }
 
@@ -460,8 +457,7 @@ static void InitESPNow() {
     // chip not paired, attempt pair
     esp_err_t addStatus = esp_now_add_peer(&chip);
     if (addStatus != ESP_OK) {
-        Serial.print("ESP-NOW pair fail:");
-        Serial.println(addStatus);
+        printf("ESP-NOW pair fail: %d\n", addStatus);
         return;
     }
 }
@@ -500,10 +496,9 @@ void sendChannel() {
 
     const uint8_t *peer_addr = chip.peer_addr;
     esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
-    //Serial.print("Send Status: ");
+    //print("Send Status: ");
     if (result != ESP_OK) {
-        Serial.print("Send failed Status: ");
-        Serial.println(result);
+        printf_P(F("Send failed Status: %d\n"), result);
     }
 }
 
@@ -523,7 +518,7 @@ void wireless_poll() {
     uint32_t t0 = millis();
     static uint32_t tl;
     if (t0 - tl > 60000) {  // report memory statistics every 60 seconds
-        Serial.printf("pypilot_mfd %d %d %d %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize(), message_count);
+        printf("pypilot_mfd %d %d %d %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize(), message_count);
         tl = t0;
         message_count = 0;
     }
@@ -566,7 +561,7 @@ void wireless_scan_devices() {
         esp_wifi_set_channel(c, WIFI_SECOND_CHAN_NONE);
         chip.channel = c;
         if (esp_now_init() != ESP_OK)
-            Serial.println("ESPNow Init Failed");
+            printf_P(F("ESPNow Init Failed"));
         esp_err_t addStatus = esp_now_add_peer(&chip);
         if (addStatus == ESP_OK) {
             for (int i = 0; i < 15; i++) {

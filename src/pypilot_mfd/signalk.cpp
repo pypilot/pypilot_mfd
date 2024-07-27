@@ -270,11 +270,11 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
     esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
     switch (event_id) {
     case WEBSOCKET_EVENT_CONNECTED:
-        Serial.println("WEBSOCKET_EVENT_CONNECTED");
+        printf("WEBSOCKET_EVENT_CONNECTED\n");
         signalk_subscribe();
         break;
     case WEBSOCKET_EVENT_DISCONNECTED:
-        Serial.println("WEBSOCKET_EVENT_DISCONNECTED");
+        printf("WEBSOCKET_EVENT_DISCONNECTED\n");
         signalk_disconnect();
         break;
     case WEBSOCKET_EVENT_DATA:
@@ -282,10 +282,10 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
         if(!settings.input_wifi)
             break;
         /*
-        Serial.println("WEBSOCKET_EVENT_DATA");
-        Serial.printf("Received opcode=%d", data->op_code);
-        Serial.printf("Received=%.*s", data->data_len, (char *)data->data_ptr);
-        Serial.printf("Total payload length=%d, data_len=%d, current payload offset=%d\r\n", data->payload_len, data->data_len, data->payload_offset);
+        println("WEBSOCKET_EVENT_DATA");
+        printf("Received opcode=%d", data->op_code);
+        printf("Received=%.*s", data->data_len, (char *)data->data_ptr);
+        printf("Total payload length=%d, data_len=%d, current payload offset=%d\r\n", data->payload_len, data->data_len, data->payload_offset);
         */
         char d[data->data_len+1];
         memcpy(d, data->data_ptr, data->data_len);
@@ -307,7 +307,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
             websocket_buffer += d;
     } break;
     case WEBSOCKET_EVENT_ERROR:
-        Serial.println("WEBSOCKET_EVENT_ERROR");
+        printf_P(F("WEBSOCKET_EVENT_ERROR"));
         break;
     }
 }
@@ -327,15 +327,12 @@ static void signalk_connect()
     int httpResponseCode = client.GET();
     String payload;
     if (httpResponseCode>0) {
-        Serial.print("signalk HTTP Response code: ");
-        Serial.print(httpResponseCode);
+        printf("signalk HTTP Response code: %d", httpResponseCode);
         payload = client.getString();
-        Serial.print(" :");
-        Serial.println(payload);
+        printf(" :%s\n", payload.c_str());
         client.end();
     } else {
-        Serial.print("signalk Error code: ");
-        Serial.println(httpResponseCode);
+        printf("signalk Error code: %d\n", httpResponseCode);
         client.end();
         return;
     }

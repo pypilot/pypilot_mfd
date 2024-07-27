@@ -39,9 +39,23 @@ void keys_setup()
     }
 }
 
+static bool keys[KEY_COUNT];
+static void readkeys()
+{
+    for (int i = 0; i < KEY_COUNT; i++) {
+        keys[i] = !digitalRead(key_pin[i]);
+}
+
 static bool pressed(int key, bool repeat=true)
 {
-    if(digitalRead(key_pin[key])) {
+    if(keys[key]) {
+        if(repeat && key_times[key] && millis() - key_times[key] > timeout) {
+            repeated = true;
+            key_times[key] += timeout;
+            timeout = 300; // faster repeat
+            return true;
+        }
+    } else {
         if(key_times[key]) {
             key_times[key] = 0;
             if(!repeated)
@@ -49,20 +63,13 @@ static bool pressed(int key, bool repeat=true)
             repeated = false;
             timeout = 500;
         }
-    } else {
-        if(repeat && key_times[key] && millis() - key_times[key] > timeout) {
-            repeated = true;
-            key_times[key] += timeout;
-            timeout = 300; // faster repeat
-            return true;
-        }
     }
     return false;
 }
 
 static bool held(int key)
 {
-    if(!repeated && !digitalRead(key_pin[key]) && key_times[key] && millis() - key_times[key] > 500) {
+    if(!repeated && keys[key]) && key_times[key] && millis() - key_times[key] > 500) {
         repeated = true;
         return true;
     }
@@ -71,7 +78,14 @@ static bool held(int key)
 
 void keys_poll()
 {
-    if (pressed(KEY_PAGE_DOWN)) {
+    read_keys();
+
+    if(keys[KEY_PAGE_UP] && keys[KEY_PAGE_DOWN])
+        wireless_toggle_mode();
+    else if (pressed(KEY_PAGE_UP)) {
+        printf("KEY UP\n");
+        display_change_page(1);
+    } else if (pressed(KEY_PAGE_DOWN)) {
         printf("KEY DOWN\n");
         display_change_page(-1);
     } else if (pressed(KEY_MENU, false)) {

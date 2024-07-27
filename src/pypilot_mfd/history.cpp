@@ -38,22 +38,20 @@ struct history
     std::list<history_element> data_high[HISTORY_RANGE_COUNT];
     std::list<history_element> data_low[HISTORY_RANGE_COUNT];
 
+    float min_llvalue[HISTORY_RANGE_COUNT], min_lvalue[HISTORY_RANGE_COUNT];
+    float max_llvalue[HISTORY_RANGE_COUNT], max_lvalue[HISTORY_RANGE_COUNT];
+    uint32_t last_time[HISTORY_RANGE_COUNT];
+
     void put(float value, uint32_t time)
     {
         //printf("put %f\n", value);
-
         for(int range = 0; range < HISTORY_RANGE_COUNT; range++) {
-            //  this very ugly code to extract the last 2 values in the history
-            float lvalue = value, llvalue = value, ltime;
-            std::list<history_element>::iterator it1 = data[range].begin();
-            if(it1 != data[range].end()) {
-                std::list<history_element>::iterator it2 = it1;
-                if(++it2 != data[range].end()) {
-                    llvalue = it2->value;
-                    lvalue = it1->value;
-                    ltime = it1->time;
-                }
-            }
+            float &lvalue_min = min_lvalue[range];
+            float &lvalue_max = max_lvalue[range];
+            float &llvalue_min = min_llvalue[range];
+            float &llvalue_max = max_llvalue[range];
+
+            uint32_t &ltime = last_time[range];
             //printf("valus %d %d %d %d %f %f %f\n", range, data[range].size(), data_high[range].size(), data_low[range].size(), value, lvalue, llvalue);
 
             uint32_t range_time = history_range_time[range];
@@ -63,32 +61,46 @@ struct history
             uint32_t dt = time - fronttime;
             if(dt < range_timeout)
                 break;
+            float minv, maxv;
             if(range > 0) {
                 // average previous range data
                 value = 0;
+                minv = INFINITY;
+                maxv = -INFINITY;
                 int count = 0;
                 for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) {
                     value += it->value;
+                    if(it->value < minv)
+                        minv = it->value;
+                    if(it->value > maxv)
+                        maxv = it->value;
                     count++;
                     if(it->time < time - range_timeout)
                         break;
                 }
                 value /= count;
-            }
+            } else
+                minv = value, maxv = value;
             data[range].push_front(history_element(value, time));
 
             // log high/low
-            if(llvalue < lvalue) {
-                if(lvalue > value) {
-                    // new peak at lvalue
-                    data_high[range].push_front(history_element(lvalue, ltime));
-                }
-            } else {
-                if(lvalue < value) {
-                    data_low[range].push_front(history_element(lvalue, ltime));
-                    // new trough at lvalue
-                }
-            }
+            if(data_high[range].empty())
+                data_high[range].push_front(history_element(maxv, time));
+            else if(llvalue_max < lvalue_max && lvalue_max >= maxv)
+                data_high[range].push_front(history_element(lvalue_max, ltime));
+
+            if(data_low[range].empty())
+                data_low[range].push_front(history_element(minv, time));
+            else if(llvalue_min > lvalue_min && lvalue_min <= minv)
+                data_low[range].push_front(history_element(lvalue_min, ltime));
+
+            llvalue_min = lvalue_min;
+            lvalue_min = minv;
+
+            llvalue_max = lvalue_max;
+            lvalue_max = maxv;
+
+            ltime = time;
 
             // remove elements that expired
             expire(data[range], time, range_time);
@@ -129,12 +141,15 @@ std::list<history_element> *history_find(display_item_e item, int r, uint32_t &t
             std::list<history_element> &data_high = histories[i].data_high[r];
             std::list<history_element> &data_low = histories[i].data_low[r];
             // compute range
-            high = -INFINITY;
+            if(histories[i].data[r].empty())
+                return 0;
+            float v = histories[i].data[r].front().value;
+            high = v;
             for(std::list<history_element>::iterator it = data_high.begin(); it!=data_high.end(); it++)
                 if(it->value > high)
                     high = it->value;
 
-            low = INFINITY;
+            low = v;
             for(std::list<history_element>::iterator it = data_low.begin(); it!=data_low.end(); it++)
                 if(it->value < low)
                     low = it->value;

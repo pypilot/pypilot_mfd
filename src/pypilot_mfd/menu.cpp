@@ -121,10 +121,7 @@ struct menu : public menu_page
         std::list<display*>::iterator it = menu_items->items.begin();
         std::advance(it, position);
         display *selected = *it;
-        draw_invert(1);
-        // todo: invert or draw box?
-        draw_box(selected->x, selected->y, selected->w, selected->h);
-        draw_invert(0);
+        draw_box(selected->x, selected->y, selected->w, selected->h, true);
     }
 
     void select() {
@@ -172,7 +169,6 @@ struct menu_item_setting : public menu_item
         int xp = x + h + (w-h)/2 - wt/2;
         draw_text(xp, yp, label.c_str());
 
-        printf("circle %d\n", h);
         if(isset())
             draw_circle(x+h/2+2, y+h/2, h/3-2, 2);
     }
@@ -550,7 +546,7 @@ void menu_setup()
     settings_menu->add_menu(new menu_choice("lat/lon format", fmts, settings.lat_lon_format));
 
     menu *display = new menu("Display");
-    display->add_item(new menu_item_int(display, "Backlight", settings.backlight, 0, 100, 1));
+    display->add_item(new menu_item_int(display, "Backlight", settings.backlight, 0, 20, 1));
     display->add_item(new menu_item_int(display, "Contrast", settings.contrast, 0, 50, 1));
 #ifdef USE_U8G2
     display->add_item(new menu_item_bool("Invert", settings.invert));

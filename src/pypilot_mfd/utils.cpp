@@ -107,46 +107,42 @@ String mac_int_to_str(uint64_t r)
 }
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
-    Serial.printf("Listing directory: %s\r\n", dirname);
+    printf("Listing directory: %s\r\n", dirname);
 
     File root = fs.open(dirname);
     if(!root){
-        Serial.println("- failed to open directory");
+        printf("- failed to open directory\n");
         return;
     }
     if(!root.isDirectory()){
-        Serial.println(" - not a directory");
+        printf(" - not a directory\n");
         return;
     }
 
     File file = root.openNextFile();
     while(file){
         if(file.isDirectory()){
-            Serial.print("  DIR : ");
-            Serial.println(file.name());
+            printf("  DIR : %s\n", file.name());
             if(levels){
                 listDir(fs, file.name(), levels -1);
             }
         } else {
-            Serial.print("  FILE: ");
-            Serial.print(file.name());
-            Serial.print("\tSIZE: ");
-            Serial.println(file.size());
+            printf("  FILE: %s\tSIZE: %d\n", file.name(), file.size());
         }
         file = root.openNextFile();
     }
 }
 
 void readFile(fs::FS &fs, const char * path){
-    Serial.printf("Reading file: %s\r\n", path);
+    printf("Reading file: %s\r\n", path);
 
     File file = fs.open(path);
     if(!file || file.isDirectory()){
-        Serial.println("- failed to open file for reading");
+        printf("- failed to open file for reading\n");
         return;
     }
 
-    Serial.println("- read from file:");
+    printf("- read from file:\n");
     while(file.available()){
         Serial.write(file.read());
     }
@@ -172,4 +168,33 @@ String millis_to_str(uint32_t dt)
     }
 
     return l + String(t, 1) + "s";
+}
+
+// Custom printf_P function for ESP32
+void printf_P(const __FlashStringHelper* flashString, ...) {
+    // Determine the length of the flash string
+    size_t len = strlen_P((PGM_P)flashString);
+    
+    // Define buffer size
+    const size_t bufferSize = 128; // Adjust the size as needed
+    char buffer[bufferSize];
+
+    // Check if the buffer is large enough
+    if (len >= bufferSize) {
+        Serial.println(F("Warning: Buffer size too small for flash string!"));
+        return;
+    }
+
+    // Copy the flash string to the buffer
+    strcpy_P(buffer, (PGM_P)flashString);
+
+    // Initialize the variable argument list
+    va_list args;
+    va_start(args, flashString);
+
+    // Use vprintf to print the formatted string
+    vprintf(buffer, args);
+
+    // Clean up the variable argument list
+    va_end(args);
 }

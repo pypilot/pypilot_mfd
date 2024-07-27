@@ -20,3 +20,4 @@ String mac_int_to_str(uint64_t i);
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
 String millis_to_str(uint32_t dt);
+void printf_P(const __FlashStringHelper* flashString, ...);

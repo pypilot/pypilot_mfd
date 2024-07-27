@@ -216,7 +216,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
         char status, lat_sign, lon_sign;
         float speed, track;
         int ret = sscanf(c1, ",%02d%02d%f,%c,%f,%c,%f,%c,%f,%f", &hour, &minute, &second, &status, &latitude, &lat_sign, &longitude, &lon_sign, &speed, &track);
-        //Serial.printf("RMC got %d %d:%d:%f  %c %.2f %c %.2f %c %.2f %.2f\n", ret, hour, minute, second, status, latitude, lat_sign, longitude, lon_sign, speed, track);
+        //printf("RMC got %d %d:%d:%f  %c %.2f %c %.2f %c %.2f %.2f\n", ret, hour, minute, second, status, latitude, lat_sign, longitude, lon_sign, speed, track);
         if(ret >= 4)
             display_data_update(TIME, (hour*60+minute)*60+second, source);
         if(ret >= 8) {
@@ -343,7 +343,7 @@ struct ClientSock
     void close() {
         if(!sock)
             return;
-        Serial.println("nmea close client");
+        printf("nmea close client\n");
         ::close(sock);
         sock = 0;
         data = "";
@@ -362,7 +362,7 @@ static void close_server() {
     if(!server_sock)
         return;
 
-    Serial.printf("close nmea server %d\n", server_sock);
+    printf("close nmea server %d\n", server_sock);
     for(int i=0; i<(sizeof clients)/(sizeof *clients); i++)
         clients[i].close();
     shutdown(server_sock, SHUT_RDWR);
@@ -383,7 +383,7 @@ static bool connect_client(String addr, int port)
         return false;
 
     sockaddr_in dest_addr;
-    Serial.printf("try connect %d %s\n", port, addr.c_str());
+    printf("try connect %d %s\n", port, addr.c_str());
     dest_addr.sin_addr.s_addr = inet_addr(addr.c_str());
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(port);
@@ -391,7 +391,7 @@ static bool connect_client(String addr, int port)
                 
     client.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (client.sock < 0) {
-        Serial.printf("Unable to create socket: errno %d", errno);
+        printf("Unable to create socket: errno %d", errno);
         client.sock = 0;
         return false;
     }
@@ -401,18 +401,18 @@ static bool connect_client(String addr, int port)
                 
     int err = connect(client.sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
     if (err != 0 && errno != EINPROGRESS) {
-        Serial.printf("Socket unable to connect: errno %d\n", errno);
+        printf("Socket unable to connect: errno %d\n", errno);
         client.close();
     }
 
-    Serial.printf("nmea client connected to %s:%d %d %d\n", addr.c_str(), port, err, errno);
+    printf("nmea client connected to %s:%d %d %d\n", addr.c_str(), port, err, errno);
     client.time = t0;
     return true;
 }
 
 static bool connect_server()
 {
-    Serial.println("connect server");
+    printf("connect server\n");
     int addr_family = AF_INET;
     int ip_protocol = 0;
 
@@ -426,7 +426,7 @@ static bool connect_server()
 
     server_sock = socket(addr_family, SOCK_STREAM, ip_protocol);
     if (server_sock < 0) {
-        Serial.println("unable to create server socket");
+        printf("unable to create server socket\n");
         server_sock = 0;
         return false;
     }
@@ -435,21 +435,21 @@ static bool connect_server()
 
     int err = bind(server_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     if (err != 0) {
-        Serial.printf("Socket unable to bind: errno %d\n", errno);
+        printf("Socket unable to bind: errno %d\n", errno);
         close_server();
         return false;
     }
 
     err = listen(server_sock, 1);
     if (err != 0) {
-        Serial.printf("Error occurred during listen: errno %d\n", errno);
+        printf("Error occurred during listen: errno %d\n", errno);
         close_server();
         return false;
     }
 
     fcntl(server_sock, F_SETFL, fcntl(server_sock, F_GETFL, 0) | O_NONBLOCK);
 
-    Serial.printf("nmea server setup %d\n", server_sock);
+    printf("nmea server setup %d\n", server_sock);
     return true;
 }
 
@@ -461,10 +461,10 @@ static void poll_client(ClientSock &c)
         int ret = recv(c.sock, buf, sizeof buf - 1, 0);
         if(ret < 0) {
             if(errno != EAGAIN) {
-                Serial.printf("client recv error %d %d\n", c.sock, errno);
+                printf("client recv error %d %d\n", c.sock, errno);
                 if(errno == 113) {
-                    printf("ERROR 113, restart\n");
-                    ESP.restart();
+                    printf("ERROR 113, restart??\n");
+                    //ESP.restart();
                 }
                 if(settings.wifi_data == NMEA_PYPILOT) // find pypilot address again with mdns
                     pypilot_discovered=0;
@@ -506,7 +506,7 @@ static void accept_server()
     if (sock < 0) {
         if(errno == EAGAIN)
             return;
-        Serial.printf("Unable to accept connection: errno %d\n", errno);
+        printf("Unable to accept connection: errno %d\n", errno);
         close_server();
         return;
     }
@@ -518,7 +518,7 @@ static void accept_server()
             break;
         i++;
         if(i >= (sizeof clients) / (sizeof *clients)) {
-            Serial.println("too many tcp clients");
+            printf("too many tcp clients\n");
             close(sock);
             return;
         }
@@ -537,7 +537,7 @@ static void accept_server()
     if (source_addr.ss_family == PF_INET)
         inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
 
-    Serial.printf("nmea socket accepted %d %d ip address: %s\n", i, sock, addr_str);
+    printf("nmea socket accepted %d %d ip address: %s\n", i, sock, addr_str);
 
     clients[i].sock = sock;
     clients[i].time = millis();
@@ -554,7 +554,7 @@ static wireless_data_e mode;
 void nmea_poll()
 {
     if(WiFi.status() != WL_CONNECTED) {
-        //Serial.printf("not conn %d\n", server_sock);
+        //printf("not conn %d\n", server_sock);
         close_server();
         client.close();
         return;
@@ -589,14 +589,14 @@ void nmea_poll()
             port = settings.nmea_server_port;
             break;
         default:
-            //Serial.println("no nmea data set");
+            //println("no nmea data set");
             client.close();
             close_server();
             return;
     }
 
     if(settings.wifi_data != mode || cur_addr != addr || cur_port != port) {
-        //Serial.printf("settings wifi %d %d\n", settings.wifi_data, settings.nmea_server_port);
+        //printf("settings wifi %d %d\n", settings.wifi_data, settings.nmea_server_port);
         client.close();
         close_server();
         mode = settings.wifi_data;
@@ -626,7 +626,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
 
     int ret = send(c.sock, buf, strlen(buf), 0);
     if(ret < 0) {
-        Serial.printf("errno %d\n", errno);
+        printf("errno %d\n", errno);
 
         if(errno == EAGAIN) {
             // timeout
@@ -636,7 +636,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
     } if(ret > 0) // for now dont worry about "short" writes
         return;
         
-    Serial.printf("closed\n", ret);
+    printf("closed\n", ret);
     c.close();
 }
 
@@ -655,8 +655,8 @@ void nmea_send(const char *buf)
     const char *fmt;
     snprintf(buf2, sizeof buf2, "$QY%s*%02x\r\n", buf, 0x08^checksum(buf));
     if(settings.output_usb)
-        Serial.print(buf2);
-    Serial2.print(buf2); // always output on second serial port
+        printf(buf2);
+    Serial2.printf(buf2); // always output on second serial port
     
     if(settings.output_wifi)
     switch(settings.wifi_data) {
