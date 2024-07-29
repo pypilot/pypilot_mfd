@@ -39,15 +39,15 @@ struct lightning_uv_transmitter_t : sensor_transmitter_t {
 void wireless_toggle_mode();
 void wireless_setup();
 
-extern String wifi_networks_html;
+extern std::string wifi_networks_html;
 
 void wireless_scan_networks();
 void wireless_scan_devices();
 void wireless_poll();
 
-String wireless_json_sensors();
+std::string wireless_json_sensors();
 
 extern bool wifi_ap_mode;
 extern float lpwind_dir, wind_knots;
 
-String get_wifi_data_str();
+std::string get_wifi_data_str();

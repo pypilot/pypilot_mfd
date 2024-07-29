@@ -8,5 +8,5 @@
 
 void pypilot_client_strobe();
 void pypilot_client_poll();
-void pypilot_watch(String key);
-String pypilot_client_value(String key, int digits=1);
+void pypilot_watch(std::string key);
+std::string pypilot_client_value(std::string key, int digits=1);

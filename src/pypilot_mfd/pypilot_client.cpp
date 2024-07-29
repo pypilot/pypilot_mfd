@@ -6,15 +6,18 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-#include <Arduino_JSON.h>
-
+#include "Arduino.h"
 #include <lwip/sockets.h>
+
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 #include "zeroconf.h"
 #include "pypilot_client.h"
 #include "display.h"
 #include "settings.h"
-
+#include "utils.h"
 
 #include <map>
 #include <list>
@@ -23,26 +26,26 @@ struct pypilotClient
 {
     pypilotClient();
 
-    bool connect(String, int port=23322);
+    bool connect(std::string, int port=23322);
     void disconnect();
     bool connected() { return !!sock; }
-    //bool receive(String &name, JSONVar &value);
+    //bool receive(std::string &name, JSONVar &value);
 
-    void set(String name, JSONVar &value);
+    void set(const std::string name, const std::string value);
 
     void poll();
 
-    //bool info(String name, JSONVar &info);
+    //bool info(std::string name, JSONVar &info);
     
     //JSONVar list;
 
-    String host;
+    std::string host;
 
     int      sock;
-    String   sock_buffer;
+    std::string   sock_buffer;
 
-    std::map<String, JSONVar> map;
-    std::map<String, double> watchlist;
+    std::map<std::string, rapidjson::Document> map;
+    std::map<std::string, float> watchlist;
     bool connecting;
     uint32_t connect_time;
 };
@@ -52,7 +55,7 @@ pypilotClient::pypilotClient()
     sock = 0;
 }
 
-bool pypilotClient::connect(String h, int port)
+bool pypilotClient::connect(std::string h, int port)
 {
     uint32_t t0 = millis();
     if(t0 - connect_time < 3000)
@@ -101,24 +104,24 @@ void pypilotClient::disconnect()
 }
 
 /*
-bool pypilotClient::receive(String &name, Json::Value &value)
+bool pypilotClient::receive(std::string &name, Json::Value &value)
 {
     if(map.empty())
         return false;
 
-    std::map<String, Json::Value>::iterator it = m_map.begin();
+    std::map<std::string, Json::Value>::iterator it = m_map.begin();
     name = it->first;
     value = it->second;
     m_map.erase(it);
     return true;
     }*/
 
-void pypilotClient::set(String name, JSONVar &value)
+void pypilotClient::set(const std::string name, const std::string json)
 {
     if(!connected())
         return;
 
-    String str = name + "=" + JSON.stringify(value) + "\n";
+    std::string str = name + "=" + json + "\n";
     int ret = send(sock, str.c_str(), str.length(), 0);
     printf("send %s %d %d\n", str.c_str(), str.length(), ret);
     if(ret < 0) {
@@ -133,23 +136,23 @@ void pypilotClient::set(String name, JSONVar &value)
 }
 
 /*
-bool pypilotClient::info(String name, JSONVar &info)
+bool pypilotClient::info(std::string name, JSONVar &info)
 {
     info = m_list[name.c_str()];
     return !info.isNull();
 }*/
 
 /*
-void pypilotClient::update_watchlist(std::map<String, double> &watchlist_)
+void pypilotClient::update_watchlist(std::map<std::string, float> &watchlist_)
 {
     JSONVar request;
     // watch new keys we weren't watching
-    for(std::map<String, double>::iterator it = watchlist_.begin(); it != watchlist_.end(); it++)
+    for(std::map<std::string, float>::iterator it = watchlist_.begin(); it != watchlist_.end(); it++)
         if(m_watchlist_.find(it->first) == m_watchlist_.end())
             request[it->first] = it->second;
 
     // unwatch old keys we don't need
-    for(std::map<String, double>::iterator it = watchlist.begin(); it != watchlist.end(); it++)
+    for(std::map<std::string, float>::iterator it = watchlist.begin(); it != watchlist.end(); it++)
         if(watchlist.find(it->first) == watchlist.end())
             request[it->first] = false;
 
@@ -180,11 +183,16 @@ void pypilotClient::poll()
 
         //watch("values");
         if(watchlist.size()) {
-            JSONVar request;
-            for(std::map<String, double>::iterator it = watchlist.begin();
-                it != watchlist.end(); it++)
-                request[it->first] = it->second;
-            set("watch", request);
+            rapidjson::StringBuffer s;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(s);
+            writer.StartObject();
+            for(std::map<std::string, float>::iterator it = watchlist.begin();
+                it != watchlist.end(); it++) {
+                writer.Key(it->first.c_str());
+                writer.Double(it->second);
+            }
+            writer.EndObject();
+            set("watch", s.GetString());
         }
         connecting = false;
     }
@@ -216,36 +224,36 @@ void pypilotClient::poll()
         
         int start = 0, line_end;
         for(;;) {
-            line_end = sock_buffer.indexOf("\n", start);
+            line_end = sock_buffer.find("\n", start);
             if(line_end <= 0)
                 break;
 
-            int c = sock_buffer.indexOf('=', start);
+            int c = sock_buffer.find('=', start);
             if(c < 0) {
                 printf("pypilot client: Error parsing - %s\n", sock_buffer.c_str());
                 continue;
             }
             
-            String key = sock_buffer.substring(start, c);
-            String json_line = sock_buffer.substring(c+1, line_end);
+            std::string key = sock_buffer.substr(start, c-start);
+            std::string value = sock_buffer.substr(c+1, line_end-c-1);
             start = line_end + 1;
 
             //printf("pypilot client %s = %s\n", key.c_str(), json_line.c_str());
-            JSONVar value = JSON.parse(json_line);
-            if(value == null) {
-                printf("pypilot client: Error parsing message - %s=%s", key.c_str(), json_line.c_str());
+            rapidjson::Document &d = map[key];
+            if(d.Parse(value.c_str()).HasParseError()) {
+                printf("pypilot client: Error parsing message - %s=%s", key.c_str(), value.c_str());
+                map.erase(key);
                 continue;
             }
-            if(key == "values") {
 
-            } else {
-                map[key] = value;
+            if(key == "values") {
+                // for now do not parse values
             }
         }
 
           //      printf("RECV0 %s %d\n", sock_buffer.c_str(),start);
 
-        sock_buffer = sock_buffer.substring(start);
+        sock_buffer = sock_buffer.substr(start);
         //printf("RECV1 %s\n", sock_buffer.c_str());
     }
 }
@@ -269,19 +277,24 @@ void pypilot_client_poll() {
         pypilot_client.connect(settings.pypilot_addr);
 }
 
-void pypilot_watch(String key)
+void pypilot_watch(std::string key)
 {
-    pypilot_client.watchlist[key] = 1; // one second for now
+    pypilot_client.watchlist[key] = 1.f; // 1 second
 }
 
-String pypilot_client_value(String key, int digits) {
+std::string pypilot_client_value(std::string key, int digits) {
     if(pypilot_client.map.find(key) == pypilot_client.map.end())
         return "N/A";
 
-    JSONVar value = pypilot_client.map[key];
-    if(JSONVar::typeof_(value) == "string")
-        return value;
-    if(JSONVar::typeof_(value) == "number")
-        return String((double)value, digits);
-    return JSON.stringify(value);
+    rapidjson::Document &d = pypilot_client.map[key];
+    if(d.IsString())
+        return d.GetString();
+
+    if(d.IsNumber())
+        return float_to_str(d.GetDouble(), digits);
+
+    if(d.IsBool())
+        return d.GetBool() ? "true" : "false";
+
+    printf("unhandled pypilot client value %s\n", key.c_str());
 }

@@ -6,10 +6,14 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <iostream>
+
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 
-#include <Arduino_JSON.h>
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 #include "settings.h"
 #include "wireless.h"
@@ -25,9 +29,9 @@ AsyncWebSocket ws("/ws");
 AsyncWebSocket ws_data("/ws_data");
 
 // bad put put here??
-JSONVar history_get_data(display_item_e item, history_range_e range);
+rapidjson::Value history_get_data(display_item_e item, history_range_e range);
 
-static sensor_position str2position(String p) {
+static sensor_position str2position(std::string p) {
     if(p == "Primary")   return PRIMARY;
     if(p == "Secondary") return SECONDARY;
     if(p == "Port")      return PORT;
@@ -40,18 +44,17 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
     AwsFrameInfo *info = (AwsFrameInfo*)arg;
     if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
         data[len] = 0;
-        String message = (char*)data;
         printf("websocket got %s\n", data);
-        JSONVar input = JSON.parse(message);
-
+        rapidjson::Document input;
+        input.Parse((char*)data);
 #if 0
         for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
-            String mac = mac_int_to_str(i->first);
+            std::string mac = mac_int_to_str(i->first);
             wind_transmitter_t &t = i->second;
-            if(input.hasOwnProperty(mac)) {
-                JSONVar s = input[mac];
-                if(s.hasOwnProperty("offset")) {
-                    float offset = (double)s["offset"];
+            if(input.hasMember(mac.c_str())) {
+                rapidjson::Value s = input[mac];
+                if(s.HasMember("offset") && s["offset"].IsNumber()) {
+                    float offset = s["offset"].GetDouble();
                     offset=fminf(fmaxf(offset, -180), 180);
                     t.offset = offset;
                 }
@@ -64,32 +67,41 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
     }
 }
 
-static String jsonDisplayData() {
-    JSONVar displaydata;
+static std::string jsonDisplayData() {
+    rapidjson::Value displaydata;
     float value;
-    String source;
+    std::string source;
     uint32_t time, t0=millis();
     for(int i=0; i<DISPLAY_COUNT; i++)
         if(display_data_get((display_item_e)i, value, source, time)) {
-            JSONVar ji;
-            ji["value"] = value;
-            ji["source"] = source;
-            ji["latency"] = t0-time;
-            String name = display_get_item_label((display_item_e)i);
-            displaydata[name] = ji;
+            rapidjson::Value ji;
+            ji["value"].Set(value);
+            ji["source"].Set(source.c_str());
+            ji["latency"].Set(t0-time);
+            std::string name = display_get_item_label((display_item_e)i);
+            displaydata[name.c_str()] = ji;
         }
-    return JSON.stringify(displaydata);
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    displaydata.Accept(writer);
+    return buffer.GetString();
 }
 
-static String jsonCurrent()
+static std::string jsonCurrent()
 {
-    JSONVar j;
-    j["direction"] = lpwind_dir;
-    j["knots"] = wind_knots;
+    rapidjson::Value j;
+    j["direction"].Set(lpwind_dir);
+    j["knots"].Set(wind_knots);
 
-    JSONVar l;
+    rapidjson::Value l;
     l["wind"] = j;
-    return JSON.stringify(l);
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    j.Accept(writer);
+
+    return buffer.GetString();
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -97,7 +109,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
     switch (type) {
         case WS_EVT_CONNECT:
             printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-            ws.textAll(wireless_json_sensors());
+            ws.textAll(wireless_json_sensors().c_str());
             break;
         case WS_EVT_DISCONNECT:
             printf("WebSocket client #%u disconnected\n", client->id());
@@ -111,98 +123,104 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
     }
 }
 
-String get_display_pages()
+std::string get_display_pages()
 {
-    String pages = "";
+    std::string pages = "";
     for(std::vector<page_info>::iterator it = display_pages.begin(); it!=display_pages.end(); it++) {
-        pages += "<span><input type='checkbox' name='" + String(it->name) + "' id='page" + String(it->name) + "'";
+        std::string cn(1, it->name);
+        pages += "<span><input type='checkbox' name='" + cn + "' id='page" + cn + "'";
         if(it->enabled)
             pages += " checked";
-        pages += "><label for='page" + String(it->name) + "'><b>";
+        pages += "><label for='page" + cn + "'><b>";
         pages += it->name;
         pages += "</b> " + it->description + "</label></span>\n";
     }
     return pages;
 }
 
-String Checked(bool value) {
+std::string Checked(bool value) {
     return value ? "checked" : "";
 }
 
-String processor(const String& var)
+std::string processor(const std::string& var)
 {
     //println(var);
     if(var == "WIFI_NETWORKS") return wifi_networks_html;
     if(var == "SSID")       return settings.ssid;
     if(var == "PSK")        return settings.psk;
-    if(var == "CHANNEL")    return String(settings.channel);
+    if(var == "CHANNEL")    return int_to_str(settings.channel);
     if(var == "INPUTUSB")   return Checked(settings.input_usb);
     if(var == "OUTPUTUSB")  return Checked(settings.output_usb);
     if(var == "INPUTWIFI")  return Checked(settings.input_wifi);
     if(var == "OUTPUTWIFI") return Checked(settings.output_wifi);
-    if(var == "USB_BAUD_RATE") return String(settings.usb_baud_rate);
-    if(var == "RS422_BAUD_RATE") return String(settings.rs422_baud_rate);
+    if(var == "USB_BAUD_RATE") return int_to_str(settings.usb_baud_rate);
+    if(var == "RS422_BAUD_RATE") return int_to_str(settings.rs422_baud_rate);
     if(var == "COMPENSATE_WIND_WITH_ACCELEROMETER") return Checked(settings.compensate_wind_with_accelerometer);
     if(var == "COMPUTE_TRUEWIND_FROM_GPS") return Checked(settings.compute_true_wind_from_gps);
     if(var == "COMPUTE_TRUEWIND_FROM_WATERSPEED") return Checked(settings.compute_true_wind_from_water);
     if(var == "PYPILOT_ADDR") return(pypilot_discovered==2 ? settings.pypilot_addr : "not detected");
-    if(var == "SIGNALK_ADDR") return(signalk_discovered==2 ? (settings.signalk_addr + ":" + String(settings.signalk_port)) : "not detected");
+    if(var == "SIGNALK_ADDR") return(signalk_discovered==2 ? (settings.signalk_addr + ":" + int_to_str(settings.signalk_port)) : "not detected");
     if(var == "WIFIDATA")   return get_wifi_data_str();
-    if(var == "NMEACLIENTADDR") return String(settings.nmea_client_addr);
-    if(var == "NMEACLIENTPORT") return String(settings.nmea_client_port);
-    if(var == "IPADDRESS") return WiFi.localIP().toString();    
-    if(var == "NMEASERVERPORT") return String(settings.nmea_server_port);
+    if(var == "NMEACLIENTADDR") return settings.nmea_client_addr;
+    if(var == "NMEACLIENTPORT") return int_to_str(settings.nmea_client_port);
+    if(var == "IPADDRESS") return WiFi.localIP().toString().c_str();    
+    if(var == "NMEASERVERPORT") return int_to_str(settings.nmea_server_port);
     if(var == "USE360")  return Checked(settings.use_360);
     if(var == "USEFAHRENHEIT")  return Checked(settings.use_fahrenheit);
     if(var == "USEINHG")  return Checked(settings.use_inHg);
     if(var == "USEDEPTHFT")  return Checked(settings.use_depth_ft);
     if(var == "LATLONFORMAT")  return settings.lat_lon_format;
     if(var == "INVERT")  return Checked(settings.invert);
-    if(var == "CONTRAST")  return String(settings.contrast);
-    if(var == "BACKLIGHT")  return String(settings.backlight);
+    if(var == "CONTRAST")  return int_to_str(settings.contrast);
+    if(var == "BACKLIGHT")  return int_to_str(settings.backlight);
     if(var == "MIRROR")  return Checked(settings.mirror);
     if(var == "POWERDOWN")  return Checked(settings.powerdown);
     if(var == "DISPLAYPAGES") return get_display_pages();
-    if(var == "VERSION")    return String(VERSION);
-    return String();
+    if(var == "VERSION")    return float_to_str(VERSION);
+    return std::string();
 }
 
-String processor_alarms(const String& var)
+String processor_helper(const String &c)
+{
+    return processor(c.c_str()).c_str();
+}
+
+std::string processor_alarms(const std::string& var)
 {
     if(var == "ANCHOR_ALARM")          return Checked(settings.anchor_alarm);
-    if(var == "ANCHOR_ALARM_DISTANCE") return String(settings.anchor_alarm_distance);
+    if(var == "ANCHOR_ALARM_DISTANCE") return int_to_str(settings.anchor_alarm_distance);
 
     if(var == "COURSE_ALARM")          return Checked(settings.course_alarm);
-    if(var == "COURSE_ALARM_COURSE")   return String(settings.course_alarm_course);
-    if(var == "COURSE_ALARM_ERROR")    return String(settings.course_alarm_error);
+    if(var == "COURSE_ALARM_COURSE")   return int_to_str(settings.course_alarm_course);
+    if(var == "COURSE_ALARM_ERROR")    return int_to_str(settings.course_alarm_error);
 
     if(var == "GPS_SPEED_ALARM")          return Checked(settings.gps_speed_alarm);
-    if(var == "GPS_MIN_SPEED_ALARM_KNOTS")    return String(settings.gps_min_speed_alarm_knots);
-    if(var == "GPS_MAX_SPEED_ALARM_KNOTS")    return String(settings.gps_max_speed_alarm_knots);
+    if(var == "GPS_MIN_SPEED_ALARM_KNOTS")    return int_to_str(settings.gps_min_speed_alarm_knots);
+    if(var == "GPS_MAX_SPEED_ALARM_KNOTS")    return int_to_str(settings.gps_max_speed_alarm_knots);
 
     if(var == "WIND_SPEED_ALARM")          return Checked(settings.wind_speed_alarm);
-    if(var == "WIND_MIN_SPEED_ALARM_KNOTS")    return String(settings.wind_min_speed_alarm_knots);
-    if(var == "WIND_MAX_SPEED_ALARM_KNOTS")    return String(settings.wind_max_speed_alarm_knots);
+    if(var == "WIND_MIN_SPEED_ALARM_KNOTS")    return int_to_str(settings.wind_min_speed_alarm_knots);
+    if(var == "WIND_MAX_SPEED_ALARM_KNOTS")    return int_to_str(settings.wind_max_speed_alarm_knots);
 
     if(var == "WATER_SPEED_ALARM")          return Checked(settings.water_speed_alarm);
-    if(var == "WATER_MIN_SPEED_ALARM_KNOTS")    return String(settings.water_min_speed_alarm_knots);
-    if(var == "WATER_MAX_SPEED_ALARM_KNOTS")    return String(settings.water_max_speed_alarm_knots);
+    if(var == "WATER_MIN_SPEED_ALARM_KNOTS")    return int_to_str(settings.water_min_speed_alarm_knots);
+    if(var == "WATER_MAX_SPEED_ALARM_KNOTS")    return int_to_str(settings.water_max_speed_alarm_knots);
 
     if(var == "WEATHER_ALARM_PRESSURE")      return Checked(settings.weather_alarm_pressure);
-    if(var == "WEATHER_ALARM_MIN_PRESSURE")  return String(settings.weather_alarm_min_pressure);
+    if(var == "WEATHER_ALARM_MIN_PRESSURE")  return int_to_str(settings.weather_alarm_min_pressure);
     if(var == "WEATHER_ALARM_PRESSURE_RATE")       return Checked(settings.weather_alarm_pressure_rate);
-    if(var == "WEATHER_ALARM_PRESSURE_RATE_VAL") return String(settings.weather_alarm_pressure_rate_value);
+    if(var == "WEATHER_ALARM_PRESSURE_RATE_VAL") return int_to_str(settings.weather_alarm_pressure_rate_value);
     if(var == "WEATHER_ALARM_LIGHTNING")          return Checked(settings.weather_alarm_lightning);
-    if(var == "WEATHER_ALARM_LIGHTNING_DISTANCE") return String(settings.weather_alarm_lightning_distance);
+    if(var == "WEATHER_ALARM_LIGHTNING_DISTANCE") return int_to_str(settings.weather_alarm_lightning_distance);
 
     if(var == "DEPTH_ALARM")             return Checked(settings.depth_alarm);
-    if(var == "DEPTH_ALARM_MIN")         return String(settings.depth_alarm_min);
+    if(var == "DEPTH_ALARM_MIN")         return int_to_str(settings.depth_alarm_min);
     if(var == "DEPTH_ALARM_RATE")        return Checked(settings.depth_alarm_rate);
-    if(var == "DEPTH_ALARM_RATE_VALUE")  return String(settings.depth_alarm_rate_value);
+    if(var == "DEPTH_ALARM_RATE_VALUE")  return int_to_str(settings.depth_alarm_rate_value);
 
     if(var == "AIS_ALARM")       return Checked(settings.ais_alarm);
-    if(var == "AIS_ALARM_CPA")   return String(settings.ais_alarm_cpa);
-    if(var == "AIS_ALARM_TCPA")  return String(settings.ais_alarm_tcpa);
+    if(var == "AIS_ALARM_CPA")   return int_to_str(settings.ais_alarm_cpa);
+    if(var == "AIS_ALARM_TCPA")  return int_to_str(settings.ais_alarm_tcpa);
 
     if(var == "PYPILOT_ALARM_NOCONNECTION")       return Checked(settings.pypilot_alarm_noconnection);
     if(var == "PYPILOT_ALARM_FAULT")       return Checked(settings.pypilot_alarm_fault);
@@ -210,8 +228,13 @@ String processor_alarms(const String& var)
     if(var == "PYPILOT_ALARM_NO_MOTORCONTROLLER")       return Checked(settings.pypilot_alarm_no_motor_controller);
     if(var == "PYPILOT_ALARM_LOST_MODE")       return Checked(settings.pypilot_alarm_lost_mode);
     
-    if(var == "VERSION")    return String(VERSION);
-    return String();
+    if(var == "VERSION")    return float_to_str(VERSION);
+    return std::string();
+}
+
+String processor_alarms_helper(const String &c)
+{
+    return processor_alarms(c.c_str()).c_str();
 }
 
 void web_setup()
@@ -222,7 +245,7 @@ void web_setup()
     server.addHandler(&ws_data);
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(SPIFFS, "/index.html", String(), 0, processor);
+        request->send(SPIFFS, "/index.html", String(), 0, processor_helper);
     });
 
     server.on("/alarms", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -245,42 +268,45 @@ void web_setup()
 
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
-            String name = p->name(), value = p->value();
+            String x = p->name();
+            std::string name = x.c_str();
+            x = p->value();
+            std::string value = x.c_str();
             //printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
             if(name == "anchor_alarm")           settings.anchor_alarm = true;
-            else if(name == "anchor_alarm_distance")  settings.anchor_alarm_distance = value.toInt();
+            else if(name == "anchor_alarm_distance")  settings.anchor_alarm_distance = str_to_int(value);
 
             else if(name == "course_alarm")         settings.course_alarm = true;
-            else if(name == "course_alarm_course")  settings.course_alarm_course = value.toInt();
-            else if(name == "course_alarm_error")   settings.course_alarm_error = value.toInt();
+            else if(name == "course_alarm_course")  settings.course_alarm_course = str_to_int(value);
+            else if(name == "course_alarm_error")   settings.course_alarm_error = str_to_int(value);
             
             else if(name == "gps_speed_alarm")        settings.gps_speed_alarm = true;
-            else if(name == "gps_min_speed_alarm_knots")  settings.gps_min_speed_alarm_knots = value.toInt();
-            else if(name == "gps_max_speed_alarm_knots")  settings.gps_max_speed_alarm_knots = value.toInt();
+            else if(name == "gps_min_speed_alarm_knots")  settings.gps_min_speed_alarm_knots = str_to_int(value);
+            else if(name == "gps_max_speed_alarm_knots")  settings.gps_max_speed_alarm_knots = str_to_int(value);
 
             else if(name == "wind_speed_alarm")        settings.wind_speed_alarm = true;
-            else if(name == "wind_min_speed_alarm_knots")  settings.wind_min_speed_alarm_knots = value.toInt();
-            else if(name == "wind_max_speed_alarm_knots")  settings.wind_max_speed_alarm_knots = value.toInt();
+            else if(name == "wind_min_speed_alarm_knots")  settings.wind_min_speed_alarm_knots = str_to_int(value);
+            else if(name == "wind_max_speed_alarm_knots")  settings.wind_max_speed_alarm_knots = str_to_int(value);
 
             else if(name == "water_speed_alarm")        settings.water_speed_alarm = true;
-            else if(name == "water_min_speed_alarm_knots")  settings.water_min_speed_alarm_knots = value.toInt();
-            else if(name == "water_max_speed_alarm_knots")  settings.water_max_speed_alarm_knots = value.toInt();
+            else if(name == "water_min_speed_alarm_knots")  settings.water_min_speed_alarm_knots = str_to_int(value);
+            else if(name == "water_max_speed_alarm_knots")  settings.water_max_speed_alarm_knots = str_to_int(value);
 
             else if(name == "weather_alarm_pressure")      settings.weather_alarm_pressure = true;
-            else if(name == "weather_alarm_min_pressure")  settings.weather_alarm_min_pressure = value.toInt();
+            else if(name == "weather_alarm_min_pressure")  settings.weather_alarm_min_pressure = str_to_int(value);
             else if(name == "weather_alarm_pressure_rate")      settings.weather_alarm_pressure_rate = true;
-            else if(name == "weather_alarm_pressure_rate_value")  settings.weather_alarm_pressure_rate_value = value.toInt();
+            else if(name == "weather_alarm_pressure_rate_value")  settings.weather_alarm_pressure_rate_value = str_to_int(value);
             else if(name == "weather_alarm_lightning")      settings.weather_alarm_lightning = true;
-            else if(name == "weather_alarm_lightning_distance")  settings.weather_alarm_lightning_distance = value.toInt();
+            else if(name == "weather_alarm_lightning_distance")  settings.weather_alarm_lightning_distance = str_to_int(value);
 
             else if(name == "depth_alarm")      settings.depth_alarm = true;
-            else if(name == "depth_alarm_min")  settings.depth_alarm_min = value.toInt();
+            else if(name == "depth_alarm_min")  settings.depth_alarm_min = str_to_int(value);
             else if(name == "depth_alarm_rate")      settings.depth_alarm_rate = true;
-            else if(name == "depth_alarm_rate_value")  settings.depth_alarm_rate_value = value.toInt();
+            else if(name == "depth_alarm_rate_value")  settings.depth_alarm_rate_value = str_to_int(value);
 
             else if(name == "ais_alarm")      settings.ais_alarm = true;
-            else if(name == "ais_alarm_cpa")  settings.ais_alarm_cpa = value.toInt();
-            else if(name == "ais_alarm_tcpa")      settings.ais_alarm_tcpa = value.toInt();
+            else if(name == "ais_alarm_cpa")  settings.ais_alarm_cpa = str_to_int(value);
+            else if(name == "ais_alarm_tcpa")      settings.ais_alarm_tcpa = str_to_int(value);
             
             else if(name == "pypilot_alarm_noconnection") settings.pypilot_alarm_noconnection = true;
             else if(name == "pypilot_alarm_fault") settings.pypilot_alarm_fault = true;
@@ -295,14 +321,14 @@ void web_setup()
     });
 
     server.on("/alarms.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms);
+        request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms_helper);
     });
 
     server.on("/network", HTTP_POST, [](AsyncWebServerRequest *request) {
         //printf("post network\n");
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
-            String name = p->name(), value = p->value();
+            std::string name = p->name().c_str(), value = p->value().c_str();
             //printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
             if(name == "ssid")     settings.ssid = value;
             else if(name == "psk") settings.psk = value;
@@ -331,12 +357,12 @@ void web_setup()
         settings.compute_true_wind_from_water = false;
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
-            String name = p->name(), value = p->value();
+            std::string name = p->name().c_str(), value = p->value().c_str();
             //printf("POST[%s]: %s\n", name.c_str(), value.c_str());
             if     (name == "input_usb")   settings.input_usb = true;
             else if(name == "output_usb")  settings.output_usb = true;
-            else if(name == "usb_baud_rate")  settings.usb_baud_rate = value.toInt();
-            else if(name == "rs422_baud_rate")  settings.rs422_baud_rate = value.toInt();
+            else if(name == "usb_baud_rate")  settings.usb_baud_rate = str_to_int(value);
+            else if(name == "rs422_baud_rate")  settings.rs422_baud_rate = str_to_int(value);
             else if(name == "input_wifi")  settings.input_wifi = true;
             else if(name == "output_wifi") settings.output_wifi = true;
             else if(name == "compensate_wind_with_accelerometer") settings.compensate_wind_with_accelerometer = true;
@@ -351,8 +377,8 @@ void web_setup()
                 else printf("post unknown wifi data setting %s\n", value.c_str());
             }
             else if(name == "nmea_tcp_client_addr") settings.nmea_client_addr = value;
-            else if(name == "nmea_tcp_client_port") settings.nmea_client_port = value.toInt();
-            else if(name == "nmea_tcp_server_port") settings.nmea_server_port = value.toInt();
+            else if(name == "nmea_tcp_client_port") settings.nmea_client_port = str_to_int(value);
+            else if(name == "nmea_tcp_server_port") settings.nmea_server_port = str_to_int(value);
             else printf("web post data unknown parameter %s %s\n", name.c_str(), value.c_str());
         }
         request->redirect("/");
@@ -365,12 +391,12 @@ void web_setup()
         settings.invert = false;
         settings.mirror = false;
         settings.powerdown = false;
-        String enabled_pages = "";
+        std::string enabled_pages = "";
         for(int i=0; i < display_pages.size(); i++)
             display_pages[i].enabled = false;
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
-            String name = p->name(), value = p->value();
+            std::string name = p->name().c_str(), value = p->value().c_str();
             //printf("POST[%s]: %s\n", name.c_str(), value.c_str());
             if(name == "use360")
                 settings.use_360 = true;
@@ -385,9 +411,9 @@ void web_setup()
             else if(name == "invert")
                 settings.invert = true;
             else if(p->name() == "contrast")
-                settings.contrast = min(max(value.toInt(), 0L), 50L);
+                settings.contrast = min(max(str_to_int(value), 0), 50);
             else if(p->name() == "backlight")
-                settings.backlight = min(max(value.toInt(), 0L), 100L);
+                settings.backlight = min(max(str_to_int(value), 0), 20);
             else if(p->name() == "mirror")
                 settings.mirror = true;
             else if(p->name() == "powerdown")
@@ -395,7 +421,7 @@ void web_setup()
             else {
                 for(int j=0; j < display_pages.size(); j++) {
                     page_info &page = display_pages[j];
-                    if(String(page.name) == name)
+                    if(std::string(1, page.name) == name)
                         page.enabled = true;
                 }
                 enabled_pages += name;
@@ -415,11 +441,11 @@ void web_setup()
     });
 
     server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {
-        String data_type, data_range;
+        std::string data_type, data_range;
         if (request->hasParam("data_type"))
-            data_type = request->getParam("data_type")->value();
+            data_type = request->getParam("data_type")->value().c_str();
         if (request->hasParam("data_range"))
-            data_range = request->getParam("data_range")->value();
+            data_range = request->getParam("data_range")->value().c_str();
 
         int item = -1, range = -1;
         for(int i=0; i<DISPLAY_COUNT; i++)
@@ -455,10 +481,10 @@ void web_poll()
         return;
     last_sock_update = t;
 
-    String s = jsonCurrent();
-    if(s) {
+    std::string s = jsonCurrent();
+    if(!s.empty()) {
         //println("ws: " + s);
-        ws.textAll(s);
+        ws.textAll(s.c_str());
     }
 
     static uint32_t last_client_update;
@@ -467,10 +493,10 @@ void web_poll()
     last_client_update = t;
 
     if(ws.count())
-        ws.textAll(wireless_json_sensors());
+        ws.textAll(wireless_json_sensors().c_str());
     ws.cleanupClients();
 
     if(ws_data.count())
-        ws_data.textAll(jsonDisplayData());
+        ws_data.textAll(jsonDisplayData().c_str());
     ws_data.cleanupClients();
 }

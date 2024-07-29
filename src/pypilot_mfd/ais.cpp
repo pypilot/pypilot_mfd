@@ -105,8 +105,8 @@ static int ais_n(std::vector<bool> &data, int start, int len, bool sign=false)
     return result;
 }
 
-String ais_t(std::vector<bool> &data, int start, int len) {
-    String result = "";
+std::string ais_t(std::vector<bool> &data, int start, int len) {
+    std::string result = "";
     for(int i=0; i<len; i+=6) {
         char d = ais_n(data, start+i, 6);
         if( d == 0 )
@@ -118,7 +118,7 @@ String ais_t(std::vector<bool> &data, int start, int len) {
     return result;
 }
 
-String ais_status(int index) {
+std::string ais_status(int index) {
     switch(index) {
     case 0: return "Under way using engine";
     case 1: return "At anchor";
@@ -177,7 +177,7 @@ float ais_ll(int n) {
     return n / 600000.0;
 }
 
-String ais_e(int type) {
+std::string ais_e(int type) {
     if(type == 0)                       return "N/A";
     if(type >= 20 && type <= 29)        return "WIG";
     switch(type) {

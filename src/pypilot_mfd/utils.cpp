@@ -80,7 +80,7 @@ uint64_t mac_as_int(const uint8_t *mac_addr)
     return r;
 }
 
-uint64_t mac_str_to_int(String mac)
+uint64_t mac_str_to_int(std::string mac)
 {
     int data[6] = {0};
     if(sscanf(mac.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", data+0, data+1, data+2, data+3, data+4, data+5) != 6)
@@ -93,7 +93,7 @@ uint64_t mac_str_to_int(String mac)
     return mac_as_int(mac_addr);
 }
 
-String mac_int_to_str(uint64_t r)
+std::string mac_int_to_str(uint64_t r)
 {
     uint8_t mac_addr[6] = {0};
     for(int i=0; i<6; i++) {
@@ -149,11 +149,11 @@ void readFile(fs::FS &fs, const char * path){
     file.close();
 }
 
-String millis_to_str(uint32_t dt)
+std::string millis_to_str(uint32_t dt)
 {
     float t = dt/1000.0f;
     int parts[][2] = {{'d', 24}, {'h', 60}, {'m', 60}};
-    String l;
+    std::string l;
     
     int count = (sizeof parts)/(sizeof *parts);
     for(int i=0; i<count; i++) {
@@ -164,10 +164,10 @@ String millis_to_str(uint32_t dt)
             continue;
         int v = t / d;
         t -= d*v;
-        l += String(v) + (char)parts[i][0] + ' ';       
+        l += float_to_str(v) + (char)parts[i][0] + ' ';       
     }
 
-    return l + String(t, 1) + "s";
+    return l + float_to_str(t, 1) + "s";
 }
 
 // Custom printf_P function for ESP32
@@ -197,4 +197,35 @@ void printf_P(const __FlashStringHelper* flashString, ...) {
 
     // Clean up the variable argument list
     va_end(args);
+}
+
+std::string float_to_str(float v, int digits)
+{
+    char buffer[32];
+    if(digits == -1)
+        snprintf(buffer, sizeof buffer, "%f", v);
+    else
+        snprintf(buffer, sizeof buffer, "%.*f", digits, v);
+    return std::string(buffer);
+}
+
+std::string int_to_str(int v)
+{
+    char buffer[32];
+        snprintf(buffer, sizeof buffer, "%d", v);
+    return std::string(buffer);
+}
+
+int str_to_int(const std::string &s)
+{
+    int x;
+    sscanf(s.c_str(), "%d", x);
+    return x;
+}
+
+bool endsWith(const std::string& str, const std::string& suffix) {
+    if (suffix.size() > str.size()) {
+        return false;
+    }
+    return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }

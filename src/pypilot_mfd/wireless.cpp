@@ -13,7 +13,10 @@
 #include <lwip/sockets.h>
 
 #include <Arduino.h>
-#include <Arduino_JSON.h>
+
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 #include "settings.h"
 #include "wireless.h"
@@ -115,7 +118,7 @@ struct packet_channel_t {
 } __attribute__((packed));
 
 void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
-    String ip = WiFi.localIP().toString();
+    std::string ip = WiFi.localIP().toString().c_str();
     printf("WIFI got IP: %s\n", ip.c_str());
     settings.channel = WiFi.channel();
 }
@@ -145,7 +148,7 @@ static void setup_wifi() {
 
         WiFi.onEvent(WiFiStationGotIP, SYSTEM_EVENT_STA_GOT_IP);
 
-        if (settings.ssid) {
+        if (!settings.ssid.empty()) {
             printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
 
             // setting a custom "country" locks the wifi in a particular channel
@@ -502,8 +505,8 @@ void sendChannel() {
     }
 }
 
-static std::map<String, int> wifi_networks;
-String wifi_networks_html;
+static std::map<std::string, int> wifi_networks;
+std::string wifi_networks_html;
 static uint32_t scanning = 0;
 void wireless_scan_networks() {
     WiFi.mode(WIFI_STA);
@@ -533,14 +536,14 @@ void wireless_poll() {
     scanning = 0;
     int n = WiFi.scanComplete();
     for (uint8_t i = 0; i < n; i++) {
-        String ssid = WiFi.SSID(i);
+        std::string ssid = WiFi.SSID(i).c_str();
         int channel = WiFi.channel(i);
         if (ssid == settings.ssid)
             settings.channel = channel;
         if (wifi_networks.find(ssid) == wifi_networks.end()) {
             wifi_networks[ssid] = channel;
-            String tr = "<tr><td>" + ssid + "</td><td>" + channel + "</td>";
-            tr += String("<td>") + WiFi.RSSI(i) + "</td><td>";
+            std::string tr = "<tr><td>" + ssid + "</td><td>" + int_to_str(channel) + "</td>";
+            tr += "<td>" + int_to_str(WiFi.RSSI(i)) + "</td><td>";
             //tr += WiFi.encryptionType(i) == ENC_TYPE_NONE ? "open" : "encrypted";
             tr += "</td></tr>";
             printf("wifi network %s\n", tr.c_str());
@@ -610,7 +613,7 @@ void wireless_setup() {
     InitESPNow();
 }
 
-String position_str(sensor_position p)
+std::string position_str(sensor_position p)
 {
     switch(p) {
     case PRIMARY:   return "Primary";
@@ -622,25 +625,30 @@ String position_str(sensor_position p)
     return "Invalid";
 }
 
-String wireless_json_sensors()
+std::string wireless_json_sensors()
 {
     uint32_t t = millis();
-    JSONVar windsensors;
+    rapidjson::Value windsensors;
     for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.macs.begin(); i != wind_transmitters.macs.end(); i++) {
-        JSONVar jwt;
+        rapidjson::Value jwt;
         wind_transmitter_t &wt = i->second;
 
-        jwt["position"] = position_str(wt.position);
-        jwt["offset"] = wt.offset;
-        jwt["dir"] = wt.dir;
-        jwt["knots"] = wt.knots;
-        jwt["dt"] = t - wt.t;
-        windsensors[mac_int_to_str(i->first)] = jwt;
+        jwt["position"].Set(position_str(wt.position).c_str());
+        jwt["offset"].Set(wt.offset);
+        jwt["dir"].Set(wt.dir);
+        jwt["knots"].Set(wt.knots);
+        jwt["dt"].Set(t - wt.t);
+        std::string x = mac_int_to_str(i->first);
+        windsensors[x.c_str()] = jwt;
     }
 
-    JSONVar sensors;
+    rapidjson::Value sensors;
     if(wind_transmitters.macs.size() > 0)
         sensors["wind"] = windsensors;
 
-    return JSON.stringify(sensors);
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    sensors.Accept(writer);
+
+    return buffer.GetString();
 }

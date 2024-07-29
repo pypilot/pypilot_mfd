@@ -18,6 +18,6 @@ enum history_range_e {MINUTE_5, HOUR, DAY, HISTORY_RANGE_COUNT};
 
 void history_put(display_item_e item, float value, uint32_t time);
 std::list<history_element> *history_find(display_item_e item, int r, uint32_t &totalmillis, float &high, float &low);
-String history_get_label(history_range_e range);
+std::string history_get_label(history_range_e range);
 
 extern int history_display_range;

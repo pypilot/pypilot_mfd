@@ -74,12 +74,6 @@
             </span>
           </div>
         </div>
-        <div class='col1-grid'>
-          <span>Computation</span>          
-          <span><input type='checkbox' name='compensate_wind_with_accelerometer' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%><label for='input_wifi'>Compensate wind with accelerometer</label></span>
-          <span><input type='checkbox' name='compute_true_wind_from_gps' id='compute_true_wind_from_gps' %COMPUTE_TRUEWIND_FROM_GPS%><label for='output_wifi'>Compute True Wind from GPS</label></span>
-          <span><input type='checkbox' name='compute_true_wind_from_water_speed' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%><label for='output_wifi'>Compute True Wind from Water Speed</label></span>
-        </div>
         <div class='data-grid'>
           <input type='radio' name='wifidata' id='nmea_pypilot' value='nmea_pypilot'>
           <label for='nmea_pypilot'>pypilot NMEA0183 port 20220</label>
@@ -94,13 +88,13 @@
         </div>
         <div class='data-grid'>
           <input type='radio' name='wifidata' id='nmea_client' value='nmea_client'></input>
-          <label for='nmea_client'>TCP client</label>
+          <label for='nmea_client'>TCP client NMEA0183</label>
           <span></span>            
           <label for='nmea_client'>Host <input type='text' name='nmea_tcp_client_addr' style='width: 10em;' value=%NMEACLIENTADDR% > Port <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% ></label>
         </div>
         <div class='data-grid'>
           <input type='radio' name='wifidata' id='nmea_server' value='nmea_server'></input>
-          <label for='nmea_server'>TCP server</label>
+          <label for='nmea_server'>TCP server NMEA</label>
           <span></span>            
           <label for='nmea_server'>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server_port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>
         </div>
@@ -111,6 +105,12 @@
           <label for='signalk'>SignalK server: %SIGNALK_ADDR%</span>
           <span></span>
           <span>To output to signalk you may have to <a href='signalk.local:3000'>grant access</a></span>
+        </div>
+        <div class='col1-grid'>
+          <span>Computation</span>          
+          <span><input type='checkbox' name='compensate_wind_with_accelerometer' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%><label for='input_wifi'>Compensate wind with accelerometer</label></span>
+          <span><input type='checkbox' name='compute_true_wind_from_gps' id='compute_true_wind_from_gps' %COMPUTE_TRUEWIND_FROM_GPS%><label for='output_wifi'>Compute True Wind from GPS</label></span>
+          <span><input type='checkbox' name='compute_true_wind_from_water_speed' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%><label for='output_wifi'>Compute True Wind from Water Speed</label></span>
         </div>
         <div class='col3-grid'>
           <div></div>

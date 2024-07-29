@@ -6,7 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-#include <Arduino_JSON.h>
+#include "rapidjson/document.h"
 
 // 5m, 1 hr, 1d
 #include <Wire.h>
@@ -18,7 +18,7 @@ static uint32_t history_range_time[] = {5*60, 60*60, 24*60*60};
 
 int history_display_range;
 
-String history_get_label(history_range_e range)
+std::string history_get_label(history_range_e range)
 {
     switch(range) {
         case MINUTE_5: return "5m";
@@ -68,8 +68,10 @@ struct history
                 minv = INFINITY;
                 maxv = -INFINITY;
                 int count = 0;
-                for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) {
-                    value += it->value;
+                for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) 
+                {
+                    if(!isnan(value))
+                        value += it->value;
                     if(it->value < minv)
                         minv = it->value;
                     if(it->value > maxv)
@@ -78,7 +80,10 @@ struct history
                     if(it->time < time - range_timeout)
                         break;
                 }
-                value /= count;
+                if(count == 0)
+                    value = NAN;
+                else
+                    value /= count;
             } else
                 minv = value, maxv = value;
             data[range].push_front(history_element(value, time));
@@ -161,22 +166,22 @@ std::list<history_element> *history_find(display_item_e item, int r, uint32_t &t
     return 0;
 }
 
-JSONVar history_get_data(display_item_e item, history_range_e range)
+rapidjson::Value history_get_data(display_item_e item, history_range_e range)
 {
     uint32_t totalmillis;
     float high, low;
     std::list<history_element> *data = history_find(item, range, totalmillis, high, low);
-    JSONVar jsondata;
+    rapidjson::Value jsondata;
     if(! data)
         return jsondata;
     int i = 0;
     for(std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
-        JSONVar value;
+        rapidjson::Value value;
         value["value"] = it->value;
         value["time"] = it->time / 1000.0f;
         jsondata[i++] = value;
     }
-    JSONVar output;
+    rapidjson::Value output;
     output["data"] = jsondata;
     output["high"] = high;
     output["low"] = low;

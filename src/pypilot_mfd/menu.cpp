@@ -18,7 +18,7 @@
 
 bool in_menu;
 
-static bool selectFont(int &wt, int &ht, String str) {
+static bool selectFont(int &wt, int &ht, std::string str) {
     // based on width and height determine best font
     if(ht > 40) ht = 40;
 
@@ -38,7 +38,7 @@ static bool selectFont(int &wt, int &ht, String str) {
 }
 
 struct menu_label : public display {
-    menu_label(String _str, int _h=0) : label(_str) {
+    menu_label(std::string _str, int _h=0) : label(_str) {
         expanding = false;
         h=_h;
     }
@@ -56,19 +56,19 @@ struct menu_label : public display {
     }
 
     int ht;
-    String label;
+    std::string label;
 };
 
 struct menu_item : public menu_label
 {
-    menu_item(String n) : menu_label(n) {}
+    menu_item(std::string n) : menu_label(n) {}
     virtual void select() = 0;
 };
 
 
 struct menu_page : public page
 {
-    menu_page(String n) : page(n) {}
+    menu_page(std::string n) : page(n) {}
     virtual void select() = 0;
     virtual void arrows(int dir) = 0;
     virtual void reset() {}
@@ -77,7 +77,7 @@ static menu_page *curmenu = 0;
 
 struct menu_item_menu : public menu_item
 {
-    menu_item_menu(String _name, menu_page *_menu) : menu_item(_name), item_menu(_menu) {}
+    menu_item_menu(std::string _name, menu_page *_menu) : menu_item(_name), item_menu(_menu) {}
 
     void select() { curmenu->reset(); curmenu = item_menu; }
     menu_page *item_menu;
@@ -85,7 +85,7 @@ struct menu_item_menu : public menu_item
 
 struct menu : public menu_page
 {
-    menu(String n) : menu_page(n) {
+    menu(std::string n) : menu_page(n) {
         parent = 0;
         position = 0;
         cols = 1; // 1 column for menu
@@ -157,7 +157,7 @@ struct menu : public menu_page
 
 struct menu_item_setting : public menu_item
 {
-    menu_item_setting(String n) : menu_item(n) { }
+    menu_item_setting(std::string n) : menu_item(n) { }
     void render() {
         // try to fit text along side label
         int wt = w - h, ht = h;
@@ -178,7 +178,7 @@ struct menu_item_setting : public menu_item
 
 struct menu_item_bool : public menu_item_setting
 {
-    menu_item_bool(String n, bool &s) : menu_item_setting(n), setting(s) { }
+    menu_item_bool(std::string n, bool &s) : menu_item_setting(n), setting(s) { }
     bool &setting;
     bool isset() { return setting; }
     void select() { setting = !setting; }
@@ -186,7 +186,7 @@ struct menu_item_bool : public menu_item_setting
 
 struct setting_int : public menu_page
 {
-    setting_int(menu_page *_back, String n, int &s, int _min, int _max, int _step) :
+    setting_int(menu_page *_back, std::string n, int &s, int _min, int _max, int _step) :
         menu_page(n), back(_back), setting(s), min(_min), max(_max), step(_step) {
         cols = 1; // 1 column for menu
         add(new menu_label(n, h/4));
@@ -196,8 +196,8 @@ struct setting_int : public menu_page
     }
 
     void render() {
-        label->label = String(setting);
-         menu_page::render();
+        label->label = int_to_str(setting);
+        menu_page::render();
     }
 
     void arrows(int dir) {
@@ -229,13 +229,13 @@ struct setting_int : public menu_page
 
 struct menu_item_int : public menu_item
 {
-    menu_item_int(menu_page *back, String n, int &s, int _min, int _max, int _step) :
+    menu_item_int(menu_page *back, std::string n, int &s, int _min, int _max, int _step) :
         menu_item(n),
         setting(back, n, s, _min, _max, _step) {}
 
     void render() {
-        String s = String(setting.setting);
-        String l = s + " " + label;
+        std::string s = int_to_str(setting.setting);
+        std::string l = s + " " + label;
 
         int wt = w - h, ht = h;
         if(!selectFont(wt, ht, l.c_str()))
@@ -287,12 +287,12 @@ struct alarm_display : public grid_display
 
         if(c != DISPLAY_COUNT) {
             if(display_data_get(item, c))
-                current.label = String(c, 2);
+                current.label = std::string(c, 2);
             else
                 current.label = " N/A ";
         }
 
-        String s_reason;
+        std::string s_reason;
         float dt = alarm_last(alarm, s_reason);
         if(!dt) {
             last.label = "never";
@@ -346,9 +346,9 @@ struct anchor_alarm_display : public display
             return;
         }
 
-        double slat = settings.anchor_lat, slon = settings.anchor_lon;
-        double x = cosf(deg2rad(lat))*resolv(lon-slon) * 60;
-        double y = (lat-slat)*60;
+        float slat = settings.anchor_lat, slon = settings.anchor_lon;
+        float x = cosf(deg2rad(lat))*resolv(lon-slon) * 60;
+        float y = (lat-slat)*60;
 
         // x and y are in miles, normalize to anchor range
         x *= settings.anchor_alarm_distance / 1852;
@@ -393,7 +393,7 @@ struct course_alarm_display : public display
             draw_line(x+w/2, y+h, x+w/2+xp, y);
         }
         // render course and course alarm text
-        String cs = String(course, 1);
+        std::string cs = std::string(course, 1);
         draw_text(x, y, cs.c_str());
     }
 };
@@ -470,7 +470,7 @@ struct pypilot_alarm_menu : public alarm_menu
 
 struct menu_choice_item : public menu_item_setting
 {
-    menu_choice_item(String _label, String &_setting)
+    menu_choice_item(std::string _label, std::string &_setting)
         : menu_item_setting(_label), setting(_setting) {}
     
     bool isset() { return setting==label; }
@@ -479,12 +479,12 @@ struct menu_choice_item : public menu_item_setting
         setting = label;
     }
 
-    String &setting;
+    std::string &setting;
 };
 
 struct menu_choice : public menu
 {
-    menu_choice(String label, std::vector<String> choices, String &setting)
+    menu_choice(std::string label, std::vector<std::string> choices, std::string &setting)
         : menu(label) {
         for(int i=0; i<choices.size(); i++) {
             add_item(new menu_choice_item(choices[i], setting));
@@ -542,7 +542,7 @@ void menu_setup()
     settings_menu->add_item(new menu_item_bool("use fahrenheit", settings.use_fahrenheit));
     settings_menu->add_item(new menu_item_bool("use in Hg", settings.use_inHg));
     settings_menu->add_item(new menu_item_bool("use depth ft", settings.use_depth_ft));
-    std::vector<String> fmts{"degrees", "minutes", "seconds"};
+    std::vector<std::string> fmts{"degrees", "minutes", "seconds"};
     settings_menu->add_menu(new menu_choice("lat/lon format", fmts, settings.lat_lon_format));
 
     menu *display = new menu("Display");
@@ -551,7 +551,7 @@ void menu_setup()
 #ifdef USE_U8G2
     display->add_item(new menu_item_bool("Invert", settings.invert));
 #else
-    std::vector<String> fmts{"Normal", "Dark", "Alt1"};
+    std::vector<std::string> fmts{"Normal", "Dark", "Alt1"};
     display->add_menu(new menu_choice("Color Scheme", schemes, settings.color_scheme));
 #endif
     //display->add_item(new menu_item_bool("Mirror", settings.mirror));

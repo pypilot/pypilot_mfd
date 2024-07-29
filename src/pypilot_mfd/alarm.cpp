@@ -17,7 +17,7 @@
 #include "menu.h"
 #include "buzzer.h"
 
-String alarm_name(alarm_e alarm)
+std::string alarm_name(alarm_e alarm)
 {
     switch(alarm) {
     case ANCHOR_ALARM: return "Anchor Alarm";
@@ -32,8 +32,8 @@ String alarm_name(alarm_e alarm)
 }
 
 static uint32_t last_alarm_trigger[ALARM_COUNT];
-static String alarm_reason[ALARM_COUNT];
-static void trigger(alarm_e alarm, String reason="")
+static std::string alarm_reason[ALARM_COUNT];
+static void trigger(alarm_e alarm, std::string reason="")
 {
     //printf("alarm trigger %d\n", alarm);
     uint32_t t = millis();
@@ -45,9 +45,10 @@ static void trigger(alarm_e alarm, String reason="")
     alarm_reason[alarm] = reason.length() ? reason : "no data";
 
     menu_switch_alarm(alarm);
+    display_toggle(true);
 }
 
-uint32_t alarm_last(alarm_e alarm, String &reason)
+uint32_t alarm_last(alarm_e alarm, std::string &reason)
 {
     uint32_t lt = last_alarm_trigger[alarm];
     if(!lt)
@@ -60,7 +61,7 @@ float alarm_anchor_dist;
 float lightning_distance;
     
 void alarm_anchor_reset() {
-    String source;
+    std::string source;
     uint32_t time;
     if(!display_data_get(LATITUDE, settings.anchor_lat, source, time))
         printf("Failed to get anchor");
@@ -221,8 +222,8 @@ static void alarm_poll_pypilot()
     }
 
     if(settings.pypilot_alarm_fault) {
-        String x = pypilot_client_value("servo.flags");
-        if(x.endsWith("FAULT"))
+        std::string x = pypilot_client_value("servo.flags");
+        if(endsWith(x, "FAULT"))
             trigger(PYPILOT_ALARM, x);
         pypilot_client_strobe();
     }

@@ -7,9 +7,6 @@
  */
 
 #include <WiFi.h>
-#include "Arduino.h"
-
-#include <ESPmDNS.h>
 
 #include "settings.h"
 #include "zeroconf.h"
@@ -21,7 +18,7 @@ static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
 int signalk_discovered;  // 0 means not discovered,  1 means we tried, 2 means found
 int pypilot_discovered;
 
-void mdns_analyze_results(String service_name, mdns_result_t * results)
+void mdns_analyze_results(std::string service_name, mdns_result_t * results)
 {
     mdns_result_t * r = results;
     mdns_ip_addr_t * a = NULL;
@@ -38,7 +35,7 @@ void mdns_analyze_results(String service_name, mdns_result_t * results)
         if(r->txt_count){
             printf("  TXT : [%u] ", r->txt_count);
             for(t=0; t<r->txt_count; t++) {
-                String key = r->txt[t].key, val = r->txt[t].value;
+                std::string key = r->txt[t].key, val = r->txt[t].value;
                // printf("%s=%s; ", key.c_str(), val.c_str());
                 if(service_name == "_http" && key == "swname" && val == "signalk-server") {
                     if(r->addr) {
@@ -124,10 +121,10 @@ void mdns_setup()
                     ( void * ) 0,    /* Parameter passed into the task. */
                     tskIDLE_PRIORITY,/* Priority at which the task is created. */
                     &xHandle );     
-    if(!MDNS.begin("pypilot_mfd")) {
-        printf_P(F("Error starting mDNS"));
-        return;
-    }
 
-    MDNS.addService("http", "tcp", 80);
+    if(mdns_hostname_set("pypilot_mfd"))
+        printf_P(F("Error starting mDNS hostname"));
+
+    if(mdns_service_add(NULL, "http", "tcp", 80, NULL, 0))
+        printf_P(F("Error starting mDNS"));
 }

@@ -42,7 +42,7 @@ void keys_setup()
 static bool keys[KEY_COUNT];
 static void readkeys()
 {
-    for (int i = 0; i < KEY_COUNT; i++) {
+    for (int i = 0; i < KEY_COUNT; i++)
         keys[i] = !digitalRead(key_pin[i]);
 }
 
@@ -69,7 +69,7 @@ static bool pressed(int key, bool repeat=true)
 
 static bool held(int key)
 {
-    if(!repeated && keys[key]) && key_times[key] && millis() - key_times[key] > 500) {
+    if(!repeated && keys[key] && key_times[key] && millis() - key_times[key] > 500) {
         repeated = true;
         return true;
     }
@@ -78,7 +78,7 @@ static bool held(int key)
 
 void keys_poll()
 {
-    read_keys();
+    readkeys();
 
     if(keys[KEY_PAGE_UP] && keys[KEY_PAGE_DOWN])
         wireless_toggle_mode();

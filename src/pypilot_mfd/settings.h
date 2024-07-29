@@ -21,12 +21,12 @@
 enum wireless_data_e {NMEA_PYPILOT, NMEA_SIGNALK, NMEA_CLIENT, NMEA_SERVER, SIGNALK};
 
 struct settings_t {
-    String magic;
+    std::string magic;
 
-    String ssid;
-    String psk;
+    std::string ssid;
+    std::string psk;
 
-    uint16_t channel;
+    int channel;
 
     bool input_usb, output_usb;
     int usb_baud_rate;
@@ -34,10 +34,10 @@ struct settings_t {
 
     bool input_wifi, output_wifi;
     wireless_data_e wifi_data;
-    String nmea_client_addr;
+    std::string nmea_client_addr;
     int nmea_client_port, nmea_server_port;
 
-    uint16_t transmitter_count;
+    int transmitter_count;
 
     bool compensate_wind_with_accelerometer;
     bool compute_true_wind_from_gps;
@@ -45,17 +45,17 @@ struct settings_t {
 
     //display
     bool use_360, use_fahrenheit, use_inHg, use_depth_ft;
-    String lat_lon_format;
+    std::string lat_lon_format;
 
     bool invert;
-    String color_scheme;
+    std::string color_scheme;
     int contrast, backlight;
     bool show_status;
     int rotation; // 0-3 are set, 4 is auto
     int mirror; // 2 is auto
     bool powerdown; // power down or just turn of screen on power button
 
-    String enabled_pages;
+    std::string enabled_pages;
 
     // alarms
     bool anchor_alarm;
@@ -101,9 +101,9 @@ struct settings_t {
     bool pypilot_alarm_lost_mode;
     
     // cache mdns 
-    String pypilot_addr, signalk_addr;
+    std::string pypilot_addr, signalk_addr;
     int signalk_port;
-    String signalk_token;
+    std::string signalk_token;
 };
 
 enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};

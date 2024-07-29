@@ -6,6 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <string>
 #include <list>
 #include <vector>
 
@@ -38,7 +39,7 @@ enum display_item_e { WIND_SPEED,
 enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, COMPUTED_DATA, DATA_SOURCE_COUNT};
 
 void display_setup();
-void display_toggle();
+void display_toggle(bool on=true);
 void display_set_mirror_rotation(int);
 void display_change_page(int dir);
 void display_enter_exit_menu();
@@ -46,21 +47,21 @@ void display_menu_scale();
 void display_poll();
 void display_data_update(display_item_e item, float value, data_source_e);
 bool display_data_get(display_item_e item, float &value);
-bool display_data_get(display_item_e item, float &value, String &source, uint32_t &time);
+bool display_data_get(display_item_e item, float &value, std::string &source, uint32_t &time);
 void display_auto();
 void display_items(std::list<display_item_e> &items);
 
-String display_get_item_label(display_item_e item);
+std::string display_get_item_label(display_item_e item);
 
 struct page_info {
-    page_info(char n, String &d) : name(n), description(d), enabled(false) {}
+    page_info(char n, std::string &d) : name(n), description(d), enabled(false) {}
     char name;
-    String &description;
+    std::string &description;
     bool enabled;
 };
 
 struct route_info_t {
-    String from_wpt, to_wpt;
+    std::string from_wpt, to_wpt;
     float target_bearing;
     float wpt_lat, wpt_lon;
     float xte, brg;
@@ -92,9 +93,9 @@ struct grid_display : public display {
 };
 
 struct page : public grid_display {
-    page(String _description);
+    page(std::string _description);
 
-    String description;
+    std::string description;
 };
 
 extern route_info_t route_info;

@@ -350,7 +350,7 @@ struct ClientSock
     }
     int sock;
     uint32_t time;
-    String data;
+    std::string data;
 };
 
 static int server_sock;
@@ -370,7 +370,7 @@ static void close_server() {
     server_sock = 0;
 }
 
-static bool connect_client(String addr, int port)
+static bool connect_client(std::string addr, int port)
 {
     uint32_t t0 = millis();
     if(client.sock)
@@ -379,7 +379,7 @@ static bool connect_client(String addr, int port)
     if(t0 - client.time < 10000)
         return false;
 
-    if(!addr || !port)
+    if(addr.empty() || port == 0)
         return false;
 
     sockaddr_in dest_addr;
@@ -475,20 +475,20 @@ static void poll_client(ClientSock &c)
         } else if(ret > 0) {
             buf[ret] = '\0';
             if(settings.input_wifi)
-                c.data += String(buf);
+                c.data += std::string(buf);
         } else
             break;
         for(;;) {
-            int ind = c.data.indexOf('$', 1);
+            int ind = c.data.find('$', 1);
             if(ind < 0) {
-                ind = c.data.indexOf('\n');
+                ind = c.data.find('\n');
                 if(ind < 0)
                     break;
             } else
                 ind --;
-            String line = c.data.substring(0, ind);
+            std::string line = c.data.substr(0, ind);
             nmea_parse_line(line.c_str(), WIFI_DATA);
-            c.data = c.data.substring(ind+1);
+            c.data = c.data.substr(ind+1);
         }
     }
 }
@@ -567,10 +567,10 @@ void nmea_poll()
         return;
     last_poll_time = t0;
 
-    static String cur_addr;
+    static std::string cur_addr;
     static int cur_port;
 
-    String addr = cur_addr;
+    std::string addr = cur_addr;
     int port;
     switch(settings.wifi_data) {
         case NMEA_PYPILOT:

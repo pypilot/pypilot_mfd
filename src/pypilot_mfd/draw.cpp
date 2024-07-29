@@ -77,7 +77,7 @@ void draw_line(int x1, int y1, int x2, int y2)
     u8g2.drawLine(x1, y1, x2, y2);
 }
 
-void draw_box(int x, int y, int w, int h, bool invert=false)
+void draw_box(int x, int y, int w, int h, bool invert)
 {
     if(invert)
         u8g2.setDrawColor(2);
@@ -118,14 +118,14 @@ bool draw_set_font(int &ht)
     return true;
 }
 
-int draw_text_width(const char *str)
+int draw_text_width(const std::string &str)
 {
-    return u8g2.getStrWidth(str);
+    return u8g2.getStrWidth(str.c_str());
 }
 
-void draw_text(int x, int y, const char *str)
+void draw_text(int x, int y, const std::string &str)
 {
-    u8g2.drawUTF8(x, y, str);
+    u8g2.drawUTF8(x, y, str.c_str());
 }
 
 void draw_color(color_e color)
@@ -163,34 +163,45 @@ void draw_send_buffer()
 
 #ifdef USE_LVGL     // color lcd
 
+#include "fonts.h"
+
 static uint8_t color;
 
 // for now 256 entrees, could make it less
 static uint8_t palette[COLOR_COUNT][8];
 
-// produce 8 bit color from 3 bit per channel mapped onto rgb232 with last bit shared for red and blue
-uint8_t rgb2321(uint8_t r, uint8_t g, uint8_t b)
+#if 1
+// produce 8 bit color from 3 bit per channel mapped onto rgb332
+uint8_t rgb3(uint8_t r, uint8_t g, uint8_t b)
 {
-    uint8_t l = r&&b ? (b&1) : 0;
+    b >>= 1;
+    return (r << 5) | (g << 2) | b;
+}
+#else
+// produce 8 bit color from 3 bit per channel mapped onto rgb2321 with last bit shared for red and blue
+uint8_t rgb3(uint8_t r, uint8_t g, uint8_t b)
+{
+    uint8_t l = (r&&b) ? (b&1) : 0;
     r >>= 1;
     b >>= 1;
     return (r << 6) | (g << 3) | (b << 1) | l;
 }
+#endif
 
 // b from 0-8;
 uint8_t compute_color(color_e c, uint8_t b)
 {
     // convert enum to rgb232+1
     switch(color) {
-    case WHITE:   return rgb2321(b, b, b);
-    case RED:     return rgb2321(b, 0, 0);
-    case GREEN:   return rgb2321(0, b, 0);
-    case BLUE:    return rgb2321(0, 0, b);
-    case CYAN:    return rgb2321(0, b, b);
-    case MAGENTA: return rgb2321(b, 0, b);
-    case YELLOW:  return rgb2321(b, b, 0);
-    case GREY:    return rgb2321(b/2, b/2, b/2);
-    case ORANGE:  return rgb2321(b, b/2, 0);
+    case WHITE:   return rgb3(b, b, b);
+    case RED:     return rgb3(b, 0, 0);
+    case GREEN:   return rgb3(0, b, 0);
+    case BLUE:    return rgb3(0, 0, b);
+    case CYAN:    return rgb3(0, b, b);
+    case MAGENTA: return rgb3(b, 0, b);
+    case YELLOW:  return rgb3(b, b, 0);
+    case GREY:    return rgb3(b/2, b/2, b/2);
+    case ORANGE:  return rgb3(b, b/2, 0);
     }
 }
 
@@ -382,34 +393,63 @@ void draw_box(int x, int y, int w, int h, bool invert=false)
     // implement using memset, and memcpy for inverting then for the right rotation
 }
 
+int cur_font = 0;
 bool draw_set_font(int &ht)
 {
-    // need fonts up to 150pt
+    for(int i=FONT_COUNT-1; i>=0; i--)
+        if(ht <= fonts[i].h) {
+            cur_font = i;
+            return true;
+        }
+    return false;
 }
 
 static int get_glyph(char c)
 {
+    if(c < FONT_MIN || c > FONT_MAX)
+        return 0;
+
+    return fonts[i].font_data[c].w;
 }
 
-static int render_glyph(char c)
+static int render_glyph(char c, int x, int y)
 {
+    if(c < FONT_MIN || c > FONT_MAX)
+        return 0;
 
+    character &ch = fonts[i].font_data[c];
+    int pos = 0;
+    int cx = x, cy = y+ch.yoff, i;
+    while(i<ch.size) {
+        int v = ch.data[i++];
+        int color = v&0x7, cnt;
+        if(i & 0x80) { // extended
+            cnt = (ch.data[i++]+1)*16 + (v&0x78)>>3;
+        else
+            cnt = (v>>3)+1;
+         for(int j=0; j<cnt; j++) {
+            putpixel(cx, cy, color);
+            if(++cx >= ch.w) {
+                cx=x;
+                y++;
+            }
+        }
+    }
+    return ch.w;
 }
 
-int draw_text_width(const char *str)
+int draw_text_width(const std::string &str)
 {
     int w = 0;
-    while(*str++) {
-        w += get_glyph(*str);
-    }
+    for(int i=0; i<str.length(); i++)
+        w += get_glyph(str[i]);
     return w;
 }
 
-void draw_text(int x, int y, const char *str)
+void draw_text(int x, int y, const std::string &str)
 {
-    while(*str++) {
-        x += render_glyph(*str);
-    }
+    for(int i=0; i<str.length(); i++)
+        x += render_glyph(str[i], x, y);
 }
 
 void draw_color(color_e c)

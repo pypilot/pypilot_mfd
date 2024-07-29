@@ -12,15 +12,15 @@ struct ship
     int mmsi;
     uint32_t timestamp;
 
-    String status;
+    std::string status;
     
     float lat, lon, sog, cog, hdg, rot;
-    String name, callsign, shiptype;
+    std::string name, callsign, shiptype;
     int to_bow, to_stern, to_port, to_starboard;
 
     int draught;
 
-    String destination;
+    std::string destination;
 
     float cpa, tcpa, dist;
 
