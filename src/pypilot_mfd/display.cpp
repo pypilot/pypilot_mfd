@@ -116,7 +116,7 @@ void display_data_update(display_item_e item, float value, data_source_e source)
             return;
     }
 
-    history_put(item, value, time);
+    history_put(item, value);
 
     display_data[item].value = value;
     display_data[item].time = time;
@@ -522,10 +522,10 @@ struct stat_display : public text_display {
     }
 
     std::string getTextItem() {
-        uint32_t totalmillis;
+        uint32_t totalseconds;
         float high, low;
         std::list<history_element> *data = history_find(item, history_display_range,
-                                                        totalmillis, high, low);
+                                                        totalseconds, high, low);
         if (!data)
             return " --- ";
         int digits = 1;
@@ -837,11 +837,10 @@ struct history_display : public display_item {
         draw_text(x + w - sw, y, history_label);
         text.render();
 
-        uint32_t time = millis(), totalmillis;
+        uint32_t totalseconds;
         float high, low;
         std::list<history_element> *data = history_find(item, history_display_range,
-                                                        totalmillis, high, low);
-
+                                                        totalseconds, high, low);
         if (!data)
             return;
 
@@ -862,11 +861,10 @@ struct history_display : public display_item {
         range = maxv - minv;
 
         int lxp = -1, lyp;
-        uint32_t lastt;
+        uint32_t time = esp_timer_get_time()/1000000LL, lastt;
         int cnt = 0;
-        uint32_t totals = totalmillis / 1000;  // avoid overflowing uint32 by just using seconds`
         for (std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
-            int xp = w - (time - it->time) / 1000 * w / totals;
+            int xp = w - (time - it->time) / 1000 * w / totalseconds;
             if (xp < 0)
                 break;
             if(isnan(it->value)) 
@@ -902,33 +900,6 @@ struct history_display : public display_item {
     bool min_zero, inverted;
 };
 
-/*
-/// make a grid display with wind min max??
-struct stat_display : public grid_display {
-stat_display(display_item_e _item) : item(_item) {
-add(new float_text_display(item, "High", high, 1))
-add(new float_text_display(item, "Low", low, 1))
-}
-
-void render() {
-uint32_t total;
-history_find(item, history_display_range, total, high, low)
-grid_display::render();
-
-int ht = 8;
-draw_set_font(ht);
-
-// render timescale in upper right
-std::string history_label = history_get_label((history_range_e)history_display_range);
-int sw = draw_text_width(history_label);
-draw_text(x+w-sw, y, history_label);
-text.render();
-}
-
-display_item_e item;
-float high, low;
-};
-*/
 struct route_display : public display_item {
     route_display()
         : display_item(ROUTE_INFO) {}
@@ -1894,7 +1865,7 @@ void display_menu_scale() {
     if (in_menu)
         menu_select();
     else {
-        if (++history_display_range == HISTORY_RANGE_COUNT)
+        if (++history_display_range >= 3) // show 5m 1h 24h
             history_display_range = 0;
 
         if (++ships_range >= (sizeof ships_range_table) / (sizeof *ships_range_table))
@@ -1940,7 +1911,7 @@ void data_timeout() {
             //if(!isnan(display_data[i].value))
             //  printf("timeout %ld %ld %d\n", t0, display_data[i].time, i);
             display_data[i].value = NAN;  // timeout if no data
-            history_put((display_item_e)i, NAN, t); // ensure history shows lack of data
+            history_put((display_item_e)i, NAN); // ensure history shows lack of data
         }
 }
 

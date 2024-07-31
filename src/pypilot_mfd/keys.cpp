@@ -106,7 +106,6 @@ void keys_poll()
             printf("going to sleep");
             esp_deep_sleep_start();
         }
-    } else if (held(KEY_PWR)) {
+    } else if (held(KEY_PWR))
         ESP.restart();
-    }
 }

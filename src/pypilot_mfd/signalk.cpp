@@ -26,6 +26,7 @@
 #include "zeroconf.h"
 #include "utils.h"
 #include "settings.h"
+#include "history.h"
 
 //std::string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2UiOiJweXBpbG90X21mZC0wMzgyMjQ2OTg4MCIsImlhdCI6MTcxMTY5MDA0MCwiZXhwIjoxNzQzMjQ3NjQwfQ.T-g3vkQMz5e6lbp9UGNEZgo6mEJex0i8eOeOUGUCGOI";
 std::string access_url;
@@ -46,6 +47,12 @@ static bool signalk_parse_value(const rapidjson::Value &value)
         return false;
     
     std::string path = value["path"].GetString();
+
+    if(value.HasMember("timestamp")) {
+        // TODO timestamp update history here
+        //history_set_time(uint32_t date, int hour, int minute, float second);
+    }
+    
     const rapidjson::Value &val = value["value"];
 
     //printf("SIGNALK GOT PATH %s %s\n", path.c_str(), x.c_str());

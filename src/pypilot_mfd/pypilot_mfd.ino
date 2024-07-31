@@ -21,6 +21,7 @@
 #include "utils.h"
 #include "keys.h"
 #include "alarm.h"
+#include "history.h"
 
 void setup()
 {
@@ -32,6 +33,7 @@ void setup()
     keys_setup();
     settings_load();
     wireless_setup();
+    history_setup();
     mdns_setup();
     web_setup();
 
@@ -62,12 +64,14 @@ void loop()
     buzzer_poll();
     web_poll();
     display_poll();
+    history_poll();
 
     // sleep remainder of second
     int dt = millis() - t0;
     const int period = 50;
     if (dt < period) {
         //printf("delay %d\n", dt);
-        delay(period - dt);
+        //delay(period - dt);
+        vTaskDelay((period-dt) / portTICK_PERIOD_MS);
     }
 }

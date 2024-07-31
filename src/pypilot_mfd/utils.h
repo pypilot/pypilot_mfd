@@ -26,3 +26,4 @@ std::string int_to_str(int v);
 int str_to_int(const std::string &s);
 bool endsWith(const std::string& str, const std::string& suffix);
 
+uint32_t gettime();

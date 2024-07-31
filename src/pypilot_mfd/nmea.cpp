@@ -18,6 +18,7 @@
 #include "ais.h"
 #include "settings.h"
 #include "wireless.h"
+#include "history.h"
 
 static uint8_t checksum(const char *buf, int len=-1)
 {
@@ -215,7 +216,8 @@ bool nmea_parse_line(const char *line, data_source_e source)
         float latitude, longitude;
         char status, lat_sign, lon_sign;
         float speed, track;
-        int ret = sscanf(c1, ",%02d%02d%f,%c,%f,%c,%f,%c,%f,%f", &hour, &minute, &second, &status, &latitude, &lat_sign, &longitude, &lon_sign, &speed, &track);
+        uint32_t date;
+        int ret = sscanf(c1, ",%02d%02d%f,%c,%f,%c,%f,%c,%f,%f", &hour, &minute, &second, &status, &latitude, &lat_sign, &longitude, &lon_sign, &speed, &track, &date);
         //printf("RMC got %d %d:%d:%f  %c %.2f %c %.2f %c %.2f %.2f\n", ret, hour, minute, second, status, latitude, lat_sign, longitude, lon_sign, speed, track);
         if(ret >= 4)
             display_data_update(TIME, (hour*60+minute)*60+second, source);
@@ -236,6 +238,10 @@ bool nmea_parse_line(const char *line, data_source_e source)
             display_data_update(GPS_SPEED, speed, source);
         if(ret >= 10)
             display_data_update(GPS_HEADING, track, source);
+        if(ret >= 11) {
+            // we have a time fix
+            history_set_time(date, hour, minute, second);
+        }
     } else
 
     if(prefix(line, "VHW")) {

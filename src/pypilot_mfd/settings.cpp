@@ -18,7 +18,7 @@
 #define DEFAULT_CHANNEL 6
 #define MAGIC "3A61CF00"
 
-std::string settings_filename = "/settings.json";
+std::string settings_filename = "/settings/settings.json";
 
 std::string get_wifi_data_str()
 {
@@ -32,10 +32,11 @@ std::string get_wifi_data_str()
     return "";
 }
 
+fs::SPIFFSFS SPIFFS_settings;
+
 static bool settings_load_suffix(std::string suffix="")
 {
     settings.usb_baud_rate = 115200;
-
     if (!SPIFFS.begin(true)) {
         printf("SPIFFS Mount Failed\n");
         return false;
