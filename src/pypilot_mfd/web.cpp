@@ -321,7 +321,17 @@ void web_setup()
     });
 
     server.on("/alarms.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+#if 0    
         request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms_helper);
+#else
+        int size = sizeof(alarms_html);
+        request->send("text/plain", size, [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+                                    int r = size - index;
+                                    int len = r > maxLen ? maxLen : r;
+                                    memcpy(buffer, alarms_html + index, len);
+                                    return len;
+                                          }, processor_alarms_helper);
+#endif
     });
 
     server.on("/network", HTTP_POST, [](AsyncWebServerRequest *request) {
