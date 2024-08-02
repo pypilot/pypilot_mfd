@@ -1,0 +1,106 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: rgba(25, 255, 190);
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.container {
+   display: grid;
+   gap: 2em;
+}
+
+h2 {
+    padding-bottom: 10px;
+    text-align: center;
+    
+}
+
+h5 {
+    text-align: center;
+}
+
+table {
+    margin: auto;
+}
+
+.box {
+  border-radius: 42px;
+  box-shadow:
+    1px 1px 0 1px #f9f9fb,
+    -1px 0 28px 0 rgba(34, 33, 81, 0.01),
+    28px 28px 28px 0 rgba(34, 33, 81, 0.25);
+  background-color: rgba(255, 255, 255);
+  padding: 0px;
+  width: 100%;
+}
+
+input[type=radio] {
+    width: 2em;
+    height: 2em;
+}
+
+form {
+    margin: 0;
+    gap: 10px;
+}
+
+.col1-grid {
+    display: grid;
+    grid-template-columns: auto;
+    gap: 15px;
+    padding: 10px;
+}
+
+.col2-grid {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 15px;
+    padding: 30px;
+}
+
+.col3-grid {
+    display: grid;
+    grid-template-columns: auto auto auto;
+    gap: 10px;
+    padding: 10px;
+}
+
+.data-grid {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 5px;
+    padding: 20px;
+}
+
+
+/* CSS */
+.button {
+  background-color: #fbeee0;
+  border: 2px solid #422800;
+  border-radius: 30px;
+  box-shadow: #422800 4px 4px 0 0;
+  color: #422800;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1em;
+  padding: 0 10px;
+  line-height: 40px;
+  text-align: center;
+  touch-action: manipulation;
+}
+
+.button:hover {
+  background-color: #fff;
+}
+
+.button:active {
+  box-shadow: #422800 2px 2px 0 0;
+  transform: translate(2px, 2px);
+}
+
+@media (min-width: 768px) {
+  .button {
+    min-width: 50px;
+  }
+}
