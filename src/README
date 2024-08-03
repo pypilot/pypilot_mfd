@@ -1,1 +1,5 @@
-The data loaded onto the esp32 is in 2 parts.   The program itself and the data on the filesystem.    The filesystem data can be loaded using the makefile in this directory.
+The source code for pypilot_mfd is located in this directory.
+
+Some components must be installed with add_arduino_component.sh
+
+to build use the normal idf interface, eg: idf.py build

@@ -1,0 +1,3 @@
+[submodule "esp32-softap-ota"]
+	path = esp32-softap-ota
+	url = git@github.com:Jeija/esp32-softap-ota.git
