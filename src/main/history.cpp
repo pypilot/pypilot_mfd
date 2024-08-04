@@ -41,11 +41,12 @@ static int32_t cold_time()
 std::string history_get_label(history_range_e range)
 {
     switch(range) {
-        case MINUTE_5: return "5m";
-        case HOUR:   return "1h";
-        case DAY:    return "1d";
-        case MONTH:  return "1m";
-        case YEAR:   return "1y";
+    case MINUTE_5: return "5m";
+    case HOUR:   return "1h";
+    case DAY:    return "1d";
+    case MONTH:  return "1m";
+    case YEAR:   return "1y";
+    default: break;
     }
     return "";
 }
@@ -326,11 +327,12 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
         return false; // invalid, corrupted data?
     
     // apply fixed to float conversion of 2 byte data
-    float v;
+    float v = 0;
     switch(history_items[item]) {
-    case DEPTH: GPS_SPEED: WATER_SPEED:
+    case DEPTH: case GPS_SPEED: case WATER_SPEED:
     case WIND_SPEED: v = value / 100.0f; break;
     case BAROMETRIC_PRESSURE: v = value / 100.0f + 1000; break;
+    default: break;
     }
 
     uint32_t age = curtime - time;
@@ -340,7 +342,7 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
         return range == 4; // at higher range if our time is out of range, we are done
 
     // add to back of history
-    histories[item].put_back(time, value, range+1, itype);
+    histories[item].put_back(time, v, range+1, itype);
     return true;
 }
 
@@ -363,9 +365,10 @@ static void eeprom_store(int position, uint8_t index, uint8_t type, uint32_t tim
 
     uint16_t v = 0;
     switch(history_items[index]) {
-    case DEPTH: GPS_SPEED: WATER_SPEED:
+    case DEPTH: case GPS_SPEED: case WATER_SPEED:
     case WIND_SPEED: v = value *100; break;
     case BAROMETRIC_PRESSURE: v = (value - 1000)*100; break;
+    default: break;
     }
         
     *(uint16_t*)(packet+4) = v;
@@ -437,6 +440,7 @@ struct history_eeprom_range_t {
             if(abs_write == EEPROM_PARTITION)
                 abs_write = 0;
             break;
+        default: break;
         }
     }
     
@@ -446,7 +450,7 @@ struct history_eeprom_range_t {
             // if this is a cold boot reset these
             if(eeprom_rel_write[range] < 0) {
                 // invalid, just reset to 0
-                printf("invalid eeprom relative ranges %d %d %d\n", eeprom_rel_write_wrapped[range], eeprom_rel_write[range]);
+                printf("invalid eeprom relative ranges %d %d\n", eeprom_rel_write_wrapped[range], eeprom_rel_write[range]);
                 eeprom_rel_write_wrapped[range] = 0;
                 eeprom_rel_write[range] = 0;
             }
@@ -546,6 +550,7 @@ struct history_eeprom_range_t {
         case ABSOLUTE_READY:
             // do nothing
             break;
+        default: break;
         }
     }
 };

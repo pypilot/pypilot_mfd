@@ -6,6 +6,8 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <string>
+
 #include "Arduino.h"
 
 #include "alarm.h"
@@ -28,7 +30,9 @@ std::string alarm_name(alarm_e alarm)
     case WEATHER_ALARM: return "Weather Alarm";
     case DEPTH_ALARM: return "Depth Alarm";
     case PYPILOT_ALARM: return "pypilot Alarm";
+    default: break;
     }
+    return "";
 }
 
 static uint32_t last_alarm_trigger[ALARM_COUNT];

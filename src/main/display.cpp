@@ -53,6 +53,7 @@ std::string display_get_item_label(display_item_e item) {
     case TIME: return "Time";
     case ROUTE_INFO: return "Route Info";
     case PYPILOT: return "pypilot";
+    default: break;
     }
     return "";
 }
@@ -305,6 +306,8 @@ struct dir_angle_text_display : public angle_text_display {
             xa = .95, xb = .85f;
         else if (v < 0)
             xa = .05, xb = .15f;
+        else
+            return;
         int x1 = x + w * xa, x2 = x + w * xb, x3 = x + w * (xa * 2 + xb) / 3;
         int y1 = y + h / 2, y2 = y + h * .35f, y3 = y + h * .65f;
         int t = h / 20;
@@ -517,8 +520,7 @@ struct stat_display : public text_display {
         : text_display(_i) {}
 
     virtual std::string getLabel() {
-        return display_get_item_label(item);
-        +" Min/Max ";
+        return display_get_item_label(item) + " Min/Max ";
     }
 
     std::string getTextItem() {
@@ -671,7 +673,7 @@ struct gauge : public display_item {
 
         const uint8_t fonts[] = { 8, 7, 0 };
         int fth[] = { 10, 8, 0 };
-        int lw1, lw2;
+        int lw1, lw2=0;
         for (int i = 0; i < (sizeof fonts) / (sizeof *fonts); i++) {
             if (!fonts[i])
                 return;
@@ -721,7 +723,6 @@ struct wind_direction_gauge : public gauge {
         gauge::render();
         // now compute true wind from apparent
         // render true wind indicator near ring
-        uint32_t t = millis() - 5000;
         float twd = display_data[TRUE_WIND_DIRECTION].value;
         if (!isnan(twd)) {
             float s = sin(twd), c = cos(twd);
@@ -860,9 +861,8 @@ struct history_display : public display_item {
 
         range = maxv - minv;
 
-        int lxp = -1, lyp;
-        uint32_t time = esp_timer_get_time()/1000000LL, lastt;
-        int cnt = 0;
+        int lxp = -1, lyp=0;
+        uint32_t time = esp_timer_get_time()/1000000LL;
         for (std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
             int xp = w - (time - it->time) / 1000 * w / totalseconds;
             if (xp < 0)
@@ -880,8 +880,6 @@ struct history_display : public display_item {
                 }
                 lxp = xp, lyp = yp;
             }
-
-            lastt = it->time;
         }
 
         //render scale
@@ -1718,9 +1716,8 @@ static void setup_analog_pins() {
     adcAttachPin(PHOTO_RESISTOR_PIN);
     adcAttachPin(NTC_PIN);
 
-    ledcSetup(9, 500, 10);
-    ledcAttachPin(BACKLIGHT_PIN, 9);
-    ledcWrite(9, 0);
+    ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 9);
+    ledcWriteChannel(9, 0);
 }
 
 // read from photo resistor and adjust the backlight
@@ -1739,10 +1736,10 @@ static void read_analog_pins() {
     else if (!backlight_on && val < 2800)
         backlight_on = true;
 
-    if (backlight_on) {
-        ledcWrite(9, 1 + settings.backlight * settings.backlight * 5 / 2);
-    } else
-        ledcWrite(9, 0);
+    if (backlight_on)
+        ledcWriteChannel(9, 1 + settings.backlight * settings.backlight * 5 / 2);
+    else
+        ledcWriteChannel(9, 0);
 }
 
 static int rotation;
@@ -1915,7 +1912,7 @@ void data_timeout() {
         }
 }
 
-#ifdef USE_U8G2 || USE_LVGL
+#if defined(USE_U8G2) || defined(USE_RGB_LCD)
 
 void display_poll() {
     uint32_t t0 = millis();
@@ -1967,7 +1964,7 @@ void display_poll() {
 
     draw_send_buffer();
     uint32_t t4 = millis();
-    //printf("render took %d %d %d %d\n", t1-t0, t2-t1, t3-t2, t4-t3);
+    printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
 #endif
 

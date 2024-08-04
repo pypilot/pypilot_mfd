@@ -36,7 +36,7 @@ std::string uid;
 esp_websocket_client_handle_t ws_h;
 
 float to_knots(float m_s) { return m_s * 1.94384; }
-        float celcius(float kelvin) { kelvin - 273.15; }
+        float celcius(float kelvin) { return kelvin - 273.15; }
 
 static bool signalk_parse_value(const rapidjson::Value &value)
 {
@@ -106,7 +106,7 @@ static bool signalk_parse_value(const rapidjson::Value &value)
     if(path == "navigation.rateOfTurn") display_data_update(RATE_OF_TURN, rad2deg(v), s); else
     if(path == "navigation.speedThroughWater") display_data_update(WATER_SPEED, to_knots(v), s); else
    // if(path == "navigation.leewayAngle") display_data_update(LEEWAY, rad2deg(v), s); else
-        ;
+    {}
     
     return true;
 }
@@ -160,6 +160,7 @@ static std::string item_to_signalk_path(display_item_e item)
         case COMPASS_HEADING:     return "navigation.headingMagnetic";
         case RATE_OF_TURN:        return "navigation.rateOfTurn";
         case WATER_SPEED:         return "navigation.speedThroughWater";
+    default: break;
     }
     return "";
 }
@@ -309,7 +310,7 @@ static void request_access()
                 if(s.HasMember("accessRequest")) {
                     const rapidjson::Value &access = s["accessRequest"];
                     if(access.HasMember("permission") && access.HasMember("token")) {
-                        if(access["permission"].GetString() == "APPROVED") {
+                        if(access["permission"].GetString() == std::string("APPROVED")) {
                             printf("signalk got new token!");
                             //store token, close signalk (to reconnect with token)
                             settings.signalk_token = access["token"].GetString();
@@ -403,7 +404,7 @@ static void signalk_connect()
 
     rapidjson::Document s;
     if(s.Parse(payload.c_str()).HasParseError()) {
-        printf("signalk failed to parse %s\n");
+        printf("signalk failed to parse %s\n", payload.c_str());
         return;
     }
 
@@ -478,37 +479,39 @@ void signalk_poll()
     if (!esp_websocket_client_is_connected(ws_h))
         return;
 
-    if(settings.output_wifi)
-        if(settings.signalk_token.length() && !skupdates.empty()) {
-            rapidjson::StringBuffer s;
-            rapidjson::Writer<rapidjson::StringBuffer> w(s);
-            w.StartObject(); {
-                w.Key("updates");
-                w.StartArray(); {
-                    w.StartObject(); {
-                        w.Key("$source");
-                        w.String("pypilot_mfd");
-                        w.Key("values");
-                        w.StartArray();
-                        for(std::map<std::string, float>::iterator it = skupdates.begin(); it != skupdates.end(); it++) {
-                            w.StartObject();
-                            w.Key("path");
-                            w.String(it->first.c_str());
-                            w.Key("value");
-                            w.Double(it->second);
-                            w.EndObject();
-                        }
-                        w.EndArray();
+    if(!settings.output_wifi)
+        return;
+    
+    if(settings.signalk_token.length() && !skupdates.empty()) {
+        rapidjson::StringBuffer s;
+        rapidjson::Writer<rapidjson::StringBuffer> w(s);
+        w.StartObject(); {
+            w.Key("updates");
+            w.StartArray(); {
+                w.StartObject(); {
+                    w.Key("$source");
+                    w.String("pypilot_mfd");
+                    w.Key("values");
+                    w.StartArray();
+                    for(std::map<std::string, float>::iterator it = skupdates.begin(); it != skupdates.end(); it++) {
+                        w.StartObject();
+                        w.Key("path");
+                        w.String(it->first.c_str());
+                        w.Key("value");
+                        w.Double(it->second);
+                        w.EndObject();
                     }
-                    w.EndObject();
+                    w.EndArray();
                 }
-                w.EndArray();
+                w.EndObject();
             }
-            w.EndObject();
+            w.EndArray();
+        }
+        w.EndObject();
 
-                //printf("SIGNALK try SEND?! %s\n", payload.c_str());
-            esp_websocket_client_send_text(ws_h, s.GetString(), s.GetSize(), portMAX_DELAY);
-            skupdates.clear();
-        } else if(settings.output_wifi)
-            request_access();
+        //printf("SIGNALK try SEND?! %s\n", payload.c_str());
+        esp_websocket_client_send_text(ws_h, s.GetString(), s.GetSize(), portMAX_DELAY);
+        skupdates.clear();
+    } else
+        request_access();
 }

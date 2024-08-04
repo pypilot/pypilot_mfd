@@ -219,7 +219,7 @@ std::string int_to_str(int v)
 int str_to_int(const std::string &s)
 {
     int x;
-    sscanf(s.c_str(), "%d", x);
+    sscanf(s.c_str(), "%d", &x);
     return x;
 }
 

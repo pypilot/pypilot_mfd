@@ -94,7 +94,6 @@ static int ais_n(std::vector<bool> &data, int start, int len, bool sign=false)
     }
             
     int result = 0;
-    int count = len;
     for(int i=0; i<len; i++)
         if(data[start+i] != negative)
             result |= (1<<(len-i-1));

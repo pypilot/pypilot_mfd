@@ -24,6 +24,9 @@
 #include "signalk.h"
 #include "web.h"
 
+extern const uint8_t alarms_html_start[] asm("_binary_alarms_html_start");
+extern const uint8_t alarms_html_end[] asm("_binary_alarms_html_end");
+
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 AsyncWebSocket ws_data("/ws_data");
@@ -31,7 +34,7 @@ AsyncWebSocket ws_data("/ws_data");
 // bad put put here??
 rapidjson::Value history_get_data(display_item_e item, history_range_e range);
 
-static sensor_position str2position(std::string p) {
+static sensor_position str2position(const std::string &p) {
     if(p == "Primary")   return PRIMARY;
     if(p == "Secondary") return SECONDARY;
     if(p == "Port")      return PORT;
@@ -77,7 +80,7 @@ static std::string jsonDisplayData() {
             rapidjson::Value ji;
             ji["value"].Set(value);
             ji["source"].Set(source.c_str());
-            ji["latency"].Set(t0-time);
+            ji["latency"].Set((int)(t0-time));
             std::string name = display_get_item_label((display_item_e)i);
             displaydata[name.c_str()] = ji;
         }
@@ -108,11 +111,11 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 {
     switch (type) {
         case WS_EVT_CONNECT:
-            printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+            printf("WebSocket client #%lu connected from %s\n", client->id(), client->remoteIP().toString().c_str());
             ws.textAll(wireless_json_sensors().c_str());
             break;
         case WS_EVT_DISCONNECT:
-            printf("WebSocket client #%u disconnected\n", client->id());
+            printf("WebSocket client #%lu disconnected\n", client->id());
             break;
         case WS_EVT_DATA:
             handleWebSocketMessage(arg, data, len);
@@ -324,11 +327,11 @@ void web_setup()
 #if 0    
         request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms_helper);
 #else
-        int size = sizeof(alarms_html);
-        request->send("text/plain", size, [](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+        int size = alarms_html_end - alarms_html_start;
+        request->send("text/plain", size, [size](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
                                     int r = size - index;
                                     int len = r > maxLen ? maxLen : r;
-                                    memcpy(buffer, alarms_html + index, len);
+                                    memcpy(buffer, alarms_html_start + index, len);
                                     return len;
                                           }, processor_alarms_helper);
 #endif

@@ -297,4 +297,5 @@ std::string pypilot_client_value(std::string key, int digits) {
         return d.GetBool() ? "true" : "false";
 
     printf("unhandled pypilot client value %s\n", key.c_str());
+    return "";
 }

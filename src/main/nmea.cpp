@@ -217,7 +217,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
         char status, lat_sign, lon_sign;
         float speed, track;
         uint32_t date;
-        int ret = sscanf(c1, ",%02d%02d%f,%c,%f,%c,%f,%c,%f,%f", &hour, &minute, &second, &status, &latitude, &lat_sign, &longitude, &lon_sign, &speed, &track, &date);
+        int ret = sscanf(c1, ",%02d%02d%f,%c,%f,%c,%f,%c,%f,%f,%lu", &hour, &minute, &second, &status, &latitude, &lat_sign, &longitude, &lon_sign, &speed, &track, &date);
         //printf("RMC got %d %d:%d:%f  %c %.2f %c %.2f %c %.2f %.2f\n", ret, hour, minute, second, status, latitude, lat_sign, longitude, lon_sign, speed, track);
         if(ret >= 4)
             display_data_update(TIME, (hour*60+minute)*60+second, source);
@@ -502,9 +502,9 @@ static void poll_client(ClientSock &c)
 static void accept_server()
 {
     int keepAlive = 1;
-    int keepIdle = 1000;
-    int keepInterval = 10000;
-    int keepCount = 1;
+    //int keepIdle = 1000;
+    //int keepInterval = 10000;
+    //int keepCount = 1;
 
     struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
     socklen_t addr_len = sizeof(source_addr);
@@ -642,7 +642,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
     } if(ret > 0) // for now dont worry about "short" writes
         return;
         
-    printf("closed\n", ret);
+    printf("nmea socket closed %d\n", ret);
     c.close();
 }
 
@@ -658,7 +658,7 @@ void nmea_send(const char *buf)
     if(wifi_ap_mode)
         return;
     char buf2[64];
-    const char *fmt;
+
     snprintf(buf2, sizeof buf2, "$QY%s*%02x\r\n", buf, 0x08^checksum(buf));
     if(settings.output_usb)
         printf(buf2);
@@ -666,13 +666,15 @@ void nmea_send(const char *buf)
     
     if(settings.output_wifi)
     switch(settings.wifi_data) {
-        case NMEA_PYPILOT:
-        case NMEA_SIGNALK:
-        case NMEA_CLIENT:
-            write_nmea_client(client, buf2);
-            break;
-        case NMEA_SERVER:
-            write_nmea_server(buf2);
-            break;
+    case NMEA_PYPILOT:
+    case NMEA_SIGNALK:
+    case NMEA_CLIENT:
+        write_nmea_client(client, buf2);
+        break;
+    case NMEA_SERVER:
+        write_nmea_server(buf2);
+        break;
+    default:
+        break;
     }
 }

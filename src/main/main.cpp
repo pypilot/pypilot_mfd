@@ -16,13 +16,19 @@
 
 #include "Arduino.h"
 
+#include <string>
+
+#include "serial.h"
+//#include "display.h"
+#include "draw.h"
+
 extern "C" void app_main(void)
 {
     initArduino();
 
     // Arduino-like setup()
-    Serial.begin(115200);
-    printf("Hello world!\n");
+    serial_setup();
+    printf("pypilot_mfd\n");
 
     /* Print chip information */
     esp_chip_info_t chip_info;
@@ -49,11 +55,28 @@ extern "C" void app_main(void)
 
     printf("Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
 
-    for (int i = 10; i >= 0; i--) {
-        printf("Restarting in %d seconds...\n", i);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    //display_setup();
+    draw_setup(0);
+
+    for(;;) {
+        uint32_t t0 = millis();
+
+        //display_poll();
+
+        draw_clear(true);
+
+        draw_color(WHITE);
+        draw_box(100, 100, 100, 100);
+        
+        draw_send_buffer();
+        
+        // sleep remainder of second
+        int dt = millis() - t0;
+        const int period = 50;
+        if (dt < period) {
+            //printf("delay %d\n", dt);
+            //delay(period - dt);
+            vTaskDelay((period-dt) / portTICK_PERIOD_MS);
+        }
     }
-    printf("Restarting now.\n");
-    fflush(stdout);
-    esp_restart();
 }

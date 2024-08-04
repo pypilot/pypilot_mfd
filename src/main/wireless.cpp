@@ -28,7 +28,6 @@
 #include "alarm.h"
 
 bool wifi_ap_mode = false;
-settings_t settings;
 
 
 template<class T>
@@ -140,13 +139,13 @@ static void setup_wifi() {
         printf("Soft-AP IP address = %s\n", WiFi.softAPIP().toString().c_str());
 
         // This is the mac address of the Slave in AP Mode
-        printf("AP MAC: ", WiFi.softAPmacAddress().c_str());
+        printf("AP MAC: %s", WiFi.softAPmacAddress().c_str());
 
     } else {
         //WiFi.mode(WIFI_AP_STA);
         WiFi.mode(WIFI_STA);
 
-        WiFi.onEvent(WiFiStationGotIP, SYSTEM_EVENT_STA_GOT_IP);
+        WiFi.onEvent(WiFiStationGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
 
         if (!settings.ssid.empty()) {
             printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
@@ -420,7 +419,8 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
 
 // callback when data is recv from Master
 // This function is run from the wifi thread, so post to a queue
-void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
+void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
+    uint8_t *mac_addr = recv_info->src_addr;
 #if 0
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -512,6 +512,7 @@ void wireless_scan_networks() {
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     int32_t n = WiFi.scanNetworks(true);
+    n++; // avoid warning unused
     scanning = millis();
     if (!scanning) scanning++;
     // display on screen scanning for wifi networks progress
@@ -521,7 +522,7 @@ void wireless_poll() {
     uint32_t t0 = millis();
     static uint32_t tl;
     if (t0 - tl > 60000) {  // report memory statistics every 60 seconds
-        printf("pypilot_mfd %d %d %d %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize(), message_count);
+        printf("pypilot_mfd %ld %ld %ld %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize(), message_count);
         tl = t0;
         message_count = 0;
     }
@@ -637,7 +638,7 @@ std::string wireless_json_sensors()
         jwt["offset"].Set(wt.offset);
         jwt["dir"].Set(wt.dir);
         jwt["knots"].Set(wt.knots);
-        jwt["dt"].Set(t - wt.t);
+        jwt["dt"].Set((int)(t - wt.t));
         std::string x = mac_int_to_str(i->first);
         windsensors[x.c_str()] = jwt;
     }

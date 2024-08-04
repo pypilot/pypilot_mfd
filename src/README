@@ -1,5 +1,6 @@
 The source code for pypilot_mfd is located in this directory.
 
 Some components must be installed with add_arduino_component.sh
+idf.py add-dependency "espressif/esp_websocket_client^1.2.3"
 
 to build use the normal idf interface, eg: idf.py build

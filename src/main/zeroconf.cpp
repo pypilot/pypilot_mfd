@@ -12,7 +12,6 @@
 #include "zeroconf.h"
 #include "utils.h"
 
-static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
 static const char * ip_protocol_str[] = {"V4", "V6", "MAX"};
 
 int signalk_discovered;  // 0 means not discovered,  1 means we tried, 2 means found
@@ -21,11 +20,11 @@ int pypilot_discovered;
 void mdns_analyze_results(std::string service_name, mdns_result_t * results)
 {
     mdns_result_t * r = results;
-    mdns_ip_addr_t * a = NULL;
+//    mdns_ip_addr_t * a = NULL;
     int i = 1, t;
     while(r) {
         
-        printf("%d: Interface: %s, Type: %s\n", i++, if_str[r->tcpip_if], ip_protocol_str[r->ip_protocol]);
+        printf("%d: Interface: %s, Type: %s\n", i++, r->service_type, ip_protocol_str[r->ip_protocol]);
         if(r->instance_name){
             printf("  PTR : %s\n", r->instance_name);
         }

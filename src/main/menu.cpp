@@ -6,6 +6,8 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <string>
+
 #include <Arduino.h>
 
 #include "alarm.h"
@@ -27,7 +29,7 @@ static bool selectFont(int &wt, int &ht, std::string str) {
         if(!draw_set_font(ht))
             break;
         
-        int width = draw_text_width(str.c_str());
+        int width = draw_text_width(str);
         if(width < wt && ht < height) {
             wt = width;
             return true;
@@ -46,13 +48,13 @@ struct menu_label : public display {
     void render() {
         ht = h;  // it will never get bigger
         int wt = w;
-        if(!selectFont(wt, ht, label.c_str()))
+        if(!selectFont(wt, ht, label))
             return;
 
         // center text
         int yp = y + h/2 - ht/2;
         int xp = x + w/2 - wt/2;
-        draw_text(xp, yp, label.c_str());
+        draw_text(xp, yp, label);
     }
 
     int ht;
@@ -243,9 +245,9 @@ struct menu_item_int : public menu_item
 
         // align text
         int yp = y + h/2 - ht/2;
-        draw_text(x, yp, s.c_str());
-        int width = draw_text_width(label.c_str());
-        draw_text(x+w-width, yp, label.c_str());
+        draw_text(x, yp, s);
+        int width = draw_text_width(label);
+        draw_text(x+w-width, yp, label);
     }
 
     void select() { curmenu = &setting; }
@@ -283,9 +285,10 @@ struct alarm_display : public grid_display
         case DEPTH_ALARM: item = DEPTH;             break;
         case AIS_ALARM:   c = alarm_ship_tcpa;      break;
         case PYPILOT_ALARM:    c = NAN;             break;
+        default: c=0; break;
         }
 
-        if(c != DISPLAY_COUNT) {
+        if(item != DISPLAY_COUNT) {
             if(display_data_get(item, c))
                 current.label = std::string(c, 2);
             else
@@ -394,7 +397,7 @@ struct course_alarm_display : public display
         }
         // render course and course alarm text
         std::string cs = std::string(course, 1);
-        draw_text(x, y, cs.c_str());
+        draw_text(x, y, cs);
     }
 };
 
@@ -551,7 +554,7 @@ void menu_setup()
 #ifdef USE_U8G2
     display->add_item(new menu_item_bool("Invert", settings.invert));
 #else
-    std::vector<std::string> fmts{"Normal", "Dark", "Alt1"};
+    std::vector<std::string> schemes{"default", "light", "sky", "mars"};
     display->add_menu(new menu_choice("Color Scheme", schemes, settings.color_scheme));
 #endif
     //display->add_item(new menu_item_bool("Mirror", settings.mirror));

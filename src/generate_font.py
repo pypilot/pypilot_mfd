@@ -92,8 +92,8 @@ def create_character(sz, c):
     return size[0], size[1], top, byte
 
 
-characters = 'abcdefghijklmnopqrstuvwxyz1234567890`~!@#$%^&*()-=_+,./<>?[]\{}|;\':"ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-big_characters = '1234567890.~-'
+characters = 'abcdefghijklmnopqrstuvwxyz1234567890`~!@#$%^&*()-=_+,./<>?[]{}|;\':" ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+big_characters = '1234567890.~- '
 sizes = [21, 24, 30, 36, 42, 52, 66, 82, 108, 134, 162]
 
 ords = list(map(ord, characters))
@@ -110,12 +110,12 @@ def main():
     
     print('struct character {')
     print('   int w, h, yoff, size;')
-    print('   uint8_t *data;')
+    print('   const uint8_t *data;')
     print('};\n')
 
     print('struct font {')
-    print('   int h')
-    print('   character *font_data')
+    print('   int h;')
+    print('   const character *font_data;')
     print('};\n')
 
     for sz in sizes:

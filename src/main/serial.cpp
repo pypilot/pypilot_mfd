@@ -63,14 +63,9 @@ void serial_setup()
   Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
                 SERIAL_8N1, 16, 17);  //Hardware Serial of ESP32
   Serial2.setTimeout(0);
-
-
 }
 
 void serial_poll() {
-    uint32_t t0 = millis();
     SerialBuffer.read(settings.input_usb);
-    uint32_t t1 = millis();
     Serial2Buffer.read();
-    uint32_t t2 = millis();
 }

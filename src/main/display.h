@@ -94,6 +94,7 @@ struct grid_display : public display {
 
 struct page : public grid_display {
     page(std::string _description);
+    virtual ~page() {}
 
     std::string description;
 };

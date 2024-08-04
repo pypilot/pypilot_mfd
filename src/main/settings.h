@@ -6,6 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <string>
 #include <map>
 
 #define VERSION 0.1

@@ -18,7 +18,8 @@
 #define DEFAULT_CHANNEL 6
 #define MAGIC "3A61CF00"
 
-std::string settings_filename = "/settings/settings.json";
+settings_t settings;
+static std::string settings_filename = "/settings/settings.json";
 
 std::string get_wifi_data_str()
 {
@@ -31,8 +32,6 @@ std::string get_wifi_data_str()
     }
     return "";
 }
-
-fs::SPIFFSFS SPIFFS_settings;
 
 static bool settings_load_suffix(std::string suffix="")
 {
@@ -68,7 +67,7 @@ static bool settings_load_suffix(std::string suffix="")
             printf("settings file invalid/corrupted, will ignore data\n");
             ret = false;
         }
-        if(!s.IsObject() || !s.HasMember("magic") || s["magic"].GetString() != MAGIC) {
+        if(!s.IsObject() || !s.HasMember("magic") || s["magic"].GetString() != settings.magic) {
             printf("settings file magic identifier failed, will ignore data\n");
             ret = false;
         }
@@ -120,6 +119,7 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_B(use_depth_ft, false)
     LOAD_SETTING_S(lat_lon_format, "minutes")
     LOAD_SETTING_B(invert, false)
+    LOAD_SETTING_S(color_scheme, "default")
     LOAD_SETTING_BOUND(contrast, 20, 0, 50)
     LOAD_SETTING_BOUND(backlight, 10, 0, 20)
     
@@ -244,6 +244,7 @@ static bool settings_store_suffix(std::string suffix="")
     STORE_SETTING_B(use_depth_ft)
     STORE_SETTING_S(lat_lon_format)
     STORE_SETTING_B(invert)
+    STORE_SETTING_S(color_scheme)
     STORE_SETTING_B(contrast)
     STORE_SETTING_B(backlight)
     
