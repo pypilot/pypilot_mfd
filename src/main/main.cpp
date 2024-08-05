@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <string>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,18 +17,33 @@
 
 #include "Arduino.h"
 
-#include <string>
-
-#include "serial.h"
-//#include "display.h"
+#include "zeroconf.h"
+#include "web.h"
+#include "display.h"
 #include "draw.h"
+#include "nmea.h"
+#include "signalk.h"
+#include "pypilot_client.h"
+#include "serial.h"
+#include "settings.h"
+#include "wireless.h"
+#include "accel.h"
+#include "menu.h"
+#include "buzzer.h"
+#include "utils.h"
+#include "keys.h"
+#include "alarm.h"
+#include "history.h"
+
+#define DEMO
 
 extern "C" void app_main(void)
 {
     initArduino();
 
     // Arduino-like setup()
-    serial_setup();
+//    delay(1500);
+//    serial_setup();
     printf("pypilot_mfd\n");
 
     /* Print chip information */
@@ -55,23 +71,90 @@ extern "C" void app_main(void)
 
     printf("Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
 
-    //display_setup();
-    draw_setup(0);
+#ifdef DEMO
+    draw_setup(2);
+#else
+    accel_setup();
+    keys_setup();
+    settings_load();
+    wireless_setup();
+    history_setup();
+    mdns_setup();
+    web_setup();
 
+    int ss = CONFIG_ARDUINO_LOOP_STACK_SIZE;
+    if (ss < 16384)
+        printf("WARNING STACK TOO SMALL\n");
+    printf("Stack Size %d\n", ss);
+
+    alarm_setup();
+    accel_read();
+    display_setup();
+    menu_setup();
+    printf("display setup complete in %ld, %ld\n", t0, millis()-t0);
+#endif
+
+    int r = 60, rd = 1;
+    int dt=1;
     for(;;) {
         uint32_t t0 = millis();
-
-        //display_poll();
-
+#ifdef DEMO
         draw_clear(true);
 
         draw_color(WHITE);
-        draw_box(100, 100, 100, 100);
+        draw_box(50, 0,700, 470);
+#if 0
+        draw_color(RED);
+        draw_box(100, 400, 349, 60);
+
+        draw_color(CYAN);
+        int ht=80;
+        draw_set_font(ht);
+        draw_text(0, 360, "Hello world!");
+
+
+        ht = 100;
+        draw_color(BLUE);
+        draw_set_font(ht);
+        char b[128];
+        sprintf(b, "%d", (int)(1000/dt));
+        draw_text(200, 0, b);
+
         
+        draw_color(GREEN);
+    draw_thick_line(100, 100, 700, 380, 20);
+
+        draw_color(GREY);
+        draw_thick_line(0, 480, 800, 0, 10);
+        
+
+        draw_color(ORANGE);
+        draw_circle(300, 300, r, 10);
+
+        if(r > 100 || r < 20)
+            rd=-rd;
+        r += rd;
+        draw_color(MAGENTA);
+        draw_triangle(576+r, 100, 480, 300+r, 780, 250);
+#endif
         draw_send_buffer();
-        
+
+#else
+        wireless_poll();
+        keys_poll();
+        serial_poll();
+        nmea_poll();
+        signalk_poll();
+        pypilot_client_poll();
+        alarm_poll();
+        buzzer_poll();
+        web_poll();
+        display_poll();
+        history_poll();
+#endif        
         // sleep remainder of second
-        int dt = millis() - t0;
+        dt = millis() - t0;
+
         const int period = 50;
         if (dt < period) {
             //printf("delay %d\n", dt);

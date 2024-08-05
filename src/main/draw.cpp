@@ -58,19 +58,19 @@ void draw_setup(int rotation)
         u8g2.setFlipMode(true);
 }
 
-void draw_thick_line(int x1, int y1, int x2, int y2, int w)
+void draw_thick_line(int x0, int y0, int x1, int y1, int w)
 {
-    int ex = x2-x1, ey = y2-y1;
+    int ex = x1-x0, ey = y1-y0;
     int d = sqrt(ex*ex + ey*ey);
     if(d == 0)
         return;
     ex = ex*w/d/2;
     ey = ey*w/d/2;
 
-    int ax = x1+ey, ay = y1-ex;
-    int bx = x1-ey, by = y1+ex;
-    int cx = x2+ey, cy = y2-ex;
-    int dx = x2-ey, dy = y2+ex;
+    int ax = x0+ey, ay = y0-ex;
+    int bx = x0-ey, by = y0+ex;
+    int cx = x1+ey, cy = y1-ex;
+    int dx = x1-ey, dy = y1+ex;
     u8g2.drawTriangle(ax, ay, bx, by, cx, cy);
     u8g2.drawTriangle(bx, by, dx, dy, cx, cy);
 }
@@ -222,18 +222,19 @@ uint8_t compute_color(color_e c, uint8_t b)
     default: break;
     }
 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
     if(settings.color_scheme == "light")
         v = ~v;
     else if(settings.color_scheme == "sky")
         v ^= rgb3(0, 3, 7);
     if(settings.color_scheme == "mars")
         v ^= rgb3(7, 1, 0);
-    
+#endif    
     return v;
 }
 
 uint8_t *framebuffer;
-static uint8_t *framebuffers[2];
+static uint8_t *framebuffers[3];
 static int vsynccount;
 static int rotation;
 
@@ -241,8 +242,8 @@ static int rotation;
 #define DRAW_LCD_BK_LIGHT_ON_LEVEL  1
 #define DRAW_LCD_BK_LIGHT_OFF_LEVEL !DRAW_LCD_BK_LIGHT_ON_LEVEL
 #define DRAW_PIN_NUM_BK_LIGHT       GPIO_NUM_42
-#define DRAW_PIN_NUM_HSYNC          -1//39
-#define DRAW_PIN_NUM_VSYNC          -1//40
+#define DRAW_PIN_NUM_HSYNC          -1//47
+#define DRAW_PIN_NUM_VSYNC          -1//48
 #define DRAW_PIN_NUM_DE             45
 #define DRAW_PIN_NUM_PCLK           21
 #define DRAW_PIN_NUM_DATA0          13 // B0
@@ -259,7 +260,7 @@ static int rotation;
 #define DRAW_LCD_H_RES              800
 #define DRAW_LCD_V_RES              480
 
-#define DRAW_LCD_NUM_FB             2
+#define DRAW_LCD_NUM_FB             3
 
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -292,10 +293,10 @@ static bool IRAM_ATTR example_on_vsync_event(esp_lcd_panel_handle_t panel, const
         vsynccount++;
     return high_task_awoken == pdTRUE;
 }
+static esp_lcd_panel_handle_t panel_handle = NULL;
 #endif
 
-static esp_lcd_panel_handle_t panel_handle = NULL;
-static std::string last_color_scheme;
+static std::string last_color_scheme = "none";
 void draw_setup(int r)
 {
     rotation = r;
@@ -339,7 +340,7 @@ void draw_setup(int r)
                 .vsync_idle_low = false,
                 .de_idle_high = false,
                 .pclk_active_neg = true,
-                .pclk_idle_high = false,
+                //.pclk_idle_high = false,
             },
             //.flags.pclk_active_neg = true,
             //.flags.de_idle_high = true,
@@ -371,7 +372,7 @@ void draw_setup(int r)
             .disp_active_low = (uint32_t)NULL,
             .refresh_on_demand = false,
             .fb_in_psram = true,
-            .double_fb = true,
+            .double_fb = false,
             .no_fb = false,
             .bb_invalidate_cache = (uint32_t)NULL,
         }
@@ -390,10 +391,10 @@ void draw_setup(int r)
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
 
-    ESP_ERROR_CHECK(esp_lcd_rgb_panel_get_frame_buffer(panel_handle, 2, (void**)&framebuffers[0], (void**)&framebuffers[1]));
+    ESP_ERROR_CHECK(esp_lcd_rgb_panel_get_frame_buffer(panel_handle, 3, (void**)&framebuffers[0], (void**)&framebuffers[1], (void**)&framebuffers[2]));
     framebuffer = framebuffers[0];
 
-    printf("got the framebuffers %p %p\n", framebuffers[0], framebuffers[1]);
+    printf("got the framebuffers %p %p %p\n", framebuffers[0], framebuffers[1], framebuffers[2]);
     
 #if DRAW_PIN_NUM_BK_LIGHT >= 0
     printf("draw: Turn on LCD backlight");
@@ -411,10 +412,12 @@ void draw_setup(int r)
     // emulation on linux
     framebuffers[0] = (uint8_t*)malloc(DRAW_LCD_H_RES*DRAW_LCD_V_RES);
     framebuffers[1] = (uint8_t*)malloc(DRAW_LCD_H_RES*DRAW_LCD_V_RES);
+    framebuffers[2] = (uint8_t*)malloc(DRAW_LCD_H_RES*DRAW_LCD_V_RES);
     framebuffer = framebuffers[0];
 #endif
     memset(framebuffers[0], 0, DRAW_LCD_V_RES*DRAW_LCD_H_RES);
     memset(framebuffers[1], 0, DRAW_LCD_V_RES*DRAW_LCD_H_RES);
+    memset(framebuffers[2], 0, DRAW_LCD_V_RES*DRAW_LCD_H_RES);
 }
 
 static void putpixel(int x, int y, uint8_t c)
@@ -519,7 +522,7 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int wd)
 {
     convert_coords(x0, y0);
     convert_coords(x1, y1);
-
+#if 0
     int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1;
     int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1;
     int err = dx-dy, e2, x2, y2;                           /* error value e_xy */
@@ -527,20 +530,62 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int wd)
 
     for (wd = (wd+1)/2; ; ) {                                    /* pixel loop */
         putpixel(x0, y0, MAX(0,MIN(GRAYS-1, (GRAYS-1)*(wd*ed-abs(err-dx+dy))/ed)));
-      e2 = err; x2 = x0;
-      if (2*e2 >= -dx) {                                            /* x step */
-         for (e2 += dy, y2 = y0; e2 < ed*wd && (y1 != y2 || dx > dy); e2 += dx)
-             putpixel(x0, y2 += sy, MAX(0,MIN(GRAYS-1, (GRAYS-1)*(wd*ed-abs(e2))/ed)));
-         if (x0 == x1) break;
-         e2 = err; err -= dy; x0 += sx;
-      }
-      if (2*e2 <= dy) {                                             /* y step */
-         for (e2 = dx-e2; e2 < ed*wd && (x1 != x2 || dx < dy); e2 += dy)
-             putpixel(x2 += sx, y0, MAX(0,MIN(GRAYS-1, (GRAYS-1)*(wd*ed-abs(e2))/ed)));
-         if (y0 == y1) break;
-         err += dx; y0 += sy;
-      }
+        e2 = err; x2 = x0;
+        if (2*e2 >= -dx) {                                            /* x step */
+            for (e2 += dy, y2 = y0; e2 < ed*wd && (y1 != y2 || dx > dy); e2 += dx)
+                putpixel(x0, y2 += sy, MAX(0,MIN(GRAYS-1, (GRAYS-1)*(wd*ed-abs(e2))/ed)));
+            if (x0 == x1) break;
+            e2 = err; err -= dy; x0 += sx;
+        }
+        if (2*e2 <= dy) {                                             /* y step */
+            for (e2 = dx-e2; e2 < ed*wd && (x1 != x2 || dx < dy); e2 += dy)
+                putpixel(x2 += sx, y0, MAX(0,MIN(GRAYS-1, (GRAYS-1)*(wd*ed-abs(e2))/ed)));
+            if (y0 == y1) break;
+            err += dx; y0 += sy;
+        }
     }
+#elif 0 // this is twice faster than above :(
+    int ex = x1-x0, ey = y1-y0;
+    int d = sqrt(ex*ex + ey*ey);
+    if(d == 0)
+        return;
+
+    ex = ex*wd/d/2;
+    ey = ey*wd/d/2;
+
+    int ax = x0+ey, ay = y0-ex;
+    int bx = x0-ey, by = y0+ex;
+    int cx = x1+ey, cy = y1-ex;
+    int dx = x1-ey, dy = y1+ex;
+    draw_triangle(ax, ay, bx, by, cx, cy);
+    draw_triangle(bx, by, dx, dy, cx, cy);
+#else // like 8 times faster but needs antialiasing
+    if(y0>y1) {
+        int t = y0;
+        y0 = y1;
+        y1 = t;
+        t = x0;
+        x0 = x1;
+        x1 = t;
+    }
+
+    int ax = abs(x1-x0), sw;
+    float dx = float(x1-x0) / (y1-y0);
+    if(ax == 0)
+        sw = ax;
+    else {
+        sw = wd * hypotf(x1-x0, y1-y0) / ax;
+        if(sw > ax)
+            sw = ax;
+    }
+
+    float x = x0-sw/2;
+    uint8_t value = palette[color][7];
+    for(int y=y0; y<= y1; y++) {
+        memset(framebuffer + DRAW_LCD_H_RES*y+(int)x, value, sw);
+        x += dx;
+    }
+#endif
 }
 
 void draw_circle_thin(int xm, int ym, int r)
@@ -588,7 +633,8 @@ void draw_circle(int xm, int ym, int r, int th)
     int a = abs(x1-x0), b = abs(y1-y0), b1 = b&1;  /* outer diameter */
     int a2 = a-2*th, b2 = b-2*th;                            /* inner diameter */
     int dx = 4*(a-1)*b*b, dy = 4*(b1-1)*a*a;                /* error increment */
-    int i = a+b2, err = b1*a*a, dx2, dy2, e2, ed; 
+    int i = a+b2, err = b1*a*a, dx2, dy2, e2;
+    float ed; 
                                                      /* thick line correction */
     if (th < 1.5) return draw_circle_thin(xm, ym, r);
     if ((th-1)*(2*b-th) > a*a) b2 = sqrtf(a*(b-a)*i*a2)/(a-th);       
@@ -636,7 +682,7 @@ void draw_circle(int xm, int ym, int r, int th)
    {
       if (err > dy+a) { y0--; y1++; err -= dy -= a; }
       for (; y0-y1 <= b; err += dy += a) { /* too early stop of flat ellipses */
-         i = (GRAYS-1)*4*err/b1;                        /* -> finish tip of ellipse */
+         i = (GRAYS-1)*4*err/b1;           /* -> finish tip of ellipse */
          putpixeli(x0,y0, i); putpixeli(x1,y0++, i);
          putpixeli(x0,y1, i); putpixeli(x1,y1--, i);
       }
@@ -672,15 +718,20 @@ static void draw_flat_tri(int x1, int y1, int x2, int x3, int y2)
     float curx3 = x1;
 
     int y = y1;
+    uint8_t value = palette[color][7];
+    
     for (;;) {
         // Left edge antialiasing
         int icurx2 = curx2;
         int icurx3 = curx3;
 
         // todo optimize scan line??
+#if 0
         for (int x = icurx2+1;x <= icurx3; x++)
             putpixel(x, y, (GRAYS-1));
-
+#else
+        memset(framebuffer + DRAW_LCD_H_RES*y+icurx2+1, value, icurx3-icurx2);
+#endif
         if(y == y2)
             break;
         y+=ys;
@@ -711,6 +762,14 @@ void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3)
     convert_coords(x1, y1);
     convert_coords(x2, y2);
     convert_coords(x3, y3);
+
+    if(x1 < 0 || x2 < 0 || x3 < 0 ||
+       x1 > DRAW_LCD_H_RES || x2 > DRAW_LCD_H_RES || x3 > DRAW_LCD_H_RES ||
+       y1 < 0 || y2 < 0 || y3 < 0 ||
+       y1 > DRAW_LCD_V_RES || y2 > DRAW_LCD_V_RES || y3 > DRAW_LCD_V_RES) {
+        printf("triangle out of screen\n");
+        return;
+    }
 
     // reorder coordinates so x1, y1 at top, and x2 to left
     if(y1 <= y2 && y1 <= y3) {
@@ -765,6 +824,7 @@ void draw_box(int x0, int y0, int w, int h, bool invert)
                 framebuffer[DRAW_LCD_H_RES*y+x] = ~framebuffer[DRAW_LCD_H_RES*y+x];
     } else {
         uint8_t value = palette[color][GRAYS-1];
+        value = rgb3(4|2|1,4|2,4|2|1);
         for(int y = y0; y<y0+h; y++)
             for(int x = x0; x<x0+w; x++)
                 framebuffer[DRAW_LCD_H_RES*y+x] = value;
@@ -790,57 +850,120 @@ static int get_glyph(char c)
     return fonts[cur_font].font_data[c-FONT_MIN].w;
 }
 
+// TODO: optimize rotation 1 and 3
 static int render_glyph(char c, int x, int y)
 {
     if(c < FONT_MIN || c > FONT_MAX)
         return 0;
-
+    
     const character &ch = fonts[cur_font].font_data[c-FONT_MIN];
+    if(x < 0)
+        return ch.w;
+    
+    switch(rotation) {
+    case 2:
+        if(x - ch.w >= DRAW_LCD_H_RES)
+            return ch.w;
+        break;
+    case 0:
+        if(x + ch.w >= DRAW_LCD_H_RES)
+            return ch.w;
+        break;
+    }
 //    y+=ch.yoff;
     int i=0;
-
     int xc = 0;
     while(i<ch.size) {
         int v = ch.data[i++];
-        int color = v&(GRAYS-1), cnt;
+        int g = v&(GRAYS-1), cnt;
         if(v & 0x80) // extended
             cnt = (ch.data[i++]+1)*16 + ((v&0x78)>>3);
         else
             cnt = (v>>3)+1;
 
+        uint8_t value = palette[color][g];
+
         switch(rotation) {
         case 1:
             for(int j=0; j<cnt; j++) {
-                putpixel(x, y-xc, color);
+                putpixel(x, y-xc, g);
                 if(++xc >= ch.w) {
                     xc = 0;
                     x++;
                 }
             } break;
         case 2:
+#if 0 // unoptimized (better blending)
             for(int j=0; j<cnt; j++) {
-                putpixel(x-xc, y, color);
+                putpixel(x-xc, y, g);
                 if(++xc >= ch.w) {
                     xc = 0;
                     y--;
                 }
-            } break;
+            }
+#else
+            if(g && y < DRAW_LCD_V_RES) {
+                for(int j=0; j<cnt;) {
+                    int len = MIN(cnt-j, ch.w-xc);
+                    if(y>=0)
+                        memset(framebuffer + DRAW_LCD_H_RES*y+x-xc-len, value, len);
+                    xc += len;
+                    j += len;
+                    if(xc == ch.w) {
+                        xc = 0;
+                        y--;
+                    }
+                }
+            } else {
+                y -= cnt/ch.w;
+                xc += cnt%ch.w;
+                if(xc >= ch.w) {
+                    xc-=ch.w;
+                    y--;
+                }
+            }
+#endif
+            break;            
         case 3: 
             for(int j=0; j<cnt; j++) {
-                putpixel(x, y+xc, color);
+                putpixel(x, y+xc, g);
                 if(++xc >= ch.w) {
                     xc = 0;
                     x--;
                 }
             } break;
-        default:      
+        default:
+#if 0 // unoptimized (better blending)
             for(int j=0; j<cnt; j++) {
-                putpixel(x+xc, y, color);
+                putpixel(x+xc, y, g);
                 if(++xc >= ch.w) {
                     xc = 0;
                     y++;
                 }
-            } break;
+            }
+#else
+            if(g && y >= 0) {
+                for(int j=0; j<cnt;) {
+                    int len = MIN(cnt-j, ch.w-xc);
+                    if(y < DRAW_LCD_V_RES)
+                        memset(framebuffer + DRAW_LCD_H_RES*y+x+xc, value, len);
+                    xc += len;
+                    j += len;
+                    if(xc == ch.w) {
+                        xc = 0;
+                        y++;
+                    }
+                }
+            } else {
+                y += cnt/ch.w;
+                xc += cnt%ch.w;
+                if(xc >= ch.w) {
+                    xc-=ch.w;
+                    y++;
+                }
+            }
+#endif
+            break;
         }
     }
 
@@ -881,23 +1004,30 @@ void draw_color(color_e c)
     color = c;
 }
 
+static uint32_t t0start;
 void draw_clear(bool display_on)
 {
+    uint8_t c = 0;
+#ifdef CONFIG_IDF_TARGET_ESP32S3
     // rebuild palette if needed
-    if(settings.color_scheme != last_color_scheme) {
+    if(settings.color_scheme != last_color_scheme)
+    {
+#endif
         for(int i=0; i<COLOR_COUNT; i++)
             for(int j=0; j<GRAYS; j++)
                 palette[i][j] = compute_color((color_e)i, j);
+#ifdef CONFIG_IDF_TARGET_ESP32S3
         last_color_scheme = settings.color_scheme;
     }        
     
     gpio_set_level(GPIO_NUM_39, display_on);
-    uint8_t c = 0;
+
     if(settings.color_scheme == "light")
         c = 0xff;
     else if(settings.color_scheme == "dusk")
         c = 0x40;
-    
+#endif    
+
     memset(framebuffer, c, DRAW_LCD_H_RES*DRAW_LCD_V_RES);
 }
 
@@ -907,20 +1037,22 @@ void draw_send_buffer()
     uint32_t t1 = esp_timer_get_time();
     esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, DRAW_LCD_H_RES, DRAW_LCD_V_RES, framebuffer);
         
-    xSemaphoreGive(sem_gui_ready);
-    xSemaphoreTake(sem_vsync_end, portMAX_DELAY);
+//    xSemaphoreGive(sem_gui_ready);
+//    xSemaphoreTake(sem_vsync_end, portMAX_DELAY);
     uint32_t t2 = esp_timer_get_time();
 #endif
     if(framebuffer == framebuffers[0])
         framebuffer = framebuffers[1];
+    else if(framebuffer == framebuffers[1])
+        framebuffer = framebuffers[2];
     else
         framebuffer = framebuffers[0];
         
 #ifndef __linux__
-    uint32_t t3 = esp_timer_get_time();
-    printf("frame %d %lu %lu\n", vsynccount, t2-t1, t3-t2);
+    printf("frame %d %lu %lu\n", vsynccount, t1-t0start, t2-t1);
     vsynccount=0;
 #endif
+    t0start = esp_timer_get_time();
 }
 
 #endif

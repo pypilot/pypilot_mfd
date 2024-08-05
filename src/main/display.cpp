@@ -11,7 +11,6 @@
 
 #include "Arduino.h"
 
-#include "bmp280.h"
 #include "settings.h"
 #include "draw.h"
 #include "display.h"
@@ -1713,8 +1712,7 @@ static void setup_analog_pins() {
     //    adc1_config_width(ADC_WIDTH_BIT);
     //   adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_0);
 
-    adcAttachPin(PHOTO_RESISTOR_PIN);
-    adcAttachPin(NTC_PIN);
+    analogReadResolution(12);
 
     ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 9);
     ledcWriteChannel(9, 0);
@@ -1722,7 +1720,6 @@ static void setup_analog_pins() {
 
 // read from photo resistor and adjust the backlight
 static void read_analog_pins() {
-    uint32_t t = millis();
     int val = analogRead(PHOTO_RESISTOR_PIN);
     int ntc = analogRead(NTC_PIN);
 

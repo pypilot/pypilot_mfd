@@ -58,11 +58,10 @@ SerialLinebuffer Serial2Buffer(Serial2, RS422_DATA);
 void serial_setup()
 {
     Serial.begin(settings.usb_baud_rate == 38400 ? 38400 : 115200);
-  Serial.setTimeout(0);
-
-  Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
-                SERIAL_8N1, 16, 17);  //Hardware Serial of ESP32
-  Serial2.setTimeout(0);
+    Serial.setTimeout(0);
+    Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
+                  SERIAL_8N1, 16, 17);  //Hardware Serial of ESP32
+    Serial2.setTimeout(0);
 }
 
 void serial_poll() {

@@ -6,8 +6,6 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-#include "Arduino.h"
-
 #include "display.h"
 #include "ais.h"
 #include "utils.h"

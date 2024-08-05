@@ -26,6 +26,8 @@
 
 extern const uint8_t alarms_html_start[] asm("_binary_alarms_html_start");
 extern const uint8_t alarms_html_end[] asm("_binary_alarms_html_end");
+extern const uint8_t index_html_start[] asm("_binary_index_html_start");
+extern const uint8_t index_html_end[] asm("_binary_index_html_end");
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
@@ -248,7 +250,17 @@ void web_setup()
     server.addHandler(&ws_data);
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+#if 0    
         request->send(SPIFFS, "/index.html", String(), 0, processor_helper);
+#else
+        int size = index_html_end - index_html_start;
+        request->send("text/plain", size, [size](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+                                    int r = size - index;
+                                    int len = r > maxLen ? maxLen : r;
+                                    memcpy(buffer, index_html_start + index, len);
+                                    return len;
+                                          }, processor_helper);
+#endif
     });
 
     server.on("/alarms", HTTP_POST, [](AsyncWebServerRequest *request) {

@@ -6,7 +6,6 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-#include "Arduino.h"
 #include <WiFi.h>
 
 #include <lwip/sockets.h>

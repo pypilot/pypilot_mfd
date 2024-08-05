@@ -12,8 +12,6 @@
 #include <WiFi.h>
 #include <lwip/sockets.h>
 
-#include <Arduino.h>
-
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"

@@ -8,8 +8,6 @@
 
 #include <string>
 
-#include "Arduino.h"
-
 #include "alarm.h"
 #include "display.h"
 #include "ais.h"
