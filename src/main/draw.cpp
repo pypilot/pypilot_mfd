@@ -19,7 +19,9 @@
 #define PROGMEM
 
 #endif
+#include <sys/time.h>
 #include <string>
+#include <list>
 
 
 #include "settings.h"
@@ -625,8 +627,9 @@ void draw_circle_thin(int xm, int ym, int r)
    } while (x < 0);
 }
 
-void draw_circle(int xm, int ym, int r, int th)
-{               /* draw anti-aliased ellipse inside rectangle with thick line... could be optimized considerably */
+void draw_circle_orig(int xm, int ym, int r, int th)
+{
+    /* draw anti-aliased ellipse inside rectangle with thick line... could be optimized considerably */
     convert_coords(xm, ym);
     int x0 = xm - r, x1 = xm + r, y0 = ym - r, y1 = ym + r;
     
@@ -687,6 +690,233 @@ void draw_circle(int xm, int ym, int r, int th)
          putpixeli(x0,y1, i); putpixeli(x1,y1--, i);
       }
    }
+}
+
+uint8_t *sp_malloc(int size)
+{
+#ifdef __linux__
+    return (uint8_t*)malloc(size);
+#else
+    return (uint8_t*)heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+#endif    
+}
+
+struct circle_cache_t
+{
+    circle_cache_t(int size, uint8_t *d) : sz(size) {
+        gettimeofday(&tv, 0);
+        enc = sp_malloc(sz);
+        memcpy(enc, d, sz);
+    }
+
+    uint8_t *get_data() {
+        gettimeofday(&tv, 0);
+        return enc;
+    }
+
+    int age() {
+        timeval tv2;
+        gettimeofday(&tv2, 0);
+        return 1000000*(tv2.tv_sec - tv.tv_sec) + (tv2.tv_usec - tv.tv_usec);
+    }
+        
+        
+    struct timeval tv;
+    int sz;
+    uint8_t *enc;
+};
+
+std::map <std::pair <int, int>, circle_cache_t > circle_cache;
+
+static void putpixelb(uint8_t *buf, int r, int x, int y, uint8_t c)
+{
+    if(x<0 || y < 0 || x> 2*r || y > r)
+        return;
+    int d = 7-c;
+    if(d<0) d = 0;
+    buf[(2*r+1)*y+x] = d;
+}
+
+void draw_circle(int xm, int ym, int r, int th)
+{    
+    if (th < 1.5) return draw_circle_thin(xm, ym, r);
+    if(r < 20) {
+        draw_circle_orig(xm, ym, r, th);        
+        return;
+    }
+
+    convert_coords(xm, ym);
+
+    std::pair pair = std::make_pair(r, th);
+    if(circle_cache.find(pair) != circle_cache.end()) {
+        circle_cache_t &c = circle_cache.at(pair);
+        uint8_t *buf = c.get_data();
+        int sz = c.sz;
+        int x = 0, y = 0;
+        for(int i=0; i<sz; i++) {
+            uint8_t c, len;
+            if(buf[i] & 0x80) {
+                uint8_t len = buf[i] & ~0x80;
+                x+=len%(2*r+1);
+                y+=len/(2*r+1);
+                if(x > 2*r) {
+                    x -= 2*r+1;
+                    y++;
+                }
+            } else {
+                uint8_t c = buf[i]&0x7;
+                uint8_t len = buf[i]>>3;
+
+                uint8_t value = palette[color][c];
+                int idx1 = DRAW_LCD_H_RES*(ym-r+y)+xm-r+x;
+                int idx2 = DRAW_LCD_H_RES*(ym+r-y)+xm-r+x;
+                int len1 = len, len2=0;
+                if(len1 + x > 2*r) {
+                    len1 = 2*r+1 - x;
+                    len2 = len - len1;
+                }
+                
+                if(c == GRAYS-1) {
+                    memset(framebuffer + idx1, value, len1);
+                    memset(framebuffer + idx2, value, len1);
+                } else {
+                    for(int i=0; i<len1; i++)
+                        framebuffer[idx1++] |= value;
+                    for(int i=0; i<len1; i++)
+                        framebuffer[idx2++] |= value;
+                }
+                x+=len1;
+                if(x > 2*r) {
+                    x -= 2*r+1;
+                    y++;
+                }
+
+                // len2
+                if(len2) {
+#if 1                    
+                    idx1 = DRAW_LCD_H_RES*(ym-r+y)+xm-r+x;
+                    idx2 = DRAW_LCD_H_RES*(ym+r-y)+xm-r+x;
+                    if(c == GRAYS-1) {
+                        memset(framebuffer + idx1, value, len2);
+                        memset(framebuffer + idx2, value, len2);
+                    } else {
+                        for(int i=0; i<len2; i++)
+                            framebuffer[idx1++] |= value;
+                        for(int i=0; i<len2; i++)
+                            framebuffer[idx2++] |= value;
+                    }
+#endif
+                    x+=len2;
+                }
+            }
+        }
+        return;
+    }
+        printf("build circle\n");
+
+    // render to buffer 1/2 circle
+    uint8_t *buf = sp_malloc(2*(r+1)*(r+1));
+    memset(buf, 0, 2*(r+1)*(r+1));
+    /* draw anti-aliased ellipse inside rectangle with thick line... could be optimized considerably */
+    int x0 = 0, x1 = 2*r, y0 = 0, y1 = 2*r;
+    
+    int a = abs(x1-x0), b = abs(y1-y0), b1 = b&1;  /* outer diameter */
+    int a2 = a-2*th, b2 = b-2*th;                            /* inner diameter */
+    int dx = 4*(a-1)*b*b, dy = 4*(b1-1)*a*a;                /* error increment */
+    int i = a+b2, err = b1*a*a, dx2, dy2, e2;
+    float ed;
+    int oth = th;
+                                                     /* thick line correction */
+    if ((th-1)*(2*b-th) > a*a) b2 = sqrtf(a*(b-a)*i*a2)/(a-th);       
+    if ((th-1)*(2*a-th) > b*b) { a2 = sqrtf(b*(a-b)*i*b2)/(b-th); th = (a-a2)/2; }
+//    if (a == 0 || b == 0) return draw_line(x0,y0, x1,y1);
+    if (x0 > x1) { x0 = x1; x1 += a; }        /* if called with swapped points */
+    if (y0 > y1) y0 = y1;                                  /* .. exchange them */
+    if (b2 <= 0) th = a;                                     /* filled ellipse */
+    e2 = 0/*th-floorf(th)*/; th = x0+th-e2;
+    dx2 = 4*(a2+2*e2-1)*b2*b2; dy2 = 4*(b1-1)*a2*a2; e2 = dx2*e2;
+    y0 += (b+1)>>1; y1 = y0-b1;                              /* starting pixel */
+    a = 8*a*a; b1 = 8*b*b; a2 = 8*a2*a2; b2 = 8*b2*b2;
+   
+    do {
+        for (;;) {                           
+            if (err < 0 || x0 > x1) { i = x0; break; }
+            i = MIN(dx,dy); ed = MAX(dx,dy);
+            if (y0 == y1+1 && 2*err > dx && a > b1) ed = a/4;           /* x-tip */
+            else ed += 2*ed*i*i/(4*ed*ed+i*i+1)+1;/* approx ed=sqrt(dx*dx+dy*dy) */
+            i = (GRAYS-1)*err/ed;                             /* outside anti-aliasing */
+            //putpixelb(buf, r, x0,y0, i);
+            putpixelb(buf, r, x0,y1, i);
+            //putpixelb(buf, r, x1,y0, i);
+            putpixelb(buf, r, x1,y1, i);
+            if (err+dy+a < dx) { i = x0+1; break; }
+            x0++; x1--; err -= dx; dx -= b1;                /* x error increment */
+      }
+      for (; i < th && 2*i <= x0+x1; i++) {                /* fill line pixel */
+          //putpixelb(buf, r, i,y0,0); putpixelb(buf, r, x0+x1-i,y0,0); 
+          putpixelb(buf, r, i,y1,0); putpixelb(buf, r, x0+x1-i,y1,0);
+      }    
+      while (e2 > 0 && x0+x1 >= 2*th) {               /* inside anti-aliasing */
+         i = MIN(dx2,dy2); ed = MAX(dx2,dy2);
+         if (y0 == y1+1 && 2*e2 > dx2 && a2 > b2) ed = a2/4;         /* x-tip */
+         else  ed += 2*ed*i*i/(4*ed*ed+i*i);                 /* approximation */
+         i = (GRAYS-1)-(GRAYS-1)*e2/ed;             /* get intensity value by pixel error */
+         //putpixelb(buf, r, th,y0, i); putpixelb(buf, r, x0+x1-th,y0, i);
+         putpixelb(buf, r, th,y1, i); putpixelb(buf, r, x0+x1-th,y1, i);
+         if (e2+dy2+a2 < dx2) break; 
+         th++; e2 -= dx2; dx2 -= b2;                     /* x error increment */
+      }
+      e2 += dy2 += a2;
+      y0++; y1--; err += dy += a;                                   /* y step */
+   } while (x0 < x1);
+
+#if 0
+   if (y0-y1 <= b)             
+   {
+      if (err > dy+a) { y0--; y1++; err -= dy -= a; }
+      for (; y0-y1 <= b; err += dy += a) { /* too early stop of flat ellipses */
+         i = (GRAYS-1)*4*err/b1;           /* -> finish tip of ellipse */
+         putpixelb(buf, r, x0,y0, i); putpixelb(buf, r, x1,y0++, i);
+         putpixelb(buf, r, x0,y1, i); putpixelb(buf, r, x1,y1--, i);
+      }
+   }
+#endif
+
+   // now encode the buffer
+   uint8_t *rbuf = sp_malloc(2*r*(r+1));
+   int cnt = 1, cur = buf[0], sz=0;
+   for(int i=1; i<2*(r+1)*(r+1); i++) {
+       if(cur && (cur != buf[i] || cnt==15)) {
+           // encode up to 15 runs for c>0
+           rbuf[sz++] = cur | (cnt<<3);
+           cur = buf[i];
+           cnt = 1;
+       } else if(!cur && (cur != buf[i] || cnt == 127)) {
+           // encode up to 127 runs for c == 0
+           rbuf[sz++] = 0x80 | cnt;
+           cur = buf[i];
+           cnt = 1;
+       } else
+           cnt++;
+   }
+   free(buf);
+   circle_cache.emplace(pair, circle_cache_t(sz, rbuf));
+   free(rbuf);
+
+#if 1
+   // free obsolete circles from cache
+   std::list <std::map <std::pair <int, int>, circle_cache_t >::iterator> obsolete;
+   for(std::map <std::pair <int, int>, circle_cache_t >::iterator it = circle_cache.begin(); it!=circle_cache.end(); it++) {
+       if(it->second.age() > 1000000)
+           obsolete.push_back(it);
+   }
+
+   for(std::list <std::map <std::pair <int, int>, circle_cache_t >::iterator>::iterator it = obsolete.begin(); it != obsolete.end(); it++) {
+       free((*it)->second.enc);
+       circle_cache.erase(*it);
+   }
+#endif
+   draw_circle(xm, ym, r, oth);
 }
 
 // rasterize a flat triangle
@@ -1051,8 +1281,8 @@ void draw_send_buffer()
 #ifndef __linux__
     printf("frame %d %lu %lu\n", vsynccount, t1-t0start, t2-t1);
     vsynccount=0;
-#endif
     t0start = esp_timer_get_time();
+#endif
 }
 
 #endif

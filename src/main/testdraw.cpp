@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <GL/glut.h>
+#include <sys/time.h>
 
 #include "draw.h"
 
@@ -45,14 +46,20 @@ void display() {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     draw_clear(true);
-    //draw_box(100, 100, 100, 100);
+    draw_box(200, 200, 100, 100);
 
     draw_color(RED);
 
-    static int ri;
+    static int ri=100;
     ri++;
-    draw_circle(200, 200, 10+ri, 10 );
+    struct timeval tv, tv2;
+    gettimeofday(&tv, 0);
+    draw_circle(300, 240, ri, 40-ri/3 );
+    gettimeofday(&tv2, 0);
+    printf("circle time %d\n", 1000000*(tv2.tv_sec - tv.tv_sec) + (tv2.tv_usec - tv.tv_usec));
     //draw_thick_line(0,0,100, 30, 10);
+    if(ri>80)
+        ri = 40;
     static float r;
     r+=.1;
     float s=sin(r), c = cos(r);
@@ -115,7 +122,7 @@ int main(int argc, char *argv[])
     glutReshapeFunc(reshape);
     glutKeyboardFunc(key);
 
-    glutTimerFunc(100, refresh, 50);
+    glutTimerFunc(100, refresh, 20);
 
     glutMainLoop();
 }
