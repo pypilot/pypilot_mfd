@@ -720,14 +720,12 @@ struct circle_cache_t
         return 1000000*(tv2.tv_sec - tv.tv_sec) + (tv2.tv_usec - tv.tv_usec);
     }
         
-        
     struct timeval tv;
     int sz;
     uint8_t *enc;
 };
 
-std::map <std::pair <int, int>, circle_cache_t > circle_cache;
-
+static std::map <std::pair <int, int>, circle_cache_t > circle_cache;
 static void putpixelb(uint8_t *buf, int r, int x, int y, uint8_t c)
 {
     if(x<0 || y < 0 || x> 2*r || y > r)
@@ -756,7 +754,7 @@ void draw_circle(int xm, int ym, int r, int th)
         for(int i=0; i<sz; i++) {
             uint8_t c, len;
             if(buf[i] & 0x80) {
-                uint8_t len = buf[i] & ~0x80;
+                uint8_t len = (buf[i] & ~0x80) + 1;
                 x+=len%(2*r+1);
                 y+=len/(2*r+1);
                 if(x > 2*r) {
@@ -765,7 +763,7 @@ void draw_circle(int xm, int ym, int r, int th)
                 }
             } else {
                 uint8_t c = buf[i]&0x7;
-                uint8_t len = buf[i]>>3;
+                uint8_t len = (buf[i]>>3) + 1;
 
                 uint8_t value = palette[color][c];
                 int idx1 = DRAW_LCD_H_RES*(ym-r+y)+xm-r+x;
@@ -812,7 +810,6 @@ void draw_circle(int xm, int ym, int r, int th)
         }
         return;
     }
-        printf("build circle\n");
 
     // render to buffer 1/2 circle
     uint8_t *buf = sp_malloc(2*(r+1)*(r+1));
@@ -886,14 +883,14 @@ void draw_circle(int xm, int ym, int r, int th)
    uint8_t *rbuf = sp_malloc(2*r*(r+1));
    int cnt = 1, cur = buf[0], sz=0;
    for(int i=1; i<2*(r+1)*(r+1); i++) {
-       if(cur && (cur != buf[i] || cnt==15)) {
-           // encode up to 15 runs for c>0
-           rbuf[sz++] = cur | (cnt<<3);
+       if(cur && (cur != buf[i] || cnt==16)) {
+           // encode up to 16 runs for c>0
+           rbuf[sz++] = cur | ((cnt-1)<<3);
            cur = buf[i];
            cnt = 1;
-       } else if(!cur && (cur != buf[i] || cnt == 127)) {
-           // encode up to 127 runs for c == 0
-           rbuf[sz++] = 0x80 | cnt;
+       } else if(!cur && (cur != buf[i] || cnt == 128)) {
+           // encode up to 128 runs for c == 0
+           rbuf[sz++] = 0x80 | (cnt-1);
            cur = buf[i];
            cnt = 1;
        } else
@@ -955,11 +952,11 @@ static void draw_flat_tri(int x1, int y1, int x2, int x3, int y2)
         int icurx2 = curx2;
         int icurx3 = curx3;
 
-        // todo optimize scan line??
 #if 0
         for (int x = icurx2+1;x <= icurx3; x++)
             putpixel(x, y, (GRAYS-1));
 #else
+        // fill scanline
         memset(framebuffer + DRAW_LCD_H_RES*y+icurx2+1, value, icurx3-icurx2);
 #endif
         if(y == y2)
@@ -1072,97 +1069,118 @@ bool draw_set_font(int &ht)
     return false;
 }
 
-static int get_glyph(char c)
-{
-    if(c < FONT_MIN || c > FONT_MAX)
-        return 0;
+struct rglyph_t {
+    rglyph_t(int size, uint8_t *buf) : sz(size) {
+        data = sp_malloc(size);
+        memcpy(data, buf, size);
+    }
+    uint8_t *data;
+    int sz;
+};
 
-    return fonts[cur_font].font_data[c-FONT_MIN].w;
-}
-
-// TODO: optimize rotation 1 and 3
+static std::map<std::pair<int, char>, rglyph_t> r_glyphs;
 static int render_glyph(char c, int x, int y)
 {
     if(c < FONT_MIN || c > FONT_MAX)
         return 0;
     
     const character &ch = fonts[cur_font].font_data[c-FONT_MIN];
-    if(x < 0)
-        return ch.w;
-    
+
+    int w = ch.w, h = ch.h;
+    if(rotation == 1 || rotation == 3) {
+        int t = w;
+        w = h;
+        h = t;
+    }
+
+    // convert to correct corner of glyph
     switch(rotation) {
+    case 1:
+        y -= h;
+        break;
     case 2:
-        if(x - ch.w >= DRAW_LCD_H_RES)
-            return ch.w;
+        x -= w;
+        y -= h;
+        break;
+    case 3:
+        x -= w;
         break;
     case 0:
-        if(x + ch.w >= DRAW_LCD_H_RES)
-            return ch.w;
+        // no conversion
         break;
     }
+    if(x < 0 || x + w >= DRAW_LCD_H_RES) // off screen no partial render
+        return ch.w;
+
+    std::pair pair = std::make_pair(cur_font, c);
+    if(r_glyphs.find(pair) == r_glyphs.end()) {
+        // data is in original rotation, re-encode with correct rotation
+        uint8_t *buf = sp_malloc(w*h+1);
+
+        int i=0;
+        int bx = 0, by = 0;
+        while(i<ch.size) {
+            int v = ch.data[i++];
+            int g = v&(GRAYS-1), cnt;
+            if(v & 0x80) // extended
+                cnt = (ch.data[i++]+1)*16 + ((v&0x78)>>3);
+            else
+                cnt = (v>>3)+1;
+            int cx, cy;
+            for(int j=0; j<cnt; j++) {
+                switch(rotation) {
+                case 0: cx = bx, cy = by;         break;
+                case 1: cx = by, cy = h-1-bx;     break;
+                case 2: cx = w-1-bx, cy = h-1-by; break;
+                case 3: cx = w-1-by, cy = bx;      break;
+                }
+                    
+                buf[w*cy+cx] = g;
+                if(++bx >= ch.w) {
+                    bx = 0;
+                    by++;
+                }
+            }
+        }
+
+        // now the character is in a buffer, we need to re-compress it again
+        uint8_t *rbuf = sp_malloc(w*h);
+        int cnt = 1, last = buf[0];
+        int sz = 0;
+        buf[w*h] = 0xff; // force write on last byte
+        for(int i=1; i<=w*h; i++) {
+            if(buf[i] != last || cnt == 4096) {
+                if(cnt <= 16)
+                    rbuf[sz++] = last | ((cnt-1)<<3);
+                else {
+                    rbuf[sz++] = last | ((cnt&0xf)<<3) | 0x80;
+                    rbuf[sz++] = (cnt >> 4) - 1;
+                }
+                last = buf[i];
+                cnt = 1;
+            } else
+                cnt++;
+        }
+
+        free(buf);
+        r_glyphs.emplace(pair, rglyph_t(sz, rbuf));
+        free(rbuf);
+    }
+
+    rglyph_t &rg = r_glyphs.at(pair);
+    // we have rotated buffer data;
 //    y+=ch.yoff;
     int i=0;
     int xc = 0;
-    while(i<ch.size) {
-        int v = ch.data[i++];
+    while(i<rg.sz) {
+        int v = rg.data[i++];
         int g = v&(GRAYS-1), cnt;
         if(v & 0x80) // extended
-            cnt = (ch.data[i++]+1)*16 + ((v&0x78)>>3);
+            cnt = (rg.data[i++]+1)*16 + ((v&0x78)>>3);
         else
             cnt = (v>>3)+1;
 
         uint8_t value = palette[color][g];
-
-        switch(rotation) {
-        case 1:
-            for(int j=0; j<cnt; j++) {
-                putpixel(x, y-xc, g);
-                if(++xc >= ch.w) {
-                    xc = 0;
-                    x++;
-                }
-            } break;
-        case 2:
-#if 0 // unoptimized (better blending)
-            for(int j=0; j<cnt; j++) {
-                putpixel(x-xc, y, g);
-                if(++xc >= ch.w) {
-                    xc = 0;
-                    y--;
-                }
-            }
-#else
-            if(g && y < DRAW_LCD_V_RES) {
-                for(int j=0; j<cnt;) {
-                    int len = MIN(cnt-j, ch.w-xc);
-                    if(y>=0)
-                        memset(framebuffer + DRAW_LCD_H_RES*y+x-xc-len, value, len);
-                    xc += len;
-                    j += len;
-                    if(xc == ch.w) {
-                        xc = 0;
-                        y--;
-                    }
-                }
-            } else {
-                y -= cnt/ch.w;
-                xc += cnt%ch.w;
-                if(xc >= ch.w) {
-                    xc-=ch.w;
-                    y--;
-                }
-            }
-#endif
-            break;            
-        case 3: 
-            for(int j=0; j<cnt; j++) {
-                putpixel(x, y+xc, g);
-                if(++xc >= ch.w) {
-                    xc = 0;
-                    x--;
-                }
-            } break;
-        default:
 #if 0 // unoptimized (better blending)
             for(int j=0; j<cnt; j++) {
                 putpixel(x+xc, y, g);
@@ -1174,37 +1192,38 @@ static int render_glyph(char c, int x, int y)
 #else
             if(g && y >= 0) {
                 for(int j=0; j<cnt;) {
-                    int len = MIN(cnt-j, ch.w-xc);
+                    int len = MIN(cnt-j, w-xc);
                     if(y < DRAW_LCD_V_RES)
                         memset(framebuffer + DRAW_LCD_H_RES*y+x+xc, value, len);
                     xc += len;
                     j += len;
-                    if(xc == ch.w) {
+                    if(xc == w) {
                         xc = 0;
                         y++;
                     }
                 }
             } else {
-                y += cnt/ch.w;
-                xc += cnt%ch.w;
-                if(xc >= ch.w) {
-                    xc-=ch.w;
+                y += cnt/w;
+                xc += cnt%w;
+                if(xc >= w) {
+                    xc-=w;
                     y++;
                 }
             }
 #endif
-            break;
-        }
     }
-
     return ch.w;
 }
 
 int draw_text_width(const std::string &str)
 {
     int w = 0;
-    for(int i=0; i<str.length(); i++)
-        w += get_glyph(str[i]);
+    for(int i=0; i<str.length(); i++) {
+        char c = str[i];
+        if(c < FONT_MIN || c > FONT_MAX)
+            return 0;
+        w += fonts[cur_font].font_data[c-FONT_MIN].w;
+    }
     return w;
 }
 

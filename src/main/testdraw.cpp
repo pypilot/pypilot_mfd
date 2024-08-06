@@ -52,11 +52,7 @@ void display() {
 
     static int ri=100;
     ri++;
-    struct timeval tv, tv2;
-    gettimeofday(&tv, 0);
     draw_circle(300, 240, ri, 40-ri/3 );
-    gettimeofday(&tv2, 0);
-    printf("circle time %d\n", 1000000*(tv2.tv_sec - tv.tv_sec) + (tv2.tv_usec - tv.tv_usec));
     //draw_thick_line(0,0,100, 30, 10);
     if(ri>80)
         ri = 40;
@@ -69,7 +65,11 @@ void display() {
     int ht = 60;
     draw_color(GREEN);
     draw_set_font(ht);
+    struct timeval tv, tv2;
+    gettimeofday(&tv, 0);
     draw_text(20, 20, "12 34  55");
+    gettimeofday(&tv2, 0);
+    printf("text time %d\n", 1000000*(tv2.tv_sec - tv.tv_sec) + (tv2.tv_usec - tv.tv_usec));
 
     draw_box(0, 20, 200, 30, true);
     
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
     glutInitWindowPosition(20,20);
     glutCreateWindow("testdraw");
 
-    draw_setup(0);
+    draw_setup(3);
     
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
