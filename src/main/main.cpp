@@ -35,11 +35,12 @@
 #include "alarm.h"
 #include "history.h"
 
-#define DEMO
+//#define DEMO
 
 extern "C" void app_main(void)
 {
     initArduino();
+    uint32_t t0 = millis();
 
     // Arduino-like setup()
 //    delay(1500);
@@ -75,12 +76,25 @@ extern "C" void app_main(void)
     draw_setup(2);
 #else
     accel_setup();
+    printf("accel_setup_done\n");
+
     keys_setup();
+    printf("keys_setup_done\n");
+    
     settings_load();
+    printf("keys_setup_done\n");
+
     wireless_setup();
+    printf("wireless_setup_done\n");
+
     history_setup();
-    mdns_setup();
-    web_setup();
+    printf("history_setup_done\n");
+
+//    mdns_setup();
+    printf("mdns_setup_done\n");
+
+//    web_setup();
+    printf("web_setup_done\n");
 
     int ss = CONFIG_ARDUINO_LOOP_STACK_SIZE;
     if (ss < 16384)
@@ -90,6 +104,7 @@ extern "C" void app_main(void)
     alarm_setup();
     accel_read();
     display_setup();
+    
     menu_setup();
     printf("display setup complete in %ld, %ld\n", t0, millis()-t0);
 #endif
@@ -97,13 +112,13 @@ extern "C" void app_main(void)
     int r = 60, rd = 1;
     int dt=1;
     for(;;) {
-        uint32_t t0 = millis();
-#ifdef DEMO
+        t0 = millis();
+//#ifdef DEMO
+        #if 0
         draw_clear(true);
 
-        draw_color(WHITE);
-        draw_box(50, 0,700, 470);
-#if 0
+//        draw_color(WHITE);
+//        draw_box(50, 0,700, 470);
         draw_color(RED);
         draw_box(100, 400, 349, 60);
 
@@ -136,7 +151,6 @@ extern "C" void app_main(void)
         r += rd;
         draw_color(MAGENTA);
         draw_triangle(576+r, 100, 480, 300+r, 780, 250);
-#endif
         draw_send_buffer();
 
 #else
@@ -144,11 +158,13 @@ extern "C" void app_main(void)
         keys_poll();
         serial_poll();
         nmea_poll();
-        signalk_poll();
-        pypilot_client_poll();
+
+//        signalk_poll();
+//        pypilot_client_poll();
         alarm_poll();
         buzzer_poll();
-        web_poll();
+//        web_poll();
+
         display_poll();
         history_poll();
 #endif        

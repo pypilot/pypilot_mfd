@@ -6,8 +6,6 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-#include <SPIFFS.h>
-
 float deg2rad(float degrees);
 float rad2deg(float radians);
 float nice_number(float v, int dir = 1);
@@ -18,9 +16,12 @@ uint64_t mac_as_int(const uint8_t *mac_addr);
 uint64_t mac_str_to_int(std::string mac);
 std::string mac_int_to_str(uint64_t i);
 
+#ifndef __linux__
+#include <SPIFFS.h>
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
+#endif
 std::string millis_to_str(uint32_t dt);
-void printf_P(const __FlashStringHelper* flashString, ...);
+//void printf_P(const __FlashStringHelper* flashString, ...);
 std::string float_to_str(float v, int digits=-1);
 std::string int_to_str(int v);
 int str_to_int(const std::string &s);

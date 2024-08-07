@@ -29,7 +29,7 @@ bool detect_address(uint8_t address)
 }
 
 void accel_setup() {
-    Wire.begin();
+    Wire.begin(40, 41);
 
     // detect address
     if(!detect_address(DEVICE_ADDRESS0) && !detect_address(DEVICE_ADDRESS1)) {

@@ -12,7 +12,6 @@
 
 // g++ -g -o testdraw testdraw.cpp draw.cpp -lGL -lGLU -lglut && ./testdraw
 
-
 extern uint8_t *framebuffer;
 
 uint32_t framebuffer32[800*480];
@@ -39,7 +38,7 @@ void convert_buffer()
 void display() {
     // draw the current object using the current texture.
 
-  glEnable(GL_TEXTURE_2D);
+    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -52,7 +51,7 @@ void display() {
 
     static int ri=100;
     ri++;
-    draw_circle(300, 240, ri, 40-ri/3 );
+    draw_circle(240, 240, 233, 6 );
     //draw_thick_line(0,0,100, 30, 10);
     if(ri>80)
         ri = 40;
@@ -67,7 +66,7 @@ void display() {
     draw_set_font(ht);
     struct timeval tv, tv2;
     gettimeofday(&tv, 0);
-    draw_text(20, 20, "12 34  55");
+    draw_text(20, 20, "Hello World!");
     gettimeofday(&tv2, 0);
     printf("text time %d\n", 1000000*(tv2.tv_sec - tv.tv_sec) + (tv2.tv_usec - tv.tv_usec));
 
@@ -116,7 +115,7 @@ int main(int argc, char *argv[])
     glutInitWindowPosition(20,20);
     glutCreateWindow("testdraw");
 
-    draw_setup(3);
+    draw_setup(0);
     
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);

@@ -370,7 +370,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
             websocket_buffer += d;
     } break;
     case WEBSOCKET_EVENT_ERROR:
-        printf_P(F("WEBSOCKET_EVENT_ERROR"));
+        printf("WEBSOCKET_EVENT_ERROR");
         break;
     }
 }

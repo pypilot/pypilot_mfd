@@ -85,7 +85,7 @@ void find_mdns_service(const char * service_name, const char * proto)
     mdns_result_t * results = NULL;
     esp_err_t err = mdns_query_ptr(service_name, proto, 3000, 20,  &results);
     if(err){
-        printf_P(F("Query Failed"));
+        printf("Query Failed");
         return;
     }
 
@@ -122,8 +122,8 @@ void mdns_setup()
                     &xHandle );     
 
     if(mdns_hostname_set("pypilot_mfd"))
-        printf_P(F("Error starting mDNS hostname"));
+        printf("Error starting mDNS hostname");
 
     if(mdns_service_add(NULL, "http", "tcp", 80, NULL, 0))
-        printf_P(F("Error starting mDNS"));
+        printf("Error starting mDNS");
 }

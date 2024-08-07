@@ -145,7 +145,7 @@ static void setup_wifi() {
 
         WiFi.onEvent(WiFiStationGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
 
-        if (!settings.ssid.empty()) {
+        if (0 && !settings.ssid.empty()) {
             printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
 
             // setting a custom "country" locks the wifi in a particular channel
@@ -159,6 +159,7 @@ static void setup_wifi() {
             myWiFi.policy = WIFI_COUNTRY_POLICY_MANUAL;
 
             esp_wifi_set_country(&myWiFi);
+            printf("wifi begin %s\n", settings.ssid.c_str());
             WiFi.begin(settings.ssid.c_str(), settings.psk.c_str());
         } else
             WiFi.disconnect();
@@ -236,10 +237,11 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     else
         dir = 360 - packet->angle * 360.0f / 16384.0f;
 
-    if (packet->period > 100)  // period of 100uS cups is about 193 knots for 100 rotations/s
+    if (packet->period > 100) { // period of 100uS cups is about 193 knots for 100 rotations/s
         //        knots = 19350.0 / packet->period;
-        wind_knots = 25800.0 / packet->period;  // corrected from preliminary calibration
-    else
+        float knots = 25800.0 / packet->period;  // corrected from preliminary calibration
+        wind_knots = knots * .3 + wind_knots * .7;
+    } else
         wind_knots = 0;
 
     if (settings.compensate_wind_with_accelerometer && dir >= 0) {
@@ -289,7 +291,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     nmea_send(buf);
 
     message_count++;
-    //printf("lpwind_dir %f\n", lpwind_dir);
+//    printf("lpwind_dir %f\n", lpwind_dir);
 
     if (settings.wifi_data == SIGNALK) {
         if (!isnan(lpwind_dir))
@@ -442,12 +444,12 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int dat
 
 // Init ESP Now with fallback
 static void InitESPNow() {
-    printf_P(F("InitESPNow %d\n"), chip.channel);
+    printf("InitESPNow %d\n", chip.channel);
     esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
     if (esp_now_init() == ESP_OK) {
-        printf_P(F("ESPNow Init Success\n"));
+        printf("ESPNow Init Success\n");
     } else {
-        printf_P(F("ESPNow Init Failed\n"));
+        printf("ESPNow Init Failed\n");
         ESP.restart();  // restart cpu on failure
     }
 
@@ -499,7 +501,7 @@ void sendChannel() {
     esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
     //print("Send Status: ");
     if (result != ESP_OK) {
-        printf_P(F("Send failed Status: %d\n"), result);
+        printf("Send failed Status: %d\n", result);
     }
 }
 
@@ -563,7 +565,7 @@ void wireless_scan_devices() {
         esp_wifi_set_channel(c, WIFI_SECOND_CHAN_NONE);
         chip.channel = c;
         if (esp_now_init() != ESP_OK)
-            printf_P(F("ESPNow Init Failed"));
+            printf("ESPNow Init Failed");
         esp_err_t addStatus = esp_now_add_peer(&chip);
         if (addStatus == ESP_OK) {
             for (int i = 0; i < 15; i++) {

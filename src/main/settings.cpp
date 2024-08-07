@@ -6,7 +6,6 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-
 #include "rapidjson/document.h"
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/stringbuffer.h"
@@ -35,11 +34,12 @@ std::string get_wifi_data_str()
 static bool settings_load_suffix(std::string suffix="")
 {
     settings.usb_baud_rate = 115200;
+#ifndef __linux__
     if (!SPIFFS.begin(true)) {
         printf("SPIFFS Mount Failed\n");
         return false;
     }
-    
+#endif    
     //    listDir(SPIFFS, "/", 0);
     //settings.channel = 6;
 
@@ -48,11 +48,12 @@ static bool settings_load_suffix(std::string suffix="")
     // start with default settings
     settings.magic = MAGIC;
 
-    String filename = (settings_filename + suffix).c_str();
-    File file = SPIFFS.open(filename, "r");
-
-    bool ret = true;
+    std::string filename = settings_filename + suffix;
+    bool ret = false;
     rapidjson::Document s;
+#ifndef __linux__
+    String sfilename = filename.c_str();
+    File file = SPIFFS.open(sfilename, "r");
 
     if(file && !file.isDirectory()) {
         std::string data;
@@ -63,19 +64,25 @@ static bool settings_load_suffix(std::string suffix="")
         //printf("READ SETTINGS %s\n", data.c_str());
 
         if(s.Parse(data.c_str()).HasParseError()) {
-            printf("settings file invalid/corrupted, will ignore data\n");
-            ret = false;
-        }
-        if(!s.IsObject() || !s.HasMember("magic") || s["magic"].GetString() != settings.magic) {
-            printf("settings file magic identifier failed, will ignore data\n");
-            ret = false;
-        }
+            printf("settings file '%s' invalid/corrupted, will ignore data\n", filename.c_str());
+        } else
+            ret = true;
     } else {
-        printf("failed to open '%s' for reading\n", settings_filename.c_str());
+        printf("failed to open '%s' for reading\n", filename.c_str());
+    }
+#endif
+
+    if(ret || !s.IsObject() || !s.HasMember("magic") || s["magic"].GetString() != settings.magic) {
         ret = false;
+        printf("settings file '%s' magic identifier failed, will ignore data\n", filename.c_str());
     }
 
-//#define LOAD_SETTING(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].Get(); else settings.NAME = DEFAULT;
+    if(!ret) {
+        if(suffix.empty())
+            return false;
+        s.Parse("{}").HasParseError();
+    }        
+
 #define LOAD_SETTING_B(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].GetBool(); else settings.NAME = DEFAULT;
 #define LOAD_SETTING_I(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].GetInt(); else settings.NAME = DEFAULT;
 #define LOAD_SETTING_F(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].GetFloat(); else settings.NAME = DEFAULT;
@@ -314,6 +321,7 @@ static bool settings_store_suffix(std::string suffix="")
 
     w.EndObject();
 
+#ifndef __linux__
     std::string filename = settings_filename + suffix;
     File file = SPIFFS.open(filename.c_str(), "w");
     if(!file || file.isDirectory()){
@@ -325,6 +333,7 @@ static bool settings_store_suffix(std::string suffix="")
     int len = s.GetSize();
     file.write((uint8_t*)cdata, len);
     file.close();
+#endif
     return true;
 }
 

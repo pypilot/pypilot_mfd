@@ -93,10 +93,10 @@ def create_character(sz, c):
 
 
 characters = 'abcdefghijklmnopqrstuvwxyz1234567890`~!@#$%^&*()-=_+,./<>?[]{}|;\':" ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-#big_characters = '1234567890.~- '
-big_characters = characters
+big_characters = '1234567890.~- '
+#big_characters = characters
 
-sizes = [21, 24, 30, 36, 42, 52, 66, 82, 108, 134, 162]
+sizes = [21, 24, 30, 36, 42, 52, 66, 82, 108, 134, 162, 200, 260, 340]
 
 ords = list(map(ord, characters))
 
@@ -123,7 +123,7 @@ def main():
     for sz in sizes:
         data = {}
         font_bytes = 0
-        this_characters = characters if sz < 120 else big_characters
+        this_characters = characters if sz < 180 else big_characters
         for c in this_characters:
             data[ord(c)] = create_character(sz, c);
 

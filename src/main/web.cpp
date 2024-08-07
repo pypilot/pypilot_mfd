@@ -73,38 +73,48 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
 }
 
 static std::string jsonDisplayData() {
-    rapidjson::Value displaydata;
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+
+
     float value;
     std::string source;
     uint32_t time, t0=millis();
+    writer.StartObject();
     for(int i=0; i<DISPLAY_COUNT; i++)
         if(display_data_get((display_item_e)i, value, source, time)) {
-            rapidjson::Value ji;
-            ji["value"].Set(value);
-            ji["source"].Set(source.c_str());
-            ji["latency"].Set((int)(t0-time));
             std::string name = display_get_item_label((display_item_e)i);
-            displaydata[name.c_str()] = ji;
+            writer.Key(name.c_str());
+            writer.StartObject(); {
+                writer.Key("value");
+                writer.Double(value);
+                writer.Key("source");
+                writer.String(source.c_str());
+                writer.Key("latency");
+                writer.Int((int)(t0-time));
+            }
         }
+    writer.EndArray();
 
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    displaydata.Accept(writer);
     return buffer.GetString();
 }
 
 static std::string jsonCurrent()
 {
-    rapidjson::Value j;
-    j["direction"].Set(lpwind_dir);
-    j["knots"].Set(wind_knots);
-
-    rapidjson::Value l;
-    l["wind"] = j;
-
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    j.Accept(writer);
+
+    writer.StartObject(); {
+        writer.Key("wind");
+        writer.StartObject(); {
+            writer.Key("direction");
+            writer.Double(lpwind_dir);
+            writer.Key("knots");
+            writer.Double(wind_knots);
+        }
+        writer.EndObject();
+    }
+    writer.EndObject();
 
     return buffer.GetString();
 }
@@ -494,7 +504,7 @@ void web_setup()
     server.serveStatic("/", SPIFFS, "/");
 
     server.begin();
-    printf_P(F("web server listening\n"));
+    printf("web server listening\n");
 }
 
 void web_poll()

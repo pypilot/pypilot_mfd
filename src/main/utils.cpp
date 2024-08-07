@@ -6,6 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <string>
 #include <math.h>
 
 #include "utils.h"
@@ -171,6 +172,7 @@ std::string millis_to_str(uint32_t dt)
 }
 
 // Custom printf_P function for ESP32
+#if 0
 void printf_P(const __FlashStringHelper* flashString, ...) {
     // Determine the length of the flash string
     size_t len = strlen_P((PGM_P)flashString);
@@ -198,7 +200,7 @@ void printf_P(const __FlashStringHelper* flashString, ...) {
     // Clean up the variable argument list
     va_end(args);
 }
-
+#endif
 std::string float_to_str(float v, int digits)
 {
     char buffer[32];

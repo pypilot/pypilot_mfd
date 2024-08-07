@@ -79,6 +79,7 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int w)
 
 void draw_circle(int x, int y, int r, int thick)
 {
+    r -= thick;
     if(r <= 0) {
         thick += r-1;
         r = 1;
@@ -240,7 +241,7 @@ static uint8_t *framebuffers[3];
 static int vsynccount;
 static int rotation;
 
-#define DRAW_LCD_PIXEL_CLOCK_HZ     (25 * 1000 * 1000)
+#define DRAW_LCD_PIXEL_CLOCK_HZ     (18 * 1000 * 1000)
 #define DRAW_LCD_BK_LIGHT_ON_LEVEL  1
 #define DRAW_LCD_BK_LIGHT_OFF_LEVEL !DRAW_LCD_BK_LIGHT_ON_LEVEL
 #define DRAW_PIN_NUM_BK_LIGHT       GPIO_NUM_42
@@ -636,7 +637,7 @@ void draw_circle_orig(int xm, int ym, int r, int th)
     int a = abs(x1-x0), b = abs(y1-y0), b1 = b&1;  /* outer diameter */
     int a2 = a-2*th, b2 = b-2*th;                            /* inner diameter */
     int dx = 4*(a-1)*b*b, dy = 4*(b1-1)*a*a;                /* error increment */
-    int i = a+b2, err = b1*a*a, dx2, dy2, e2;
+    float i = a+b2, err = b1*a*a, dx2, dy2, e2;
     float ed; 
                                                      /* thick line correction */
     if (th < 1.5) return draw_circle_thin(xm, ym, r);
@@ -732,27 +733,30 @@ static void putpixelb(uint8_t *buf, int r, int x, int y, uint8_t c)
         return;
     int d = 7-c;
     if(d<0) d = 0;
+    if(d>7) d = 7; // should not normally get hit
     buf[(2*r+1)*y+x] = d;
 }
 
 void draw_circle(int xm, int ym, int r, int th)
-{    
+{
+    //printf("draw circle %d %d %d %d\n", xm, ym, r, th);
+//    draw_circle_orig(xm, ym, r, th);
+//    return;
+    
     if (th < 1.5) return draw_circle_thin(xm, ym, r);
     if(r < 20) {
         draw_circle_orig(xm, ym, r, th);        
         return;
     }
 
-    convert_coords(xm, ym);
-
     std::pair pair = std::make_pair(r, th);
     if(circle_cache.find(pair) != circle_cache.end()) {
+        convert_coords(xm, ym);
         circle_cache_t &c = circle_cache.at(pair);
         uint8_t *buf = c.get_data();
         int sz = c.sz;
         int x = 0, y = 0;
         for(int i=0; i<sz; i++) {
-            uint8_t c, len;
             if(buf[i] & 0x80) {
                 uint8_t len = (buf[i] & ~0x80) + 1;
                 x+=len%(2*r+1);
@@ -820,7 +824,7 @@ void draw_circle(int xm, int ym, int r, int th)
     int a = abs(x1-x0), b = abs(y1-y0), b1 = b&1;  /* outer diameter */
     int a2 = a-2*th, b2 = b-2*th;                            /* inner diameter */
     int dx = 4*(a-1)*b*b, dy = 4*(b1-1)*a*a;                /* error increment */
-    int i = a+b2, err = b1*a*a, dx2, dy2, e2;
+    float i = a+b2, err = b1*a*a, dx2, dy2, e2;
     float ed;
     int oth = th;
                                                      /* thick line correction */
@@ -1051,21 +1055,24 @@ void draw_box(int x0, int y0, int w, int h, bool invert)
                 framebuffer[DRAW_LCD_H_RES*y+x] = ~framebuffer[DRAW_LCD_H_RES*y+x];
     } else {
         uint8_t value = palette[color][GRAYS-1];
-        value = rgb3(4|2|1,4|2,4|2|1);
+        //value = rgb3(4|2|1,4|2,4|2|1);
         for(int y = y0; y<y0+h; y++)
             for(int x = x0; x<x0+w; x++)
                 framebuffer[DRAW_LCD_H_RES*y+x] = value;
     }
 }
 
-int cur_font = 0;
+static int cur_font = 0;
 bool draw_set_font(int &ht)
 {
-    for(int i=0; i<FONT_COUNT; i++)
-        if(ht <= fonts[i].h) {
+    for(int i=FONT_COUNT-1; i >= 0; i--) {
+        if(ht >= fonts[i].h) {
             cur_font = i;
+            ht = fonts[i].h;
             return true;
         }
+    }
+
     return false;
 }
 
@@ -1129,10 +1136,10 @@ static int render_glyph(char c, int x, int y)
             int cx, cy;
             for(int j=0; j<cnt; j++) {
                 switch(rotation) {
-                case 0: cx = bx, cy = by;         break;
                 case 1: cx = by, cy = h-1-bx;     break;
                 case 2: cx = w-1-bx, cy = h-1-by; break;
                 case 3: cx = w-1-by, cy = bx;      break;
+                default: cx = bx, cy = by;         break;
                 }
                     
                 buf[w*cy+cx] = g;
@@ -1229,6 +1236,7 @@ int draw_text_width(const std::string &str)
 
 void draw_text(int x, int y, const std::string &str)
 {
+    //printf("draw text %d %d %s\n", x, y, str.c_str());
     convert_coords(x, y);
     for(int i=0; i<str.length(); i++) {
         switch(rotation) {
@@ -1298,7 +1306,7 @@ void draw_send_buffer()
         framebuffer = framebuffers[0];
         
 #ifndef __linux__
-    printf("frame %d %lu %lu\n", vsynccount, t1-t0start, t2-t1);
+    //printf("frame %d %lu %lu\n", vsynccount, t1-t0start, t2-t1);
     vsynccount=0;
     t0start = esp_timer_get_time();
 #endif

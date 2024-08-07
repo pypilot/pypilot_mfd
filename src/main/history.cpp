@@ -76,7 +76,6 @@ struct history
     void put(uint8_t index, float value)
     {
         int32_t time = cold_time(); // 32 bits in seconds
-        //printf("put %f\n", value);
         for(int range = 0; range < HISTORY_RANGE_COUNT; range++) {
             float &lvalue_min = min_lvalue[range];
             float &lvalue_max = max_lvalue[range];
@@ -86,7 +85,7 @@ struct history
             //printf("valus %d %d %d %d %f %f %f\n", range, data[range].size(), data_high[range].size(), data_low[range].size(), value, lvalue, llvalue);
 
             uint32_t range_time = history_range_time[range];
-            int range_timeout = range_time * 1000 / 80;
+            int range_timeout = range_time / 80;
 
             uint32_t fronttime = data[range].empty() ? 0 : data[range].front().time;
             uint32_t dt = time - fronttime;
@@ -118,6 +117,7 @@ struct history
                 store_packet(range, index, HISTORY_VALUE, time, value);
             } else
                 minv = value, maxv = value;
+
             data[range].push_front(history_element(value, time));
 
             // log high/low
@@ -609,7 +609,7 @@ void history_poll()
 
 void history_setup()
 {
-    Wire.begin();
+//    Wire.begin();
     Wire.beginTransmission(DEVICE_ADDRESS);
     int error = Wire.endTransmission();
 

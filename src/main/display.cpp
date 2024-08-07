@@ -23,10 +23,20 @@
 #include "buzzer.h"
 
 // autocompensate contrast based on light and temperature
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+
+#define NTC_PIN -1 // s3 has internal temp sensor
+#define PHOTO_RESISTOR_PIN 1
+#define PWR_LED 18
+
+#else
+
 #define BACKLIGHT_PIN 14
 #define NTC_PIN 39
 #define PHOTO_RESISTOR_PIN 36
 #define PWR_LED 26
+
+#endif
 
 static bool display_on = true;
 bool landscape = false;
@@ -295,6 +305,7 @@ struct dir_angle_text_display : public angle_text_display {
 
     void render() {
         text_display::render();
+        
         if ((settings.use_360 && has360) || centered)
             return;
         float v = display_data[item].value;
@@ -530,6 +541,7 @@ struct stat_display : public text_display {
         if (!data)
             return " --- ";
         int digits = 1;
+        draw_color(MAGENTA);
         return "low: " + float_to_str(low, digits) + "  high: " + float_to_str(high, digits);
     }
 };
@@ -562,8 +574,8 @@ struct gauge : public display_item {
         yc = y + h / 2;
 
         int thick = r / 36;
-        int r2 = r - thick - 1;
-        draw_circle(xc, yc, r2, thick);
+        //int r2 = r - thick - 1;
+        draw_circle(xc, yc, r-1, thick);
     }
 
     void render_tick(float angle, int u, int &x0, int &y0) {
@@ -582,10 +594,14 @@ struct gauge : public display_item {
 
     void render_ticks(bool text = false) {
         int th;
+#ifdef USE_RGB_LCD
+        th = 21;
+#else
         if (w > 90)
             th = 8;
         else
             th = 7;
+#endif
         draw_set_font(th);
 
         for (float angle = min_ang; angle <= max_ang; angle += ang_step) {
@@ -659,8 +675,10 @@ struct gauge : public display_item {
         nyp = (typ + 15 * nyp) / 16;
         text.x = xc + nxp;
         text.y = yc + nyp;
+        draw_color(YELLOW);
         text.render();
 
+        draw_color(RED);
         draw_triangle(xc - xp, yc - yp, xc + x0, yc + y0, xc + xp, yc + yp);
     }
 
@@ -670,7 +688,11 @@ struct gauge : public display_item {
         std::string label1 = space1 > 0 ? label.substr(0, space1) : label;
         std::string label2 = space2 > 0 ? label.substr(space2) : "";
 
+#ifdef USE_RGB_LCD
+        const uint8_t fonts[] = { 30, 24, 21, 0 };
+#else
         const uint8_t fonts[] = { 8, 7, 0 };
+#endif
         int fth[] = { 10, 8, 0 };
         int lw1, lw2=0;
         for (int i = 0; i < (sizeof fonts) / (sizeof *fonts); i++) {
@@ -686,20 +708,20 @@ struct gauge : public display_item {
             int r1_2 = x1 * x1 + y12 * y12, r2_2 = x2 * x2 + y12 * y12;
             int mr = r * r * 9 / 10;
             //printf("%s   %d %d %d   %d %d %d\n", label1.c_str(), x1, x2, y12, r1_2, r2_2, mr);
-            if (r1_2 > mr || r2_2 > mr)
+            if (r1_2 < mr && r2_2 < mr)
                 break;
         }
+        draw_color(MAGENTA);
         draw_text(x, y, label1);
-        draw_text(x + w - lw2, y, label2);
+        draw_text(x + w - lw2-1, y, label2);
     }
 
     virtual void render() {
         render_label();
-        draw_color(BLUE);
         render_dial();
         draw_color(GREY);
         render_ticks(w > 60);
-        draw_color(WHITE);
+        draw_color(GREEN);
         render_ring();
     }
 
@@ -814,6 +836,7 @@ struct rate_of_turn_gauge : public gauge {
         : gauge(_text, -10, 10, -90, 90, 30) {}
 };
 
+uint32_t start_time;
 struct history_display : public display_item {
     history_display(text_display *_text, bool _min_zero = true, bool _inverted = false)
         : display_item(_text->item), text(*_text), min_zero(_min_zero), inverted(_inverted) {
@@ -821,15 +844,20 @@ struct history_display : public display_item {
 
     void fit() {
         text.x = x + w / 4;
-        text.y = y;
+        text.y = y+3;
         text.w = w / 2;
-        text.h = 14;
+        text.h = h/12;
         text.fit();
     }
 
     void render() {
         // draw label
+        draw_color(GREEN);
+#ifdef USE_RGB_LCD
+        int ht = h/12;
+#else
         int ht = 8;
+#endif
         draw_set_font(ht);
 
         std::string history_label = history_get_label((history_range_e)history_display_range);
@@ -861,9 +889,10 @@ struct history_display : public display_item {
         range = maxv - minv;
 
         int lxp = -1, lyp=0;
-        uint32_t time = esp_timer_get_time()/1000000LL;
+        uint32_t t = esp_timer_get_time()/1000L;
+        draw_color(ORANGE);
         for (std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
-            int xp = w - (time - it->time) / 1000 * w / totalseconds;
+            int xp = w - (start_time*1000 + t - 1000*it->time) * w / (totalseconds * 1000);
             if (xp < 0)
                 break;
             if(isnan(it->value)) 
@@ -882,6 +911,7 @@ struct history_display : public display_item {
         }
 
         //render scale
+        draw_color(WHITE);
         draw_text(x, y, float_to_str(maxv, digits));
         draw_text(x, y + h / 2 - 4, float_to_str((minv + maxv) / 2, digits));
         draw_text(x, y + h - 8, float_to_str(minv, digits));
@@ -889,7 +919,7 @@ struct history_display : public display_item {
         if (h > 100) {
             std::string minmax = "low: " + float_to_str(low, digits) + "  high: " + float_to_str(high, digits);
             int sw = draw_text_width(minmax);
-            draw_text(x + (w - sw) / 2, y + 15, minmax);
+            draw_text(x + (w - sw) / 2, y + ht*2, minmax);
         }
     }
 
@@ -1714,14 +1744,18 @@ static void setup_analog_pins() {
 
     analogReadResolution(12);
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
     ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 9);
     ledcWriteChannel(9, 0);
+#endif
 }
 
 // read from photo resistor and adjust the backlight
 static void read_analog_pins() {
     int val = analogRead(PHOTO_RESISTOR_PIN);
+#ifndef CONFIG_IDF_TARGET_ESP32S3
     int ntc = analogRead(NTC_PIN);
+#endif
 
     // set backlight level
     static bool backlight_on;
@@ -1733,10 +1767,12 @@ static void read_analog_pins() {
     else if (!backlight_on && val < 2800)
         backlight_on = true;
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
     if (backlight_on)
         ledcWriteChannel(9, 1 + settings.backlight * settings.backlight * 5 / 2);
     else
         ledcWriteChannel(9, 0);
+#endif
 }
 
 static int rotation;
@@ -1757,6 +1793,9 @@ void display_setup() {
 
     printf("display_setup %d\n", rotation);
 
+    start_time = time(0);
+    
+    rotation = 0;
 #ifdef USE_U8G2
     switch (rotation) {
     case 0:
@@ -1772,12 +1811,27 @@ void display_setup() {
         landscape = false;
         break;
     }
+#else
+    switch (rotation) {
+    case 0:
+    case 2:
+        page_width = 800;
+        page_height = settings.show_status ? 450 : 480;
+        landscape = true;
+        break;
+    case 1:
+    case 3:
+        page_width = 480;
+        page_height = settings.show_status ? 800 : 770;
+        landscape = false;
+        break;
+    }
 #endif
     pinMode(PWR_LED, OUTPUT);
     digitalWrite(PWR_LED, LOW);
 
     draw_setup(rotation);
-    cur_page = 'C' - 'A';
+    cur_page = 'B' - 'A';
 
     for (int i = 0; i < pages.size(); i++)
         delete pages[i];
@@ -1868,7 +1922,11 @@ void display_menu_scale() {
 }
 
 static void render_status() {
+#ifdef USE_RGB_LCD
+    int ht = 21;
+#else
     int ht = 8;
+#endif
     draw_set_font(ht);
 
     int y = page_height;
@@ -1904,31 +1962,34 @@ void data_timeout() {
         if (t + 100 - display_data[i].time > 5000) {
             //if(!isnan(display_data[i].value))
             //  printf("timeout %ld %ld %d\n", t0, display_data[i].time, i);
-            display_data[i].value = NAN;  // timeout if no data
-            history_put((display_item_e)i, NAN); // ensure history shows lack of data
+            if(!isnan(display_data[i].value)) {
+                history_put((display_item_e)i, NAN); // ensure history shows lack of data
+                display_data[i].value = NAN;  // timeout if no data
+            }
         }
 }
 
 #if defined(USE_U8G2) || defined(USE_RGB_LCD)
 
 void display_poll() {
-    uint32_t t0 = millis();
+#ifdef USE_U8G2    
     static uint32_t last_render;
     if (t0 - last_render < 200)
         return;
     last_render = t0;
+#endif
+//    read_analog_pins();
 
-
-    read_analog_pins();
-
+    //printf("draw clear %d\n", display_on);
+    uint32_t t0 = millis();
     draw_clear(display_on);
+    uint32_t t1 = millis();
     if (!display_on) {
         draw_send_buffer();
         return;
     }
 
     draw_color(WHITE);
-    uint32_t t1 = millis();
 
     if (wifi_ap_mode) {
         int ht = 14;
@@ -1961,7 +2022,7 @@ void display_poll() {
 
     draw_send_buffer();
     uint32_t t4 = millis();
-    printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
+    //printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
 #endif
 
