@@ -1972,6 +1972,7 @@ void data_timeout() {
 #if defined(USE_U8G2) || defined(USE_RGB_LCD)
 
 void display_poll() {
+    uint32_t t0 = millis();
 #ifdef USE_U8G2    
     static uint32_t last_render;
     if (t0 - last_render < 200)
@@ -1981,7 +1982,6 @@ void display_poll() {
 //    read_analog_pins();
 
     //printf("draw clear %d\n", display_on);
-    uint32_t t0 = millis();
     draw_clear(display_on);
     uint32_t t1 = millis();
     if (!display_on) {

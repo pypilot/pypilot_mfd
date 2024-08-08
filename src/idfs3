@@ -1,0 +1,1 @@
+idf.py -B build-esp32s3 -DSDKCONFIG=sdkconfig.esp32s3 $1

@@ -89,7 +89,7 @@ void draw_circle(int x, int y, int r, int thick)
             u8g2.drawCircle(x + i, y + j, r);
 }
 
-void draw_line(int x1, int y1, int x2, int y2)
+void draw_line(int x1, int y1, int x2, int y2, bool)
 {
     u8g2.drawLine(x1, y1, x2, y2);
 }
