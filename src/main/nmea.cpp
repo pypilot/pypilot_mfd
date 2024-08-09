@@ -16,7 +16,6 @@
 #include "zeroconf.h"
 #include "ais.h"
 #include "settings.h"
-#include "wireless.h"
 #include "history.h"
 
 static uint8_t checksum(const char *buf, int len=-1)
@@ -654,7 +653,7 @@ static void write_nmea_server(const char *buf)
 void nmea_send(const char *buf)
 {
     return;
-    if(wifi_ap_mode)
+    if(settings_wifi_ap_mode)
         return;
     char buf2[64];
 

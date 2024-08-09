@@ -12,12 +12,14 @@
 
 #include "utils.h"
 #include "settings.h"
+#include "wireless.h"
 
 #define DEFAULT_CHANNEL 6
 #define MAGIC "3A61CF00"
 
 settings_t settings;
 static std::string settings_filename = "/settings/settings.json";
+bool settings_wifi_ap_mode = false;
 
 std::string get_wifi_data_str()
 {
@@ -186,22 +188,8 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_I(signalk_port, 3000)
 
     // transmitters
-#if 0
-    if(s.HasMember("transmitters")) {
-        rapidjson::Value &t = s["transmitters"];
-        for (rapidjson::Value::ConstMemberIterator itr = t.MemberBegin();itr != t.MemberEnd(); ++itr) {
-            std::string mac = itr->name.GetString();
-            rapidjson::Value &u = itr->value;
-            wind_transmitter_t tr = {0};
-            tr.position = (wind_position)(int)u["position"];
-            tr.offset = (double)u["offset"];
-
-            std::string str = JSON.stringify(u);//["position"];
-            uint64_t maci = mac_str_to_int(mac);
-            wind_transmitters[maci] = tr;
-        }
-    }
-#endif
+    if(s.HasMember("transmitters"))
+        wireless_read_transmitters(s["transmitters"]);
 
     return ret;
 }
@@ -307,19 +295,8 @@ static bool settings_store_suffix(std::string suffix="")
     STORE_SETTING_I(signalk_port)
 
     // transmitters
-    #if 0
-    rapidjson::Value transmitters;
-    for(std::map<uint64_t, wind_transmitter_t>::iterator it = wind_transmitters.begin();
-        it != wind_transmitters.end(); it++) {
-        rapidjson::Value t;
-        wind_transmitter_t &tr = it->second;
-        t["position"].Set(tr.position);
-        transmitters[mac_int_to_str(it->first)] = t;
-    }
-    s["transmitters"] = transmitters;
-    #endif
-
-    w.EndObject();
+    w.Key("transmitters");
+    wireless_write_transmitters(w, false);
 
 #ifndef __linux__
     std::string filename = settings_filename + suffix;

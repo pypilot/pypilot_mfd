@@ -9,7 +9,6 @@
 #include "Arduino.h"
 
 #include "settings.h"
-#include "wireless.h"
 #include "display.h"
 #include "menu.h"
 #include "keys.h"

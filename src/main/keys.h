@@ -8,3 +8,7 @@
 
 void keys_poll();
 void keys_setup();
+
+void wireless_toggle_mode();
+void wireless_setup();
+void wireless_poll();

@@ -10,9 +10,7 @@
 function request() {
     var data_type = document.getElementById('data_type');
     var data_range = document.getElementById('data_range');
-    
     const url = 'history?data_type=' + data_type.value + '&data_range=' + data_type.range;
-
     fetch(url)
         .then(response => {
             if (!response.ok) {
@@ -32,6 +30,7 @@ function request() {
         });
 }
 
+var theChart = null;
 function plot(data)
 {
     let tt = data['total_time'];
@@ -53,32 +52,38 @@ function plot(data)
         theChart.destroy();
     theChart = new Chart("chart", {
         type: "line",
-        data: {
-//            labels: xValues,
-            datasets: [{
-                data: data1,
-                borderColor: "red",
-                fill: false,
-                pointRadius: 0
-            }]
-        },
-        options: {
+    data: {
+        labels: xValues,
+        datasets: [{
+            data: data1,
+            borderColor: "red",
+            fill: false,
+            pointRadius: 0
+        }]
+    },
+    options: {
+        legend: {display: false},
+        plugins: {
             legend: {display: false},
-            scales: {
-                x: {
-                    title: {
-                            display: true,
-                            text: "Time"
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: "value"
-                        }
-                    }
+            title: {
+                display: false,
+                text: 'Custom Chart Title'
+            }
+        },
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: "Time"
+                }
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: "Value"
                 }
             }
-            
-    });
+        }
+    }
+  });
 }

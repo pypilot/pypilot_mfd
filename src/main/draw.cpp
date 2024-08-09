@@ -795,7 +795,6 @@ void draw_circle(int xm, int ym, int r, int th)
 
                 // len2
                 if(len2) {
-#if 1                    
                     idx1 = DRAW_LCD_H_RES*(ym-r+y)+xm-r+x;
                     idx2 = DRAW_LCD_H_RES*(ym+r-y)+xm-r+x;
                     if(c == GRAYS-1) {
@@ -807,7 +806,6 @@ void draw_circle(int xm, int ym, int r, int th)
                         for(int i=0; i<len2; i++)
                             framebuffer[idx2++] |= value;
                     }
-#endif
                     x+=len2;
                 }
             }
@@ -871,7 +869,7 @@ void draw_circle(int xm, int ym, int r, int th)
       y0++; y1--; err += dy += a;                                   /* y step */
    } while (x0 < x1);
 
-#if 0
+#if 0 // seems to be not needed
    if (y0-y1 <= b)             
    {
       if (err > dy+a) { y0--; y1++; err -= dy -= a; }

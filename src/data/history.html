@@ -9,7 +9,6 @@
 <body>
   <canvas id="chart" style="width:100%"></canvas>
   <span id="time"> High:  <span id="low"> Low:   <span id="low">
-
     <select id='data_type' name='data_type' onchange='request()'>
       <option value='wind_speed'>Wind Speed</option>
       <option value='barometric_pressure'>Barometric Pressure</option>
@@ -21,6 +20,11 @@
       <option value='5m'>5 minutes</option>
       <option value='1h'>Hour</option>
       <option value='1d'>Day</option>
+      <option value='1m'>Month</option>
+      <option value='1y'>Year</option>
     </select>
+    <script>
+      request();
+    </script>
 </body>
 </html>

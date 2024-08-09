@@ -24,25 +24,11 @@
 #include "signalk.h"
 #include "web.h"
 
-extern const uint8_t alarms_html_start[] asm("_binary_alarms_html_start");
-extern const uint8_t alarms_html_end[] asm("_binary_alarms_html_end");
-extern const uint8_t index_html_start[] asm("_binary_index_html_start");
-extern const uint8_t index_html_end[] asm("_binary_index_html_end");
+#include "data.h"
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 AsyncWebSocket ws_data("/ws_data");
-
-// bad put put here??
-rapidjson::Value history_get_data(display_item_e item, history_range_e range);
-
-static sensor_position str2position(const std::string &p) {
-    if(p == "Primary")   return PRIMARY;
-    if(p == "Secondary") return SECONDARY;
-    if(p == "Port")      return PORT;
-    if(p == "Starboard") return STARBOARD;
-    return IGNORED;
-}
 
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
 {
@@ -52,30 +38,14 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
         printf("websocket got %s\n", data);
         rapidjson::Document input;
         input.Parse((char*)data);
-#if 0
-        for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.begin(); i != wind_transmitters.end(); i++) { 
-            std::string mac = mac_int_to_str(i->first);
-            wind_transmitter_t &t = i->second;
-            if(input.hasMember(mac.c_str())) {
-                rapidjson::Value s = input[mac];
-                if(s.HasMember("offset") && s["offset"].IsNumber()) {
-                    float offset = s["offset"].GetDouble();
-                    offset=fminf(fmaxf(offset, -180), 180);
-                    t.offset = offset;
-                }
-                if(s.hasOwnProperty("position"))
-                    t.position = str2position(s["position"]);
-                break;
-            }
-        }
-#endif
+
+        wireless_setting(input);
     }
 }
 
 static std::string jsonDisplayData() {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-
 
     float value;
     std::string source;
@@ -252,6 +222,29 @@ String processor_alarms_helper(const String &c)
     return processor_alarms(c.c_str()).c_str();
 }
 
+static ArRequestHandlerFunction getRequest(const char *path, AwsTemplateProcessor processor=nullptr)
+{
+    return [path, processor](AsyncWebServerRequest *request) {
+        unsigned int i, num_files = (sizeof data_files)/(sizeof *data_files);
+        for(i = 0; i<num_files; i++)
+            if(!strcmp(path, data_files[i].path))
+                break;
+        if(i == num_files) {
+            printf("file not found");
+            return;
+        }
+        
+        int size = data_files[i].size;
+        const char *data = data_files[i].data;
+        request->send("text/plain", size, [size, data](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+            int r = size - index;
+            int len = r > maxLen ? maxLen : r;
+            memcpy(buffer, data + index, len);
+            return len;
+        }, processor);
+    };
+}
+
 void web_setup()
 {
     ws.onEvent(onEvent);
@@ -259,19 +252,7 @@ void web_setup()
     server.addHandler(&ws);
     server.addHandler(&ws_data);
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-#if 0    
-        request->send(SPIFFS, "/index.html", String(), 0, processor_helper);
-#else
-        int size = index_html_end - index_html_start;
-        request->send("text/plain", size, [size](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-                                    int r = size - index;
-                                    int len = r > maxLen ? maxLen : r;
-                                    memcpy(buffer, index_html_start + index, len);
-                                    return len;
-                                          }, processor_helper);
-#endif
-    });
+    server.on("/", HTTP_GET, getRequest("index.html", processor_helper));
 
     server.on("/alarms", HTTP_POST, [](AsyncWebServerRequest *request) {
         settings.anchor_alarm = false;
@@ -345,19 +326,9 @@ void web_setup()
         settings_store();
     });
 
-    server.on("/alarms.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-#if 0    
-        request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms_helper);
-#else
-        int size = alarms_html_end - alarms_html_start;
-        request->send("text/plain", size, [size](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
-                                    int r = size - index;
-                                    int len = r > maxLen ? maxLen : r;
-                                    memcpy(buffer, alarms_html_start + index, len);
-                                    return len;
-                                          }, processor_alarms_helper);
-#endif
-    });
+//    server.on("/alarms.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+//        request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms_helper);
+    server.on("/alarms.html", HTTP_GET, getRequest("alarms.html", processor_alarms_helper));
 
     server.on("/network", HTTP_POST, [](AsyncWebServerRequest *request) {
         //printf("post network\n");
@@ -496,12 +467,20 @@ void web_setup()
             }
 
         if(item >= 0 && range >= 0)
-        ;//    request->send(200, "text/plain", history_get(item, range));
+            request->send(200, "text/plain", history_get_data
+                          ((display_item_e)item,(history_range_e)range).c_str());
         else
             request->send(404);
     });
 
-    server.serveStatic("/", SPIFFS, "/");
+    // serve all files
+    unsigned int i, num_files = (sizeof data_files)/(sizeof *data_files);
+    for(i = 0; i<num_files; i++) {
+        const char *path = data_files[i].path;
+        std::string spath("/");
+        spath += path;
+        server.on(spath.c_str(), HTTP_GET, getRequest(path));
+    }
 
     server.begin();
     printf("web server listening\n");

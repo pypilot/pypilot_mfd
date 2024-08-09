@@ -7,6 +7,8 @@
  */
 
 #include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
 
 // 5m, 1 hr, 1d
 #include <Wire.h>
@@ -185,11 +187,11 @@ void history_put(display_item_e item, float value)
         }
 }
 
-std::list<history_element> *history_find(display_item_e item, int r, uint32_t &totalseconds, float &high, float &low)
+std::list<history_element> *history_find(display_item_e item, int r, uint32_t &total_seconds, float &high, float &low)
 {
     for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
         if(history_items[i] == item) {
-            totalseconds = history_range_time[r];
+            total_seconds = history_range_time[r];
             std::list<history_element> &data_high = histories[i].data_high[r];
             std::list<history_element> &data_low = histories[i].data_low[r];
             // compute range
@@ -213,28 +215,39 @@ std::list<history_element> *history_find(display_item_e item, int r, uint32_t &t
     return 0;
 }
 
-rapidjson::Value history_get_data(display_item_e item, history_range_e range)
+std::string history_get_data(display_item_e item, history_range_e range)
 {
-    uint32_t totalmillis;
+    uint32_t total_seconds;
     float high, low;
-    std::list<history_element> *data = history_find(item, range, totalmillis, high, low);
-    rapidjson::Value jsondata;
-    if(! data)
-        return jsondata;
-    int i = 0;
-    for(std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
-        rapidjson::Value value;
-        value["value"] = it->value;
-        value["time"] = it->time / 1000.0f;
-        jsondata[i++] = value;
-    }
-    rapidjson::Value output;
-    output["data"] = jsondata;
-    output["high"] = high;
-    output["low"] = low;
-    output["total_time"] = totalmillis / 1000.0f;
+    std::list<history_element> *data = history_find(item, range, total_seconds, high, low);
+    if(!data)
+        return "";
 
-    return output;
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+
+    int i = 0;
+    writer.StartObject();
+    writer.Key("data");
+    writer.StartArray();
+    for(std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
+        writer.StartObject();
+        writer.Key("value");
+        writer.Double(it->value);
+        writer.Key("time");
+        writer.Double(it->time);
+        writer.EndObject();
+    }
+    writer.EndArray();
+    writer.Key("high");
+    writer.Double(high);
+    writer.Key("low");
+    writer.Double(low);
+    writer.Key("total_time");
+    writer.Double(total_seconds);
+    writer.EndObject();
+
+    return buffer.GetString();
 }
 
 

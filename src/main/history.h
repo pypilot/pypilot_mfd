@@ -20,8 +20,9 @@ void history_setup();
 void history_poll();
 void history_put(display_item_e item, float value);
 void history_set_time(uint32_t date, int hour, int minute, float second);
+std::string history_get_data(display_item_e item, history_range_e range);
 
-std::list<history_element> *history_find(display_item_e item, int r, uint32_t &totalseconds, float &high, float &low);
+std::list<history_element> *history_find(display_item_e item, int r, uint32_t &total_seconds, float &high, float &low);
 std::string history_get_label(history_range_e range);
 
 extern int history_display_range;

@@ -17,7 +17,6 @@
 #include "ais.h"
 #include "pypilot_client.h"
 #include "utils.h"
-#include "wireless.h"
 #include "menu.h"
 #include "history.h"
 #include "buzzer.h"
@@ -1991,7 +1990,7 @@ void display_poll() {
 
     draw_color(WHITE);
 
-    if (wifi_ap_mode) {
+    if (settings_wifi_ap_mode) {
         int ht = 14;
         draw_set_font(ht);
         draw_text(0, 0, "WIFI AP");
@@ -2046,12 +2045,12 @@ void display_setup() {
 }
 
 void display_poll() {
-    static bool last_wifi_ap_mode;
-    if (wifi_ap_mode != last_wifi_ap_mode) {
+    static bool last_settings_wifi_ap_mode;
+    if (settings_wifi_ap_mode != last_settings_wifi_ap_mode) {
         tft.fillScreen(TFT_BLACK);
-        last_wifi_ap_mode = wifi_ap_mode;
+        last_settings_wifi_ap_mode = settings_wifi_ap_mode;
     }
-    if (wifi_ap_mode) {
+    if (settings_wifi_ap_mode) {
         tft.setTextColor(TFT_RED, TFT_BLACK);
         tft.drawString("WIFI AP", 0, 0, 4);
 

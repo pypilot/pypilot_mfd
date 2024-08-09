@@ -111,5 +111,7 @@ enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
 
 void settings_load();
 void settings_store();
+std::string get_wifi_data_str();
 
 extern settings_t settings;
+extern bool settings_wifi_ap_mode;

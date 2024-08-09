@@ -25,8 +25,26 @@
 #include "zeroconf.h"
 #include "alarm.h"
 
-bool wifi_ap_mode = false;
+static std::string position_str(sensor_position p)
+{
+    switch(p) {
+    case PRIMARY:   return "Primary";
+    case SECONDARY: return "Secondary";
+    case PORT:      return "Port";
+    case STARBOARD: return "Starboard";
+    default:   break;
+    }
+    return "Ignored";
+}
 
+sensor_position wireless_str_position(const std::string &p)
+{
+    if(p == "Primary")   return PRIMARY;
+    if(p == "Secondary") return SECONDARY;
+    if(p == "Port")      return PORT;
+    if(p == "Starboard") return STARBOARD;
+    return IGNORED;
+}
 
 template<class T>
 struct transmitters {
@@ -55,12 +73,162 @@ struct transmitters {
             cur_primary = 0;
         return wt;
     }
+
+    void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info=false) {
+        writer.StartObject();
+        for(auto i = macs.begin(); i != macs.end(); i++) {
+            std::string x = mac_int_to_str(i->first);
+            writer.Key(x.c_str());
+            T &wt = i->second;
+            writer.StartObject();
+            writer.Key("position");
+            writer.String(position_str(wt.position).c_str());
+            wt.json(writer, info);
+            if(info) {
+                writer.Key("dt");
+                uint32_t t = millis();
+                writer.Int((int)(t - wt.t));
+            }
+            writer.EndObject();
+        }
+        writer.EndObject();
+    }
+
+    void setting(uint64_t maci, const rapidjson::Value &s) {
+        if(macs.find(maci) == macs.end())
+            return;
+
+        T &t = macs[maci];
+        if(s.HasMember("position"))
+            t.position = wireless_str_position(s["position"].GetString());
+        t.setting(s);
+    }
+
+    void read_settings(const rapidjson::Value &t) {
+        for (rapidjson::Value::ConstMemberIterator itr = t.MemberBegin(); itr != t.MemberEnd(); ++itr) {
+            std::string mac = itr->name.GetString();
+            const rapidjson::Value &u = itr->value;
+            T tr;
+            uint64_t maci = mac_str_to_int(mac);
+            macs[maci] = tr;
+            setting(maci, u);
+        }
+    }
 };
 
 static transmitters<wind_transmitter_t> wind_transmitters;
 static transmitters<air_transmitter_t> air_transmitters;
 static transmitters<water_transmitter_t> water_transmitters;
 static transmitters<lightning_uv_transmitter_t> lightning_uv_transmitters;
+
+void wind_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+{
+    writer.Key("offset");
+    writer.Double(offset);
+    if(!info)
+        return;
+    writer.Key("dir");
+    writer.Double(dir);
+    writer.Key("knots");
+    writer.Double(knots);
+}
+
+void wind_transmitter_t::setting(const rapidjson::Value &s)
+{
+    if(s.HasMember("offset") && s["offset"].IsNumber())
+        offset=fminf(fmaxf(s["offset"].GetDouble(), -180), 180);
+}
+
+void air_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+{
+    if(!info)
+        return;
+
+    writer.Key("pressure");
+    writer.Double(pressure);
+    writer.Key("temperature");
+    writer.Double(temperature);
+    writer.Key("rel_humidity");
+    writer.Double(rel_humidity);
+    writer.Key("air_quality");
+    writer.Double(air_quality);
+    writer.Key("battery_voltage");
+    writer.Double(battery_voltage);
+}
+
+void water_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+{
+    if(!info)
+        return;
+    writer.Key("speed");
+    writer.Double(speed);
+    writer.Key("depth");
+    writer.Double(depth);
+    writer.Key("temperature");
+    writer.Double(temperature);
+}
+
+void lightning_uv_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+{
+    if(!info)
+        return;
+    writer.Key("distance");
+    writer.Double(distance);
+    writer.Key("uva");
+    writer.Double(uva);
+    writer.Key("uvb");
+    writer.Double(uvb);
+    writer.Key("uvc");
+    writer.Double(uvc);
+    writer.Key("visible");
+    writer.Double(visible);
+}
+
+void wireless_write_transmitters(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+{
+    writer.StartObject();
+
+    writer.Key("wind");
+    wind_transmitters.json(writer, info);
+
+    writer.Key("air");
+    air_transmitters.json(writer, info);
+
+    writer.Key("water");
+    water_transmitters.json(writer, info);
+
+    writer.Key("lightning_uv");
+    lightning_uv_transmitters.json(writer, info);
+
+    writer.EndObject();
+}
+
+void wireless_read_transmitters(const rapidjson::Value &t)
+{
+    for (rapidjson::Value::ConstMemberIterator itr = t.MemberBegin(); itr != t.MemberEnd(); ++itr) {
+        std::string name = itr->name.GetString();
+        if(name == "wind")
+            wind_transmitters.read_settings(itr->value);
+        else if(name == "air")
+            air_transmitters.read_settings(itr->value);
+        else if(name == "water")
+            water_transmitters.read_settings(itr->value);
+        else if(name == "lightning_uv")
+            lightning_uv_transmitters.read_settings(itr->value);
+    }
+}
+
+void wireless_setting(const rapidjson::Document &d)
+{
+    for (rapidjson::Value::ConstMemberIterator itr = d.MemberBegin(); itr != d.MemberEnd(); ++itr) {
+        std::string name = itr->name.GetString();
+        uint64_t maci = mac_str_to_int(name);
+        wind_transmitters.setting(maci, itr->value);
+        air_transmitters.setting(maci, itr->value);
+        water_transmitters.setting(maci, itr->value);
+        lightning_uv_transmitters.setting(maci, itr->value);
+    }
+}
 
 // Global copy of chip
 esp_now_peer_info_t chip;
@@ -121,9 +289,9 @@ void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
 }
 
 static void setup_wifi() {
-    //wifi_ap_mode=true;
-    //printf("wifi mode %d\n", wifi_ap_mode);
-    if (wifi_ap_mode) {
+    //settings_wifi_ap_mode=true;
+    //printf("wifi mode %d\n", settings_wifi_ap_mode);
+    if (settings_wifi_ap_mode) {
         //Set device in AP mode to begin with
         WiFi.mode(WIFI_AP);
         // configure device AP mode
@@ -589,7 +757,7 @@ void wireless_toggle_mode() {
     uint32_t t0 = millis();
     static int last_wifi_toggle_time;
     if (t0 - last_wifi_toggle_time > 2000) {
-        wifi_ap_mode = !wifi_ap_mode;
+        settings_wifi_ap_mode = !settings_wifi_ap_mode;
         last_wifi_toggle_time = t0;
         setup_wifi();
     }
@@ -614,42 +782,11 @@ void wireless_setup() {
     InitESPNow();
 }
 
-std::string position_str(sensor_position p)
-{
-    switch(p) {
-    case PRIMARY:   return "Primary";
-    case SECONDARY: return "Secondary";
-    case PORT:      return "Port";
-    case STARBOARD: return "Starboard";
-    case IGNORED:   return "Ignored";
-    }
-    return "Invalid";
-}
-
 std::string wireless_json_sensors()
 {
-    uint32_t t = millis();
-    rapidjson::Value windsensors;
-    for(std::map<uint64_t, wind_transmitter_t>::iterator i = wind_transmitters.macs.begin(); i != wind_transmitters.macs.end(); i++) {
-        rapidjson::Value jwt;
-        wind_transmitter_t &wt = i->second;
-
-        jwt["position"].Set(position_str(wt.position).c_str());
-        jwt["offset"].Set(wt.offset);
-        jwt["dir"].Set(wt.dir);
-        jwt["knots"].Set(wt.knots);
-        jwt["dt"].Set((int)(t - wt.t));
-        std::string x = mac_int_to_str(i->first);
-        windsensors[x.c_str()] = jwt;
-    }
-
-    rapidjson::Value sensors;
-    if(wind_transmitters.macs.size() > 0)
-        sensors["wind"] = windsensors;
-
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    sensors.Accept(writer);
 
+    wireless_write_transmitters(writer, true);
     return buffer.GetString();
 }
