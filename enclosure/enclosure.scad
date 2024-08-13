@@ -2,12 +2,12 @@
 
 use_threads = true     ;
 use_holes = false;
-
-length = 124;
-width = 97;
+//-3
+length = 124.5;
+width = 95;
 height = 19;
 
-board_length = 116.25;
+board_length = 117;
 board_width = 86.25-4;
 
 pane = [128,100, 3];
@@ -22,12 +22,12 @@ connoff = -24;
 lcd_area = [101, 60];
 lcd_off = 3;
 
-ex_r = 3;
+ex_r = 4;
 
-board_off=4;
+board_off=5;
 module box() {
     difference() {
-        translate([-length/2+ex_r,-width/2+ex_r+1,0])
+        translate([-length/2+ex_r,-width/2+ex_r,0])
         minkowski() {
             cube([length-ex_r*2, width-ex_r*2, height]);
             cylinder(r=thickness+ex_r,h=bthickness);
@@ -46,17 +46,17 @@ module box() {
         translate([5,13-board_off,0])
             cylinder(r=6.5, h=40, center=true);
         }
-        translate([0,1,height+bthickness-.8])
+        translate([0,0,height+bthickness-1])
             scale([1, 1, .7])
                 groove();
 
         //translate([-pane[0]/2,-pane[1]/2,height+bthickness-pane[2]+.1])
       //     cube(pane);
-        translate([0,+1,-1])
+        translate([0,0,0])
         screws();
         
         // keypad ribbon
-        translate([connoff,pane[1]/2-9,4])
+        translate([connoff,pane[1]/2-10,4])
           cube([conn[0], conn[1], height]);
         // wifi antenna area
         translate([10,pane[1]/2-9,5])
@@ -107,15 +107,15 @@ module screw(r) {
 
 module screws(r=1.65) {
     all() {
-        translate([length/2+thickness*.57, 0, -.1])
+        translate([length/2+thickness*.46, 0, -.1])
         rotate(30)
             screw(r);
-        translate([length/2+thickness*.57, width*.35, -.1])
+        translate([length/2+thickness*.46, width*.35, -.1])
             rotate(30)
             screw(r);
-        translate([length*.4,width/2+thickness*.57, -.1])
+        translate([length*.4,width/2+thickness*.46, -.1])
             screw(r);
-        translate([length*.15, width/2+thickness*.57, -.1])
+        translate([length*.15, width/2+thickness*.46, -.1])
             screw(r);
     }
 }
