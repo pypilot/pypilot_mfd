@@ -34,63 +34,18 @@
 #include "alarm.h"
 #include "history.h"
 
-//#define DEMO
-
-void demo_draw(int dt)
-{
-    static int r = 60, rd = 1;
-            draw_clear(true);
-
-//        draw_color(WHITE);
-//        draw_box(50, 0,700, 470);
-        draw_color(RED);
-        draw_box(100, 400, 349, 60);
-
-        draw_color(CYAN);
-        int ht=80;
-        draw_set_font(ht);
-        draw_text(0, 360, "Hello world!");
-
-
-        ht = 100;
-        draw_color(BLUE);
-        draw_set_font(ht);
-        char b[128];
-        sprintf(b, "%d", (int)(1000/dt));
-        draw_text(200, 0, b);
-
-        
-        draw_color(GREEN);
-    draw_thick_line(100, 100, 700, 380, 20);
-
-        draw_color(GREY);
-        draw_thick_line(0, 480, 800, 0, 10);
-        
-
-        draw_color(ORANGE);
-        draw_circle(300, 300, r, 10);
-
-        if(r > 100 || r < 20)
-            rd=-rd;
-        r += rd;
-        draw_color(MAGENTA);
-        draw_triangle(576+r, 100, 480, 300+r, 780, 250);
-        draw_send_buffer();
-}
-
 extern "C" void app_main(void)
 {
     initArduino();
     uint32_t t0 = millis();
 
     // Arduino-like setup()
-//    delay(1500);
-//    serial_setup();
-    printf("pypilot_mfd\n");
+    //delay(1500);
+    serial_setup();
+    printf("pypilot_mfd, %ld\n", millis());
 
     /* Print chip information */
     esp_chip_info_t chip_info;
-    uint32_t flash_size;
     esp_chip_info(&chip_info);
     printf("This is %s chip with %d CPU core(s), %s%s%s%s, ",
            CONFIG_IDF_TARGET,
@@ -99,64 +54,58 @@ extern "C" void app_main(void)
            (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
            (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
            (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "");
-
     unsigned major_rev = chip_info.revision / 100;
     unsigned minor_rev = chip_info.revision % 100;
     printf("silicon revision v%d.%d, ", major_rev, minor_rev);
+    uint32_t flash_size;
     if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) {
         printf("Get flash size failed");
         return;
     }
-
-
-#ifdef DEMO
-    draw_setup(2);
-#else
-    accel_setup();
-    printf("accel_setup_done\n");
-
-    keys_setup();
-    printf("keys_setup_done\n");
-    
-    settings_load();
-    printf("keys_setup_done\n");
-
-    wireless_setup();
-    printf("wireless_setup_done\n");
-
-    history_setup();
-    printf("history_setup_done\n");
-
-//    mdns_setup();
-    printf("mdns_setup_done\n");
-
-    web_setup();
-    printf("web_setup_done\n");
-
-    int ss = CONFIG_ARDUINO_LOOP_STACK_SIZE;
-    if (ss < 16384)
-        printf("WARNING STACK TOO SMALL\n");
-    printf("Stack Size %d\n", ss);
-
-    alarm_setup();
-    accel_read();
-    display_setup();
-    
-    menu_setup();
-    printf("display setup complete in %ld, %ld\n", t0, millis()-t0);
-#endif
-
     printf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
-    printf("Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
+    accel_setup();
+    printf("accel_setup_done, %ld\n", millis());
+
+    keys_setup();
+    printf("keys_setup_done, %ld\n", millis());
     
+    settings_load();
+    printf("settings_load_done, %ld\n", millis());
+
+    wireless_setup();
+    printf("wireless_setup_done, %ld\n", millis());
+
+    history_setup();
+    printf("history_setup_done, %ld\n", millis());
+
+    mdns_setup();
+    printf("mdns_setup_done, %ld\n", millis());
+
+    web_setup();
+    printf("web_setup_done, %ld\n", millis());
+
+    int ss = CONFIG_ARDUINO_LOOP_STACK_SIZE;
+    if (ss < 16384)
+        printf("WARNING STACK TOO SMALL, %ld\n", millis());
+    printf("Stack Size %d\n", ss);
+
+    alarm_setup();
+    printf("alarm_setup %ld\n", millis());
+
+    accel_read();
+    display_setup();
+    printf("display_setup  %ld\n", millis());
+    
+    menu_setup();
+    printf("menu_setup  %ld\n", millis());
+
+    printf("Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
+
     int dt=1;
     for(;;) {
         t0 = millis();
-#ifdef DEMO
-        demo_draw(dt);
-#else
         wireless_poll();
         keys_poll();
         serial_poll();
@@ -170,7 +119,7 @@ extern "C" void app_main(void)
 
         display_poll();
         history_poll();
-#endif        
+
         // sleep remainder of second
         dt = millis() - t0;
 

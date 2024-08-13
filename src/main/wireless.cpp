@@ -145,8 +145,10 @@ void air_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer,
         return;
 
     writer.Key("pressure");
+    writer.SetMaxDecimalPlaces(5);
     writer.Double(pressure);
     writer.Key("temperature");
+    writer.SetMaxDecimalPlaces(2);
     writer.Double(temperature);
     writer.Key("rel_humidity");
     writer.Double(rel_humidity);
@@ -253,6 +255,7 @@ struct air_packet_t {
     int16_t temperature;    // in 100th/deg C
     uint16_t rel_humidity;  // in 100th %
     uint16_t air_quality;   // in 100th %
+    uint16_t reserved;
     uint16_t battery_voltage; // in 100th of volts
     uint16_t crc16;
 } __attribute__((packed));
@@ -291,7 +294,7 @@ void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
 static void setup_wifi() {
     //settings_wifi_ap_mode=true;
     //printf("wifi mode %d\n", settings_wifi_ap_mode);
-    if (settings_wifi_ap_mode) {
+    if (1||settings_wifi_ap_mode) {
         //Set device in AP mode to begin with
         WiFi.mode(WIFI_AP);
         // configure device AP mode
@@ -305,7 +308,7 @@ static void setup_wifi() {
         printf("Soft-AP IP address = %s\n", WiFi.softAPIP().toString().c_str());
 
         // This is the mac address of the Slave in AP Mode
-        printf("AP MAC: %s", WiFi.softAPmacAddress().c_str());
+        printf("AP MAC: %s\n", WiFi.softAPmacAddress().c_str());
 
     } else {
         //WiFi.mode(WIFI_AP_STA);
@@ -786,6 +789,7 @@ std::string wireless_json_sensors()
 {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    writer.SetMaxDecimalPlaces(2);
 
     wireless_write_transmitters(writer, true);
     return buffer.GetString();

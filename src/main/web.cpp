@@ -47,6 +47,7 @@ static std::string jsonDisplayData() {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
+    writer.SetMaxDecimalPlaces(2);
     float value;
     std::string source;
     uint32_t time, t0=millis();
@@ -63,8 +64,9 @@ static std::string jsonDisplayData() {
                 writer.Key("latency");
                 writer.Int((int)(t0-time));
             }
+            writer.EndObject();
         }
-    writer.EndArray();
+    writer.EndObject();
 
     return buffer.GetString();
 }
@@ -74,6 +76,7 @@ static std::string jsonCurrent()
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
+    writer.SetMaxDecimalPlaces(2);
     writer.StartObject(); {
         writer.Key("wind");
         writer.StartObject(); {
@@ -161,7 +164,7 @@ std::string processor(const std::string& var)
     if(var == "MIRROR")  return Checked(settings.mirror);
     if(var == "POWERDOWN")  return Checked(settings.powerdown);
     if(var == "DISPLAYPAGES") return get_display_pages();
-    if(var == "VERSION")    return float_to_str(VERSION);
+    if(var == "VERSION")    return float_to_str(VERSION, 2);
     return std::string();
 }
 
@@ -213,7 +216,7 @@ std::string processor_alarms(const std::string& var)
     if(var == "PYPILOT_ALARM_NO_MOTORCONTROLLER")       return Checked(settings.pypilot_alarm_no_motor_controller);
     if(var == "PYPILOT_ALARM_LOST_MODE")       return Checked(settings.pypilot_alarm_lost_mode);
     
-    if(var == "VERSION")    return float_to_str(VERSION);
+    if(var == "VERSION")    return float_to_str(VERSION, 2);
     return std::string();
 }
 
@@ -221,6 +224,7 @@ String processor_alarms_helper(const String &c)
 {
     return processor_alarms(c.c_str()).c_str();
 }
+
 
 static ArRequestHandlerFunction getRequest(const char *path, AwsTemplateProcessor processor=nullptr)
 {
@@ -236,7 +240,17 @@ static ArRequestHandlerFunction getRequest(const char *path, AwsTemplateProcesso
         
         int size = data_files[i].size;
         const char *data = data_files[i].data;
-        request->send("text/plain", size, [size, data](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+        String p(path);
+
+        String type = "text/plain";
+        if(p.endsWith(".html"))
+           type = "text/html";
+        else if(p.endsWith(".js"))
+           type = "text/javascript";
+        else if(p.endsWith(".css"))
+           type = "text/css";
+            
+        request->send(type, size, [size, data](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
             int r = size - index;
             int len = r > maxLen ? maxLen : r;
             memcpy(buffer, data + index, len);
@@ -453,6 +467,8 @@ void web_setup()
         if (request->hasParam("data_range"))
             data_range = request->getParam("data_range")->value().c_str();
 
+        //printf("GET HISTORY %s %s\n", data_type.c_str(), data_range.c_str());
+
         int item = -1, range = -1;
         for(int i=0; i<DISPLAY_COUNT; i++)
             if(display_get_item_label((display_item_e)i) == data_type) {
@@ -461,16 +477,17 @@ void web_setup()
             }
 
         for(int i=0; i<HISTORY_RANGE_COUNT; i++)
-            if(history_get_label((history_range_e)i) == data_type) {
+            if(history_get_label((history_range_e)i) == data_range) {
                 range = i;
                 break;
             }
 
-        if(item >= 0 && range >= 0)
-            request->send(200, "text/plain", history_get_data
-                          ((display_item_e)item,(history_range_e)range).c_str());
-        else
-            request->send(404);
+        //printf("GET HISTORY %d %d\n", item, range);
+
+        std::string data = history_get_data((display_item_e)item,(history_range_e)range);
+        //printf("GET HISTORY %s\n", data.c_str());
+
+        request->send(200, "text/plain", data.c_str());
     });
 
     // serve all files
@@ -488,6 +505,8 @@ void web_setup()
 
 void web_poll()
 {
+    ws.cleanupClients();
+
     uint32_t t = millis();
 
     static uint32_t last_sock_update;
@@ -495,10 +514,13 @@ void web_poll()
         return;
     last_sock_update = t;
 
-    std::string s = jsonCurrent();
-    if(!s.empty()) {
-        //println("ws: " + s);
-        ws.textAll(s.c_str());
+    if(ws.count())
+    {
+        std::string s = jsonCurrent();
+        if(!s.empty()) {
+            //println("ws: " + s);
+            ws.textAll(s.c_str());
+        }
     }
 
     static uint32_t last_client_update;

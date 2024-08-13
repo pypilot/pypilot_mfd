@@ -28,3 +28,5 @@ int str_to_int(const std::string &s);
 bool endsWith(const std::string& str, const std::string& suffix);
 
 uint32_t gettime();
+
+void test_operation_speeds();

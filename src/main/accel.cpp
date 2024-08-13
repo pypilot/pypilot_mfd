@@ -29,8 +29,11 @@ bool detect_address(uint8_t address)
 }
 
 void accel_setup() {
+#ifdef CONFIG_IDF_TARGET_ESP32S3
     Wire.begin(40, 41);
-
+#else
+    Wire.begin();
+#endif
     // detect address
     if(!detect_address(DEVICE_ADDRESS0) && !detect_address(DEVICE_ADDRESS1)) {
         printf("failed to detect LIS2DW12 at either address!\n");

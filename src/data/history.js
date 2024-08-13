@@ -10,7 +10,7 @@
 function request() {
     var data_type = document.getElementById('data_type');
     var data_range = document.getElementById('data_range');
-    const url = 'history?data_type=' + data_type.value + '&data_range=' + data_type.range;
+    const url = 'history?data_type=' + data_type.value + '&data_range=' + data_range.value;
     fetch(url)
         .then(response => {
             if (!response.ok) {
@@ -40,50 +40,91 @@ function plot(data)
     document.getElementById('low').innerText = data['low'];
 
     let d = data['data'];
-    let xValues = [];
+
+    let datasets = [];
     let data1 = [];
-    for(var i=0; i<=10; i++)
-	xValues.push(tt/i);
+    let mint = -1, maxt = -1;
 
-    for(var i=0; i<d.length(); i++)
-        data1.push({x:d['time'], y:d['value']});
+    function push_data() {
+        data1.reverse();
+        if(data1.length)
+            datasets.push({
+                data: data1,
+                borderColor: "red",
+                fill: false,
+                pointRadius: 0,
+                showLine: true
+            });
+        data1 = [];
+    }    
 
-    if(theChart)
-        theChart.destroy();
-    theChart = new Chart("chart", {
-        type: "line",
-    data: {
-        labels: xValues,
-        datasets: [{
-            data: data1,
-            borderColor: "red",
-            fill: false,
-            pointRadius: 0
-        }]
-    },
-    options: {
-        legend: {display: false},
-        plugins: {
-            legend: {display: false},
-            title: {
-                display: false,
-                text: 'Custom Chart Title'
-            }
-        },
-        scales: {
-            x: {
-                title: {
-                    display: true,
-                    text: "Time"
-                }
-            },
-            y: {
-                title: {
-                    display: true,
-                    text: "Value"
-                }
-            }
+    for(var i=0; i<d.length; i++) {
+        let e = d[i];
+        if(typeof e[1] === "boolean") {
+            push_data();
+        } else {
+            let t = e[0];
+            let v = e[1];
+            data1.push({x:t, y:v});
+            if(maxt == -1 || t > maxt)
+                maxt = t;
+            if(mint == -1 || t < mint)
+                mint = t;
+        //    console.log('t: ' + t + ' v: ' + v);
         }
     }
-  });
+    push_data();
+        
+    
+    let xValues = [];
+    for(var i=0; i<=10; i++)
+	xValues.push(mint+i*(maxt-mint)/10);
+
+
+    if(theChart) {
+        theChart.data.datasets = datasets;
+        theChart.update();
+    } else {
+        theChart = new Chart("chart", {
+            type: "scatter",
+            data: {
+                labels: xValues,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 0
+                },
+                legend: {display: false},
+                plugins: {
+                    legend: {display: false},
+                    title: {
+                        display: false,
+                        text: 'Custom Chart Title'
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: "Time"
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: "Value"
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    setTimeout(request, 1000*tt/80);
 }
+
+// initial request
+request();

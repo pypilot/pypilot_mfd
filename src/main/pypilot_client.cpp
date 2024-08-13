@@ -185,6 +185,7 @@ void pypilotClient::poll()
         if(watchlist.size()) {
             rapidjson::StringBuffer s;
             rapidjson::Writer<rapidjson::StringBuffer> writer(s);
+            writer.SetMaxDecimalPlaces(6);
             writer.StartObject();
             for(std::map<std::string, float>::iterator it = watchlist.begin();
                 it != watchlist.end(); it++) {

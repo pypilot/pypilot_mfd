@@ -101,12 +101,17 @@ void keys_poll()
         buzzer_buzz(in_menu ? 1000 : 600, 50, 0);
         in_menu = !in_menu;
     } else if (pressed(KEY_PWR, false)) {
+        printf("KEY PWR\n");
         display_toggle();
         menu_reset();
         if(settings.powerdown) {
             while(!digitalRead(0)); // wait for button to release
             esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, LOW);
-            printf("going to sleep");
+            printf("going to sleep\n");
+            ledcDetach(14);
+            pinMode(14, OUTPUT);  // strap for display
+            digitalWrite(14, 0);
+
             esp_deep_sleep_start();
         }
     } else if (held(KEY_PWR))

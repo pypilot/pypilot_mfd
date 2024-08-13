@@ -286,15 +286,16 @@ struct alarm_display : public grid_display
         default: c=0; break;
         }
 
+
         if(item != DISPLAY_COUNT) {
             if(display_data_get(item, c))
-                current.label = std::string(c, 2);
+                current.label = float_to_str(c, 2);
             else
                 current.label = " N/A ";
         }
 
         std::string s_reason;
-        float dt = alarm_last(alarm, s_reason);
+        uint32_t dt = alarm_last(alarm, s_reason);
         if(!dt) {
             last.label = "never";
             reason.label = "";

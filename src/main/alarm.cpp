@@ -37,7 +37,6 @@ static uint32_t last_alarm_trigger[ALARM_COUNT];
 static std::string alarm_reason[ALARM_COUNT];
 static void trigger(alarm_e alarm, std::string reason="")
 {
-    //printf("alarm trigger %d\n", alarm);
     uint32_t t = millis();
     if(t - last_alarm_trigger[alarm] < 5000)
         return;
@@ -111,8 +110,6 @@ static void alarm_poll_speed(bool enabled, int min_speed_limit, int max_speed_li
     if(!display_data_get(item, speed))
         trigger(alarm);
 
-   // printf("alarm poll speed %f %d %d\n", speed, min_speed_limit, max_speed_limit);
-
     if(speed < min_speed_limit)
         trigger(alarm, "min speed");
     else if(speed > max_speed_limit)
@@ -125,8 +122,8 @@ static void alarm_poll_weather()
         float pressure;
         if(!display_data_get(BAROMETRIC_PRESSURE, pressure))
             trigger(WEATHER_ALARM);
-        if(pressure < settings.weather_alarm_min_pressure)
-            trigger(WEATHER_ALARM, "absolute pressure");
+        if(pressure*1000 < settings.weather_alarm_min_pressure)
+            trigger(WEATHER_ALARM, "pressure");
     }
 
     if(settings.weather_alarm_pressure_rate) {
@@ -238,7 +235,7 @@ static void alarm_poll_pypilot()
 
     if(settings.pypilot_alarm_no_motor_controller) {
         if(pypilot_client_value("servo.controller") == "none")
-            trigger(PYPILOT_ALARM, "no motor controller");
+            trigger(PYPILOT_ALARM, "no motor contr");
         pypilot_client_strobe();
     }
 

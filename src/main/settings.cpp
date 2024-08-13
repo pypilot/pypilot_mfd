@@ -42,10 +42,10 @@ static bool settings_load_suffix(std::string suffix="")
         return false;
     }
 #endif    
-    //    listDir(SPIFFS, "/", 0);
+    //listDir(SPIFFS, "/", 0);
     //settings.channel = 6;
 
-    printf("settings load\n");
+    printf("settings load 1 %ld\n", millis());
 
     // start with default settings
     settings.magic = MAGIC;
@@ -56,6 +56,7 @@ static bool settings_load_suffix(std::string suffix="")
 #ifndef __linux__
     String sfilename = filename.c_str();
     File file = SPIFFS.open(sfilename, "r");
+    printf("settings load 2 %ld\n", millis());
 
     if(file && !file.isDirectory()) {
         std::string data;
@@ -74,22 +75,23 @@ static bool settings_load_suffix(std::string suffix="")
     }
 #endif
 
-    if(ret || !s.IsObject() || !s.HasMember("magic") || s["magic"].GetString() != settings.magic) {
+    if(!ret || !s.IsObject() || !s.HasMember("magic") || s["magic"].GetString() != settings.magic) {
         ret = false;
         printf("settings file '%s' magic identifier failed, will ignore data\n", filename.c_str());
     }
+    printf("settings load 3 %ld\n", millis());
 
     if(!ret) {
         if(suffix.empty())
             return false;
-        s.Parse("{}").HasParseError();
+         s.Parse("{}").HasParseError();
     }        
 
-#define LOAD_SETTING_B(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].GetBool(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_I(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].GetInt(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_F(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].GetFloat(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_S(NAME, DEFAULT)   if(s.HasMember(#NAME)) settings.NAME = s[#NAME].GetString(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.HasMember(#NAME)) settings.NAME = (TYPE)(int)s[#NAME].GetInt(); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_B(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsBool()) settings.NAME = s[#NAME].GetBool(); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_I(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = s[#NAME].GetInt(); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_F(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsDouble()) settings.NAME = s[#NAME].GetFloat(); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_S(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsString()) settings.NAME = s[#NAME].GetString(); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = (TYPE)(int)s[#NAME].GetInt(); else settings.NAME = DEFAULT;
 
 #define LOAD_SETTING_BOUND(NAME, DEFAULT, MIN, MAX) \
     LOAD_SETTING_I(NAME, DEFAULT) \
@@ -115,7 +117,6 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_S(nmea_client_addr, "")
     LOAD_SETTING_I(nmea_client_port, 0);
     LOAD_SETTING_I(nmea_server_port, 3600);
-
     LOAD_SETTING_B(compensate_wind_with_accelerometer, false)
     LOAD_SETTING_B(compute_true_wind_from_gps, false)
     LOAD_SETTING_B(compute_true_wind_from_water, true)
@@ -137,6 +138,7 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_B(powerdown, false)
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
+    printf("settings load 4 %ld\n", millis());
 
     // alarms
     LOAD_SETTING_B(anchor_alarm, false)
@@ -187,9 +189,11 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_S(signalk_addr, "10.10.10.1")
     LOAD_SETTING_I(signalk_port, 3000)
 
+    printf("settings load 5 %ld\n", millis());
     // transmitters
     if(s.HasMember("transmitters"))
         wireless_read_transmitters(s["transmitters"]);
+    printf("settings load 6 %ld\n", millis());
 
     return ret;
 }
@@ -198,6 +202,7 @@ static bool settings_store_suffix(std::string suffix="")
 {
     rapidjson::StringBuffer s;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> w(s);
+    w.SetMaxDecimalPlaces(6);
 
     w.StartObject();
     
@@ -216,8 +221,8 @@ static bool settings_store_suffix(std::string suffix="")
 
     STORE_SETTING_B(input_usb)
     STORE_SETTING_B(output_usb)
-    STORE_SETTING_B(usb_baud_rate)
-    STORE_SETTING_B(rs422_baud_rate)
+    STORE_SETTING_I(usb_baud_rate)
+    STORE_SETTING_I(rs422_baud_rate)
 
     STORE_SETTING_B(input_wifi)
     STORE_SETTING_B(output_wifi)
@@ -297,6 +302,8 @@ static bool settings_store_suffix(std::string suffix="")
     // transmitters
     w.Key("transmitters");
     wireless_write_transmitters(w, false);
+
+    w.EndObject();
 
 #ifndef __linux__
     std::string filename = settings_filename + suffix;

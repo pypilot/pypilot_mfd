@@ -165,7 +165,7 @@ std::string millis_to_str(uint32_t dt)
             continue;
         int v = t / d;
         t -= d*v;
-        l += float_to_str(v) + (char)parts[i][0] + ' ';       
+        l += float_to_str(v,0) + (char)parts[i][0] + ' ';       
     }
 
     return l + float_to_str(t, 1) + "s";
@@ -231,4 +231,45 @@ bool endsWith(const std::string& str, const std::string& suffix) {
         return false;
     }
     return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+}
+
+template <typename T>
+static void test_operation()
+{
+    uint64_t t0 = esp_timer_get_time();
+
+    T x = t0;
+    for(int i=0; i<1000000; i++)
+        x += x+x;
+    
+    uint64_t t1 = esp_timer_get_time();
+
+    T y = t1;
+    for(int i=0; i<1000000; i++)
+        x += y-x;
+
+    uint64_t t2 = esp_timer_get_time();
+
+    T z = t0;
+    for(int i=0; i<1000000; i++)
+        z += z*z;
+    
+    uint64_t t3 = esp_timer_get_time();
+
+    T w = t1;
+    for(int i=0; i<1000000; i++)
+        w += w/z;
+
+    uint64_t t4 = esp_timer_get_time();
+
+    printf(__PRETTY_FUNCTION__);
+    printf(" testop %d %d %d %d %d %d %d %d\n", (int)(t1-t0), (int)(t2-t1), (int)(t3-t2), (int)(t4-t3), (int)x, (int)y, (int)z, (int)w);
+}
+
+void test_operation_speeds()
+{
+    test_operation<uint32_t>();
+    test_operation<uint64_t>();
+    test_operation<float>();
+    test_operation<double>();
 }

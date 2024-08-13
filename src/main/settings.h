@@ -9,7 +9,7 @@
 #include <string>
 #include <map>
 
-#define VERSION 0.1
+#define VERSION 0.11
 
 //#define OLD
 

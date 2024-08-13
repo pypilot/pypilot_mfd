@@ -92,6 +92,7 @@ def create_character(sz, c):
     return size[0], size[1], top, byte
 
 
+# make work for °
 characters = 'abcdefghijklmnopqrstuvwxyz1234567890`~!@#$%^&*()-=_+,./<>?[]{}|;\':" ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 big_characters = '1234567890.~- '
 #big_characters = characters

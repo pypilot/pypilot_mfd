@@ -113,6 +113,9 @@ void query_mdns_task(void *)
 
 void mdns_setup()
 {
+    ESP_ERROR_CHECK( mdns_init() );
+    ESP_ERROR_CHECK( mdns_hostname_set("pypilot_mfd") );
+
     TaskHandle_t xHandle = NULL;
     xTaskCreate(query_mdns_task,       /* Function that implements the task. */
                     "mdns",          /* Text name for the task. */
@@ -121,9 +124,6 @@ void mdns_setup()
                     tskIDLE_PRIORITY,/* Priority at which the task is created. */
                     &xHandle );     
 
-    if(mdns_hostname_set("pypilot_mfd"))
-        printf("Error starting mDNS hostname");
-
     if(mdns_service_add(NULL, "http", "tcp", 80, NULL, 0))
-        printf("Error starting mDNS");
+        printf("Error starting mDNS\n");
 }

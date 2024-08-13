@@ -36,10 +36,11 @@ enum display_item_e { WIND_SPEED,
                       AIS_DATA,
                       PYPILOT,
                       DISPLAY_COUNT };
+
 enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, COMPUTED_DATA, DATA_SOURCE_COUNT};
 
 void display_setup();
-void display_toggle(bool on=true);
+void display_toggle(bool on=false);
 void display_set_mirror_rotation(int);
 void display_change_page(int dir);
 void display_enter_exit_menu();

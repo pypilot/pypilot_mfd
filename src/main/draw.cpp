@@ -62,17 +62,25 @@ void draw_setup(int rotation)
 
 void draw_thick_line(int x0, int y0, int x1, int y1, int w)
 {
+    if(w < 2)
+        draw_line(x0, y0, x1, y1);
+
     int ex = x1-x0, ey = y1-y0;
     int d = sqrt(ex*ex + ey*ey);
-    if(d == 0)
-        return;
-    ex = ex*w/d/2;
-    ey = ey*w/d/2;
 
-    int ax = x0+ey, ay = y0-ex;
-    int bx = x0-ey, by = y0+ex;
-    int cx = x1+ey, cy = y1-ex;
-    int dx = x1-ey, dy = y1+ex;
+     if(d == 0)
+        return;
+
+    int ex0 = (ex*w/d+(ex > 0 ? 1 : -1))/2;
+    int ey0 = (ey*w/d+(ey > 0 ? 1 : -1))/2;
+    int ex1 = ex*w/d/2;
+    int ey1 = ey*w/d/2;
+
+    int ax = x0+ey0, ay = y0-ex0;
+    int bx = x0-ey1, by = y0+ex1;
+    int cx = x1+ey0, cy = y1-ex0;
+    int dx = x1-ey1, dy = y1+ex1;
+ 
     u8g2.drawTriangle(ax, ay, bx, by, cx, cy);
     u8g2.drawTriangle(bx, by, dx, dy, cx, cy);
 }
@@ -84,8 +92,8 @@ void draw_circle(int x, int y, int r, int thick)
         thick += r-1;
         r = 1;
     }
-    for (int i = -thick; i <= thick; i++)
-        for (int j = -thick; j <= thick; j++)
+    for (int i = -thick; i < thick; i++)
+        for (int j = -thick; j < thick; j++)
             u8g2.drawCircle(x + i, y + j, r);
 }
 
@@ -631,6 +639,7 @@ void draw_circle_thin(int xm, int ym, int r)
 void draw_circle_orig(int xm, int ym, int r, int th)
 {
     /* draw anti-aliased ellipse inside rectangle with thick line... could be optimized considerably */
+    r--; // todo: is this correct??
     convert_coords(xm, ym);
     int x0 = xm - r, x1 = xm + r, y0 = ym - r, y1 = ym + r;
     

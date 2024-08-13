@@ -10,8 +10,48 @@
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
 
+#define EEPROM_WRITE_DELAY 10
+
 // 5m, 1 hr, 1d
+#ifdef __linux__
+
+#include <math.h>
+#define RTC_DATA_ATTR
+struct Wire_t {
+    Wire_t() { cnt = 0; }
+    void beginTransmission(uint8_t a)
+        { pos = 0;
+            addr=0;
+        }
+    void write(uint8_t d) {
+        if(pos < 2) {
+            addr |= d;
+            if(pos == 0) {
+                addr <<= 8;
+            }
+        } else
+            data[addr++] = d;
+        pos++;
+    }
+    int endTransmission() { return 0; }
+
+    void requestFrom(uint8_t addr, int c) { cnt = c; }
+    bool available() { return cnt; }
+    uint8_t read() {
+        cnt--;
+        return data[addr++];
+    }
+
+    int addr;
+    int pos;
+    int cnt;
+    uint8_t data[64*1024*1024];
+};
+
+Wire_t Wire;
+#else
 #include <Wire.h>
+#endif
 
 #include "display.h"
 #include "history.h"
@@ -70,9 +110,8 @@ struct history
     history() {
         // put NAN entry in each value to split history and new data
         int32_t t = cold_time();
-        for(int range = 0; range < HISTORY_RANGE_COUNT; range++) {
+        for(int range = 0; range < HISTORY_RANGE_COUNT; range++)
             data[range].push_back(history_element(NAN, t));
-        }
     }
 
     void put(uint8_t index, float value)
@@ -84,15 +123,20 @@ struct history
             float &llvalue_min = min_llvalue[range];
             float &llvalue_max = max_llvalue[range];
 
-            //printf("valus %d %d %d %d %f %f %f\n", range, data[range].size(), data_high[range].size(), data_low[range].size(), value, lvalue, llvalue);
 
             uint32_t range_time = history_range_time[range];
             int range_timeout = range_time / 80;
 
             uint32_t fronttime = data[range].empty() ? 0 : data[range].front().time;
             uint32_t dt = time - fronttime;
+
+            //if(range > 0)
+            //printf("valus %d %d %d %d %f %ld %d\n", range, data[range].size(), data_high[range].size(), data_low[range].size(), value, dt, range_timeout);
+
+
             if(dt < range_timeout)
                 break;
+
             float minv, maxv;
             if(range > 0) {
                 // average previous range data
@@ -102,21 +146,22 @@ struct history
                 int count = 0;
                 for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) 
                 {
-                    if(!isnan(value))
+                    if(!isnan(it->value)) {
                         value += it->value;
-                    if(it->value < minv)
-                        minv = it->value;
-                    if(it->value > maxv)
-                        maxv = it->value;
-                    count++;
+                        if(it->value < minv)
+                            minv = it->value;
+                        if(it->value > maxv)
+                            maxv = it->value;
+                        count++;
+                    }
                     if(it->time < time - range_timeout)
                         break;
                 }
                 if(count == 0)
-                    value = NAN;
-                else
-                    value /= count;
-                store_packet(range, index, HISTORY_VALUE, time, value);
+                    break;
+
+                store_packet(range-1, index, HISTORY_VALUE, time, value);
+                value /= count;
             } else
                 minv = value, maxv = value;
 
@@ -128,14 +173,14 @@ struct history
             else if(llvalue_max < lvalue_max && lvalue_max >= maxv) {
                 data_high[range].push_front(history_element(lvalue_max, time));
                 if(range > 0)
-                    store_packet(range, index, HISTORY_HIGH, time, value);
+                    store_packet(range-1, index, HISTORY_HIGH, time, value);
             }
             if(data_low[range].empty())
                 data_low[range].push_front(history_element(minv, time));
             else if(llvalue_min > lvalue_min && lvalue_min <= minv) {
                 data_low[range].push_front(history_element(lvalue_min, time));
                 if(range > 0)
-                    store_packet(range, index, HISTORY_LOW, time, value);
+                    store_packet(range-1, index, HISTORY_LOW, time, value);
             }
 
             llvalue_min = lvalue_min;
@@ -161,15 +206,17 @@ struct history
         }
 
         // sanity check
-        if(d->front().time < time)
+        if(d->empty() || d->back().time > time) {
+            //uint32_t dt = d->back().time - time;            
             d->push_back(history_element(value, time));
+        }
     }
 
     void expire(std::list<history_element> &data, uint32_t time, int range_time)
     {
         while(!data.empty()) {
             history_element &back = data.back();
-            if(time - back.time < range_time * 1000)
+            if(time - back.time < range_time)
                 break;
             data.pop_back();
         }
@@ -187,7 +234,7 @@ void history_put(display_item_e item, float value)
         }
 }
 
-std::list<history_element> *history_find(display_item_e item, int r, uint32_t &total_seconds, float &high, float &low)
+std::list<history_element> *history_find(display_item_e item, int r, int &total_seconds, float &high, float &low)
 {
     for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
         if(history_items[i] == item) {
@@ -200,12 +247,12 @@ std::list<history_element> *history_find(display_item_e item, int r, uint32_t &t
             float v = histories[i].data[r].front().value;
             high = v;
             for(std::list<history_element>::iterator it = data_high.begin(); it!=data_high.end(); it++)
-                if(it->value > high)
+                if(it->value > high || isnan(high))
                     high = it->value;
 
             low = v;
             for(std::list<history_element>::iterator it = data_low.begin(); it!=data_low.end(); it++)
-                if(it->value < low)
+                if(it->value < low || isnan(low))
                     low = it->value;
             return &histories[i].data[r];
         }
@@ -217,26 +264,36 @@ std::list<history_element> *history_find(display_item_e item, int r, uint32_t &t
 
 std::string history_get_data(display_item_e item, history_range_e range)
 {
-    uint32_t total_seconds;
+    int total_seconds;
     float high, low;
+    if(range < 0 || range >= HISTORY_RANGE_COUNT)
+        return "{}";
+    
     std::list<history_element> *data = history_find(item, range, total_seconds, high, low);
     if(!data)
-        return "";
+        return "{}";
 
+    if(isnan(high))
+        high = 0;
+    if(isnan(low))
+        low = 0;
+
+    
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    writer.SetMaxDecimalPlaces(item == BAROMETRIC_PRESSURE ? 5 : 2);
 
-    int i = 0;
     writer.StartObject();
     writer.Key("data");
     writer.StartArray();
     for(std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
-        writer.StartObject();
-        writer.Key("value");
-        writer.Double(it->value);
-        writer.Key("time");
+        writer.StartArray();
         writer.Double(it->time);
-        writer.EndObject();
+        if(isnan(it->value))
+           writer.Bool(false);
+        else
+           writer.Double(it->value);
+        writer.EndArray();
     }
     writer.EndArray();
     writer.Key("high");
@@ -246,6 +303,8 @@ std::string history_get_data(display_item_e item, history_range_e range)
     writer.Key("total_time");
     writer.Double(total_seconds);
     writer.EndObject();
+
+//    printf("History Get Data %s\n", buffer.GetString());
 
     return buffer.GetString();
 }
@@ -286,17 +345,36 @@ static uint8_t crc8(const uint8_t *data, size_t len) {
 1 byte crc8
  */
 
+static uint32_t eeprom_write_time;
+static void eeprom_begin_read(int offset)
+{
+    int tries = 0;
+    for(;;) {
+        uint32_t t = millis();
+        int d = EEPROM_WRITE_DELAY - (t - eeprom_write_time);
+        if(d > 0)
+            delay(d);
+
+        Wire.beginTransmission(DEVICE_ADDRESS);
+        Wire.write((offset>>8)&0xff);
+        Wire.write(offset & 0xff);
+        Wire.endTransmission();
+
+        eeprom_write_time = millis();
+
+        int len = Wire.requestFrom(DEVICE_ADDRESS, 8);
+        //printf("request from READ RET %d %d %d\n", len, tries, d);
+        if(len == 8)
+            return;
+        tries++;
+    }
+}    
 
 static int32_t read_packet_time(int offset)
 {
     offset *= 8;
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    Wire.write((offset>>8)&0xff);
-    Wire.write(offset & 0xff);
-    Wire.endTransmission();
-    // first pass find
+    eeprom_begin_read(offset);
 
-    Wire.requestFrom(DEVICE_ADDRESS, 8);
     uint8_t data[8] = { 0 }, i=0;
     while (Wire.available() && i < 8)
         data[i++] = Wire.read();
@@ -308,18 +386,19 @@ static int32_t read_packet_time(int offset)
 
 static bool read_packet(bool absolute, uint8_t range, int offset)
 {
+    //printf("history read packet %d %d %d\n", absolute, range, offset);
     offset *= 8;
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    Wire.write((offset>>8)&0xff);
-    Wire.write(offset & 0xff);
-    Wire.endTransmission();
 
-    Wire.requestFrom(DEVICE_ADDRESS, 8);
+    eeprom_begin_read(offset);
     uint8_t data[8] = { 0 }, i=0;
     while (Wire.available() && i < 8)
         data[i++] = Wire.read();
-    if(i != 8 || data[7] != crc8(data, 7))
+    if(i != 8 || data[7] != crc8(data, 7)) {
+        printf("bail, history fail crc %x %x\n", data[7], crc8(data, 7));
         return false;
+    }
+
+    // printf("GOT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
 
     // time on eeprom is absolute since epoch
     int32_t time = *(uint32_t*)data;
@@ -329,44 +408,70 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
     int32_t curtime = cold_time();
 
     // sanity check, if history data is after current time, it is invalid, maybe our epoch is wrong?
-    if(time > curtime)
+    if(time > curtime) {
+        printf("bail, history after cur time %ld %ld\n", time, curtime);
         return false;
+    }
 
     uint16_t value = *(uint16_t*)(data+4);    
-    type itype = (type)((data[6]&0x3)>>4);
+    type itype = (type)((data[6]>>4)&0x3);
     uint8_t item = data[6]&0xf;
 
-    if(item >= HISTORY_ITEM_COUNT)
+    if(item >= HISTORY_ITEM_COUNT) {
+        printf("bail corrupt item %d\n", item);
         return false; // invalid, corrupted data?
+    }
     
     // apply fixed to float conversion of 2 byte data
     float v = 0;
-    switch(history_items[item]) {
-    case DEPTH: case GPS_SPEED: case WATER_SPEED:
-    case WIND_SPEED: v = value / 100.0f; break;
-    case BAROMETRIC_PRESSURE: v = value / 100.0f + 1000; break;
-    default: break;
+    if(value == 0xffff)
+        v = NAN;
+    else {
+        switch(history_items[item]) {
+        case DEPTH: case GPS_SPEED: case WATER_SPEED:
+        case WIND_SPEED: v = value / 100.0f; break;
+        case BAROMETRIC_PRESSURE: v = value / 100.0f + 1000; break;
+        default: break;
+        }
     }
 
     uint32_t age = curtime - time;
     
     uint32_t max_age = history_range_time[range+1];
-    if(age > max_age)
-        return range == 4; // at higher range if our time is out of range, we are done
+    if(age > max_age) {
+        printf("bail max age %ld %ld\n", age, max_age);
+        return false;// range == 4; // at higher range if our time is out of range, we are done
+    }
 
     // add to back of history
+    //printf("history put back v%d %ld %f %d %ld %d %x\n", item, time, v, range, time, itype, data[6]);
     histories[item].put_back(time, v, range+1, itype);
     return true;
 }
 
 static void eeprom_store_packet(int position, uint8_t data[8]) {
     int offset = position * 8;
+
+    // printf("PUT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+
+    uint32_t t = millis();
+    int d = EEPROM_WRITE_DELAY - (t - eeprom_write_time);
+    if(d > 0) {
+        //printf("need delay %d\n", d);
+        delay(d);
+    }
+    
+    uint32_t t0 = millis();
     Wire.beginTransmission(DEVICE_ADDRESS);
     Wire.write((offset>>8)&0xff);
     Wire.write(offset & 0xff);
     for(int i=0; i<8; i++)
         Wire.write(data[i]);
     Wire.endTransmission();
+
+    uint32_t t1 = millis();
+    //printf("took to write %ld\n", t1-t0);
+    eeprom_write_time = t1;
 }
 
 static void eeprom_store(int position, uint8_t index, uint8_t type, uint32_t time, float value)
@@ -377,15 +482,19 @@ static void eeprom_store(int position, uint8_t index, uint8_t type, uint32_t tim
     *(uint32_t*)(packet) = t + epoch;
 
     uint16_t v = 0;
-    switch(history_items[index]) {
-    case DEPTH: case GPS_SPEED: case WATER_SPEED:
-    case WIND_SPEED: v = value *100; break;
-    case BAROMETRIC_PRESSURE: v = (value - 1000)*100; break;
-    default: break;
+    if(isnan(value))
+        v = 0xffff;
+    else {
+        switch(history_items[index]) {
+        case DEPTH: case GPS_SPEED: case WATER_SPEED:
+        case WIND_SPEED: v = value *100; break;
+        case BAROMETRIC_PRESSURE: v = (value - 1000)*100; break;
+        default: break;
+        }
     }
         
     *(uint16_t*)(packet+4) = v;
-    packet[6] = ((type&0x3)<<2) | (index & 0xf);
+    packet[6] = ((type&0x3)<<4) | (index & 0xf);
     packet[7] = crc8(packet, 7);
         
     eeprom_store_packet(position, packet);
@@ -424,12 +533,12 @@ struct history_eeprom_range_t {
 
     void store_packet(uint8_t index, uint8_t type, int32_t time, float value)
     {
-        int off, roff;
+        int off;
         switch(state) {
         case RELATIVE_READ:
         case RELATIVE_READY:
         case ABSOLUTE_SEARCH:
-         case COPY: // store packet to relative time region
+        case COPY: // store packet to relative time region
             off = eeprom_rel_write[range];
             eeprom_store(rel_start + off, index, type, time, value);
             off++;
@@ -468,6 +577,7 @@ struct history_eeprom_range_t {
                 eeprom_rel_write[range] = 0;
             }
             rel_read = eeprom_rel_write[range];
+            
             state = RELATIVE_READ;
             // fall through
         case RELATIVE_READ:
@@ -555,7 +665,7 @@ struct history_eeprom_range_t {
             // read one packet
             if(!read_packet(true, range, abs_start + abs_read)) {
                 state = ABSOLUTE_READY;
-                printf("eeprom finished reading absolute history2 %d\n", range);
+                printf("eeprom finished reading absolute history %d\n", range);
                 break;
             }
             break;
@@ -572,6 +682,7 @@ history_eeprom_range_t history_eeprom_range[4] = {{0}, {1}, {2}, {3}};
 
 static void store_packet(int range, uint8_t index, uint8_t type, int32_t time, float value)
 {
+    //printf("history store packet %d %d %d %ld %f\n", range, index, type, time, value);
     history_eeprom_range[range].store_packet(index, type, time, value);
 }
 
@@ -609,12 +720,19 @@ void history_set_time(uint32_t date, int hour, int minute, float second)
     epoch = time - t;
 }
 
-uint8_t cur_range;
+void history_reset()
+{
+    for(int i=0; i<4; i++)
+        history_eeprom_range[i].state = history_eeprom_range_t::INIT;
+}
+
+
 void history_poll()
 {
     if(!have_eeprom)
         return;
 
+    static uint8_t cur_range;
     history_eeprom_range[cur_range++].poll();
     if(cur_range == 4)
         cur_range = 0;
@@ -623,6 +741,11 @@ void history_poll()
 void history_setup()
 {
 //    Wire.begin();
+    printf("i2c clock is %ld\n", Wire.getClock());
+
+//    printf("i2c set clock %d\n", Wire.setClock(10000));
+//    printf("i2c clock is %ld\n", Wire.getClock());
+    
     Wire.beginTransmission(DEVICE_ADDRESS);
     int error = Wire.endTransmission();
 

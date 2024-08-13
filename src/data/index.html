@@ -131,6 +131,15 @@
     </div>
  
     <div class='box'>
+      <h2>Display Pages</h2>
+      <form action='display' method='post'>
+        <div class='col1-grid'>
+          %DISPLAYPAGES%
+        </div>
+      </form>
+    </div>
+
+    <div class='box'>
       <h2>Display</h2>
       <form action='display_auto' method='post'>
         <div class='col3-grid'>
@@ -166,9 +175,6 @@
             <label for='powerdown'>Powerdown display</label>
           </span>
         </div>
-        <div class='col1-grid'>
-          %DISPLAYPAGES%
-        </div>
         <div class='col3-grid'>
           <div> </div>
           <input class='button' type='submit' value='Submit'>
@@ -179,7 +185,7 @@
       </script>
     </div>
   </div>
-<h5>pypilot multi-function display %VERSION%</h5>
+<h5>pypilot multi-function display version %VERSION%</h5>
 <h5>written by Sean D'Epagnier</h5>
 </body>
 <script type='text/javascript' src='mfd.js'></script>

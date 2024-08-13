@@ -1,6 +1,5 @@
 # Name,   Type, SubType,  Offset,  Size, Flags
 nvs,      data, nvs,      0x10000,  0x4000,
-otadata,  data, ota,      ,         0x2000,
-factory,  app,  factory,  ,        3M,
-ota_0,    app,  ota_0,    ,        3M,
-spiffs,   data, spiffs,          , 192K
+otadata,  data, ota,      0x14000,  0x2000,
+factory,  app,  factory,  0x20000,  0x300000,
+spiffs,   data, spiffs,  0x320000,  0x100000

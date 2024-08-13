@@ -165,6 +165,7 @@ struct display_item : public display {
 struct text_display : public display_item {
     text_display(display_item_e _i, std::string _units = "")
         : display_item(_i), units(_units) {
+        x0 = 0;
         expanding = false;
         centered = false;
     }
@@ -179,7 +180,7 @@ struct text_display : public display_item {
             label_font = 8;
             draw_set_font(label_font);
             label_w = draw_text_width(str);
-            label_h = 10;
+            label_h = 8;
 
             if (label_w > w / 2 || label_h > h / 2) {
                 label_font = 7;
@@ -217,18 +218,22 @@ struct text_display : public display_item {
         //    label = false;
 
         int yp = y;
-        if (label_h) yp += label_h / 2;
-        yp += (h - ht) / 2;
         int xp;
         if (centered) {
             yp = y - ht / 2;
             xp = x - wt / 2;  // center text over x position
+            x0 = 0;
         } else {
-            if (ht + label_h < h)
+            if (ht + label_h < h) {
                 xp = x + (w - wt) / 2;
+                x0 = 0;
+                yp += (label_h + h - ht)/2;
             // center bounds
-            else  // right justify
+            } else {  // right justify
                 xp = x + w - wt;
+                x0 = label_w;
+                yp += (h - ht) / 2;
+            }
         }
         //printf("draw text %s %d %d %d %d %d %d %d %d\n", str.c_str(), x, y, w, h, wt, ht, xp, yp);
         draw_text(xp, yp, str);
@@ -264,9 +269,19 @@ struct text_display : public display_item {
     bool use_units;
     std::string units;
     int label_font;
-    int wt, ht;
+    int wt, ht, x0;
     int label_w, label_h;
     bool centered;  // currently means centered over x (and no label)  maybe should change this
+};
+
+struct generic_text_display : public text_display {
+    generic_text_display(display_item_e _i, const char *units, int _digits)
+        : text_display(_i, units) , digits(_digits) {}
+
+    std::string getTextItem() {
+        return float_to_str(display_data[item].value, digits);
+    }
+    int digits;
 };
 
 struct speed_text_display : public text_display {
@@ -278,14 +293,9 @@ struct speed_text_display : public text_display {
     }
 };
 
-struct angle_text_display : public text_display {
+struct angle_text_display : public generic_text_display {
     angle_text_display(display_item_e _i, int _digits = 0)
-        : text_display(_i, "°"), digits(_digits) {}
-
-    std::string getTextItem() {
-        return float_to_str(display_data[item].value, digits);
-    }
-    int digits;
+        : generic_text_display(_i, "°", _digits) {}
 };
 
 struct dir_angle_text_display : public angle_text_display {
@@ -300,6 +310,11 @@ struct dir_angle_text_display : public angle_text_display {
             return float_to_str(resolv(v, 180));
 
         return float_to_str(fabsf(v), digits);
+    }
+
+    void fit() {
+        text_display::fit();
+        ht = h*4/5;
     }
 
     void render() {
@@ -317,9 +332,11 @@ struct dir_angle_text_display : public angle_text_display {
             xa = .05, xb = .15f;
         else
             return;
-        int x1 = x + w * xa, x2 = x + w * xb, x3 = x + w * (xa * 2 + xb) / 3;
+        int w0 = w-x0;
+        int x1 = x + x0 + w0 * xa, x2 = x + x0 + w0 * xb, x3 = x + x0 + w0 * (xa * 2 + xb) / 3;
         int y1 = y + h / 2, y2 = y + h * .35f, y3 = y + h * .65f;
-        int t = h / 20;
+        int t = h / 30+1;
+
         draw_thick_line(x1, y1, x2, y1, t);
         draw_thick_line(x1, y1, x3, y2, t);
         draw_thick_line(x3, y3, x1, y1, t);
@@ -524,24 +541,58 @@ struct pypilot_command_display : public pypilot_text_display {
     }
 };
 
-struct stat_display : public text_display {
+struct stat_display : public display_item {
     stat_display(display_item_e _i)
-        : text_display(_i) {}
+        : display_item(_i) { expanding=false; }
 
-    virtual std::string getLabel() {
-        return display_get_item_label(item) + " Min/Max ";
+    void selectFont(std::string str) {
+        // based on width and height determine best font
+        int ht = h;
+        for (;;) {
+            if (!draw_set_font(ht))
+                return;
+
+            int wt = draw_text_width(str);
+            if (wt < w && ht < h/4)
+                break;
+            ht--;
+        }
     }
+    
+    virtual void render() {
+        //printf("stat display %d %d %d %d\n", x, y, w, h);
+        int ht = h/4;
+        std::string label = display_get_item_label(item) + " Min/Max ";
+        selectFont(label);
+        int sw = draw_text_width(label);
+        draw_color(YELLOW);
+        draw_text(x + (w - sw) / 2, y, label);
 
-    std::string getTextItem() {
-        uint32_t totalseconds;
+        int totalseconds;
         float high, low;
         std::list<history_element> *data = history_find(item, history_display_range,
                                                         totalseconds, high, low);
-        if (!data)
-            return " --- ";
+        std::string slow, shigh;
         int digits = 1;
+        if (!data)
+            slow = " --- ";
+        else {
+            slow = "low: " + float_to_str(low, digits);
+            shigh = "high: " + float_to_str(high, digits);
+        }
+
         draw_color(MAGENTA);
-        return "low: " + float_to_str(low, digits) + "  high: " + float_to_str(high, digits);
+        selectFont(slow);
+        sw = draw_text_width(slow);
+        draw_text(x + (w - sw) / 2, y + ht, slow);
+        sw = draw_text_width(shigh);
+        draw_text(x + (w - sw) / 2, y + 2*ht, shigh);
+
+        std::string history_label = history_get_label((history_range_e)history_display_range);
+        selectFont(history_label);
+        sw = draw_text_width(history_label);
+        draw_color(RED);
+        draw_text(x + (w - sw) / 2, y + h - ht, history_label);            
     }
 };
 
@@ -574,7 +625,7 @@ struct gauge : public display_item {
 
         int thick = r / 36;
         //int r2 = r - thick - 1;
-        draw_circle(xc, yc, r-1, thick);
+        draw_circle(xc, yc, r, thick);
     }
 
     void render_tick(float angle, int u, int &x0, int &y0) {
@@ -844,8 +895,8 @@ struct history_display : public display_item {
     void fit() {
         text.x = x + w / 4;
         text.y = y+3;
-        text.w = w / 2;
-        text.h = h/12;
+        text.w = w * 3/5;
+        text.h = h/10;
         text.fit();
     }
 
@@ -864,7 +915,7 @@ struct history_display : public display_item {
         draw_text(x + w - sw, y, history_label);
         text.render();
 
-        uint32_t totalseconds;
+        int totalseconds;
         float high, low;
         std::list<history_element> *data = history_find(item, history_display_range,
                                                         totalseconds, high, low);
@@ -888,37 +939,51 @@ struct history_display : public display_item {
         range = maxv - minv;
 
         int lxp = -1, lyp=0;
-        uint32_t t = esp_timer_get_time()/1000L;
+        uint32_t ltime = 0;
+        uint64_t total_ms = totalseconds * 1000;
+        uint64_t st = (uint64_t)start_time*1000 + esp_timer_get_time()/1000L;
+
         draw_color(ORANGE);
         for (std::list<history_element>::iterator it = data->begin(); it != data->end(); it++) {
-            int xp = w - (start_time*1000 + t - 1000*it->time) * w / (totalseconds * 1000);
+            int xp = w;
+            xp -= (st - 1000*it->time) * w / total_ms;
+
             if (xp < 0)
                 break;
+
             if(isnan(it->value)) 
                 lxp = -1;
             else {
                 int yp = h - 1 - (it->value - minv) * (h - 1) / range;
 
+                // if the time is sufficiently large,  insert a "gap"
+                int range_timeout = totalseconds / 60;
+                int dt = it->time - ltime;
+                if(dt > range_timeout)
+                    ; // nothing
+                else
                 if (lxp >= 0 && yp >= 0 && yp < h && lyp >= 0 && lyp < h) {
-                    if (xp - lxp < 3)
+                    //if (xp - lxp < 3)
                         draw_line(x + lxp, y + lyp, x + xp, y + yp);
                     //              if(abs(lxp - xp) > 100)
                     //printf("BADLINE ! %d %d %d %d %d %d %\n", cnt++, it->time, lastt, xp, lxp, yp, lyp);
                 }
                 lxp = xp, lyp = yp;
+                ltime = it->time;
             }
         }
 
         //render scale
         draw_color(WHITE);
         draw_text(x, y, float_to_str(maxv, digits));
-        draw_text(x, y + h / 2 - 4, float_to_str((minv + maxv) / 2, digits));
+        draw_text(x, y + h / 2 - 4, float_to_str((minv + maxv) / 2, digits+1));
         draw_text(x, y + h - 8, float_to_str(minv, digits));
 
         if (h > 100) {
+            draw_color(CYAN);
             std::string minmax = "low: " + float_to_str(low, digits) + "  high: " + float_to_str(high, digits);
             int sw = draw_text_width(minmax);
-            draw_text(x + (w - sw) / 2, y + ht*2, minmax);
+            draw_text(x + (w - sw) / 2, y + h-ht*2, minmax);
         }
     }
 
@@ -1307,6 +1372,9 @@ page::page(std::string _description)
 #define PRESSURE_H new history_display(PRESSURE_T, false)
 //#define PRESSURE_S     new stat_display(BAROMETRIC_PRESSURE)
 #define AIR_TEMP_T new temperature_text_display(AIR_TEMPERATURE)
+#define RELATIVE_HUMIDITY_T new generic_text_display(RELATIVE_HUMIDITY, "%", 2)
+#define BATTERY_VOLTAGE_T new generic_text_display(BATTERY_VOLTAGE, "V", 2)
+#define AIR_QUALITY_T new generic_text_display(AIR_QUALITY, "idx", 0)
 
 #define COMPASS_T new angle_text_display(COMPASS_HEADING)
 #define COMPASS_G new heading_gauge(COMPASS_T)
@@ -1366,12 +1434,13 @@ struct pageC : public page {
     pageC()
         : page("Wind Speed history") {
         add(WIND_SPEED_H);
+        cols = 1;
     }
 };
 
 struct pageD : public page {
     pageD()
-        : page("Wind gauges with IMU text") {
+        : page("Wind gauges with weather text") {
         cols = landscape ? 1 : 2;
 
         grid_display *d = new grid_display(this, landscape ? 2 : 1);
@@ -1381,13 +1450,11 @@ struct pageD : public page {
 
         grid_display *t = new grid_display(this, landscape ? 3 : 1);
         t->expanding = false;
-        //t->add(PRESSURE_T);
-        //t->add(AIR_TEMP_T);
-        t->add(COMPASS_T);
-        if (landscape)
-            t->add(RATE_OF_TURN_T);
-        t->add(PITCH_T);
-        t->add(HEEL_T);
+        t->add(PRESSURE_T);
+        t->add(AIR_TEMP_T);
+        t->add(RELATIVE_HUMIDITY_T);
+        t->add(BATTERY_VOLTAGE_T);
+        t->add(AIR_QUALITY_T);
     }
 };
 
@@ -1593,11 +1660,10 @@ struct pageS : public page {
     }
 };
 
-
 struct pageT : public page {
     pageT()
-        : page("most text fields") {
-        cols = landscape ? 3 : 2;
+        : page("baro history") {
+        cols = landscape ? 3 : 2; 
         add(WIND_DIR_T);
         add(WIND_SPEED_T);
         add(PRESSURE_T);
@@ -1694,6 +1760,16 @@ struct pageW : public page {
     }
 };
 
+struct pageX : public page {
+    pageX()
+        : page("Barometric Pressure history") {
+        add(PRESSURE_H);
+        add(AIR_TEMP_T);
+        cols = 1;
+    }
+};
+
+
 static std::vector<page *> pages;
 static int cur_page = 0;
 route_info_t route_info;
@@ -1744,33 +1820,53 @@ static void setup_analog_pins() {
     analogReadResolution(12);
 
 #ifndef CONFIG_IDF_TARGET_ESP32S3
-    ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 9);
-    ledcWriteChannel(9, 0);
+    ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3);
+    ledcWriteChannel(3, 0);
 #endif
 }
 
 // read from photo resistor and adjust the backlight
+static bool over_temperature = false;
 static void read_analog_pins() {
     int val = analogRead(PHOTO_RESISTOR_PIN);
 #ifndef CONFIG_IDF_TARGET_ESP32S3
+    //int32_t t0 = esp_timer_get_time();
     int ntc = analogRead(NTC_PIN);
+
+    //float B = 3950;
+    //float V = 3.3*ntc/4095;
+    //float R25 = 10e3;
+    // V = 3.3*R/(R+10e3)
+    // R*4096 = ntc*(R+10e3)
+    // R*(4096 - ntc) = ntc*10e3
+    //float R = ntc*10e3/(4095 - ntc);
+    //temperature = 1 / (log(R/R25)/B + 1/298.15) - 273.15;
+    //printf("val %d %f %f %f %lld\n", ntc, V, R, temperature, esp_timer_get_time()-t0);
+    // 75 = 1 / (log(R/R25)/B + 1/298.15) - 273.15;
+    // (273.15+75)*log(R/R25)/B = -.1677
+    // -1.9 = log(R/R25)
+    // .14957 = R/R25
+    // R = 1495  at 75C
+    // ntc/4095 = R/(R+10e3)
+    // ntc/4095 = 1495/(1495+10e3)
+    // min raw value for ntc with 12 bit adc is 532 for 75C
+    over_temperature = ntc < 532;
 #endif
 
     // set backlight level
     static bool backlight_on;
-    // printf("val %d %d %d\n", val, settings.backlight  , ntc);
     if (!display_on)
         backlight_on = false;
-    else if (backlight_on && val > 3800)
+    else if (backlight_on && val > 3900)
         backlight_on = false;
-    else if (!backlight_on && val < 2800)
+    else if (!backlight_on && val < 3400)
         backlight_on = true;
 
 #ifndef CONFIG_IDF_TARGET_ESP32S3
     if (backlight_on)
-        ledcWriteChannel(9, 1 + settings.backlight * settings.backlight * 5 / 2);
+        ledcWriteChannel(3, 1 + settings.backlight * settings.backlight * 5 / 2);
     else
-        ledcWriteChannel(9, 0);
+        ledcWriteChannel(3, 0);
 #endif
 }
 
@@ -1787,14 +1883,29 @@ void display_toggle(bool on) {
     digitalWrite(PWR_LED, !display_on);
 }
 
+static int display_data_timeout[DISPLAY_COUNT];
+
 void display_setup() {
+    for(int i=0; i<DISPLAY_COUNT; i++) {
+        display_data_timeout[i] = 5000;
+        display_data[i].value = NAN; // no data
+    }
+
+    display_data_timeout[BAROMETRIC_PRESSURE] = 30000;
+    display_data_timeout[AIR_TEMPERATURE] = 30000;
+    display_data_timeout[RELATIVE_HUMIDITY] = 30000;
+    display_data_timeout[AIR_QUALITY] = 30000;
+    display_data_timeout[BATTERY_VOLTAGE] = 30000;
+
+    display_data_timeout[ROUTE_INFO] = 10000;
+    display_data_timeout[PYPILOT] = 10000;
+    
     pinMode(2, INPUT_PULLUP);  // strap for display
 
     printf("display_setup %d\n", rotation);
 
     start_time = time(0);
     
-    rotation = 0;
 #ifdef USE_U8G2
     switch (rotation) {
     case 0:
@@ -1830,7 +1941,7 @@ void display_setup() {
     digitalWrite(PWR_LED, LOW);
 
     draw_setup(rotation);
-    cur_page = 'B' - 'A';
+    cur_page = 'C' - 'A';
 
     for (int i = 0; i < pages.size(); i++)
         delete pages[i];
@@ -1861,6 +1972,7 @@ void display_setup() {
     add(new pageU);
     add(new pageV);
     add(new pageW);
+    add(new pageX);
 
     for (int i = 0; i < settings.enabled_pages.length(); i++)
         for (int j = 0; j < (int)display_pages.size(); j++)
@@ -1912,6 +2024,8 @@ void display_menu_scale() {
     if (in_menu)
         menu_select();
     else {
+        buzzer_buzz(800, 20, 0);
+        
         if (++history_display_range >= 3) // show 5m 1h 24h
             history_display_range = 0;
 
@@ -1924,7 +2038,7 @@ static void render_status() {
 #ifdef USE_RGB_LCD
     int ht = 21;
 #else
-    int ht = 8;
+    int ht = 11;
 #endif
     draw_set_font(ht);
 
@@ -1958,7 +2072,7 @@ static void render_status() {
 void data_timeout() {
     uint32_t t = millis();
     for (int i = 0; i < DISPLAY_COUNT; i++)
-        if (t + 100 - display_data[i].time > 5000) {
+        if (t + 100 - display_data[i].time > display_data_timeout[i]) {
             //if(!isnan(display_data[i].value))
             //  printf("timeout %ld %ld %d\n", t0, display_data[i].time, i);
             if(!isnan(display_data[i].value)) {
@@ -1978,7 +2092,7 @@ void display_poll() {
         return;
     last_render = t0;
 #endif
-//    read_analog_pins();
+    read_analog_pins();
 
     //printf("draw clear %d\n", display_on);
     draw_clear(display_on);
@@ -1990,13 +2104,32 @@ void display_poll() {
 
     draw_color(WHITE);
 
+    static uint32_t safetemp_time;
+    if(over_temperature) { // above 75C is an issue...
+        int ht = 14;
+        draw_set_font(ht);
+        draw_text(0, 0, "OVER TEMPERATURE");
+        draw_send_buffer();
+        buzzer_buzz(700, 200, 3);
+
+        if(t0 - safetemp_time > 30000) { // after 30 seconds sleep
+            // hopefully safer in deep sleep
+            ledcDetach(14);
+            pinMode(14, OUTPUT);  // strap for display
+            digitalWrite(14, 0);
+            esp_deep_sleep_start();
+        }
+        return;
+    }
+    safetemp_time = t0;
+    
     if (settings_wifi_ap_mode) {
         int ht = 14;
         draw_set_font(ht);
         draw_text(0, 0, "WIFI AP");
 
         draw_text(0, 20, "pypilot_mfd");
-        draw_text(0, 60, "http://wind.local");
+        draw_text(0, 60, "http://pypilot_mfd.local");
 
         char buf[16];
         snprintf(buf, sizeof buf, "Version %.2f", VERSION);
@@ -2021,14 +2154,13 @@ void display_poll() {
 
     draw_send_buffer();
     uint32_t t4 = millis();
-    //printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
+//    printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
 #endif
 
 #ifdef USE_TFT_ESPI
 //#include <TFT_eSPI.h>  // Hardware-specific library
 //#include <SPI.h>
-
 
 TFT_eSPI tft = TFT_eSPI();
 

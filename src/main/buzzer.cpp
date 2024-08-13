@@ -13,6 +13,9 @@ static int buzzer_pattern;
 
 void buzzer_buzz(int freq, int duration, int pattern)
 {
+    if(buzzer_timeout)
+        ledcDetach(4);
+
     // buzzer (backlight uses channel 9)
     // buzzer is io pin 4
     ledcAttachChannel(4, freq, 10, 0); // channel 0, freq, 10bit
