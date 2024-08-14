@@ -162,7 +162,7 @@ std::string processor(const std::string& var)
     if(var == "CONTRAST")  return int_to_str(settings.contrast);
     if(var == "BACKLIGHT")  return int_to_str(settings.backlight);
     if(var == "MIRROR")  return Checked(settings.mirror);
-    if(var == "POWERDOWN")  return Checked(settings.powerdown);
+    if(var == "POWERBUTTON")  return settings.power_button;
     if(var == "DISPLAYPAGES") return get_display_pages();
     if(var == "VERSION")    return float_to_str(VERSION, 2);
     return std::string();
@@ -410,7 +410,6 @@ void web_setup()
         settings.use_inHg = settings.use_depth_ft = false;
         settings.invert = false;
         settings.mirror = false;
-        settings.powerdown = false;
         std::string enabled_pages = "";
         for(int i=0; i < display_pages.size(); i++)
             display_pages[i].enabled = false;
@@ -436,8 +435,8 @@ void web_setup()
                 settings.backlight = min(max(str_to_int(value), 0), 20);
             else if(p->name() == "mirror")
                 settings.mirror = true;
-            else if(p->name() == "powerdown")
-                settings.powerdown = true;
+            else if(p->name() == "power_button")
+                settings.power_button = value;
             else {
                 for(int j=0; j < display_pages.size(); j++) {
                     page_info &page = display_pages[j];

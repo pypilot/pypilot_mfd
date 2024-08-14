@@ -42,6 +42,11 @@ void keys_setup()
     }
 }
 
+bool keys_pwr_pressed()
+{
+    return key_times[KEY_PWR];
+}
+
 static bool keys[KEY_COUNT];
 static void readkeys()
 {
@@ -102,16 +107,18 @@ void keys_poll()
         in_menu = !in_menu;
     } else if (pressed(KEY_PWR, false)) {
         printf("KEY PWR\n");
-        display_toggle();
+        bool on = display_toggle();
         menu_reset();
-        if(settings.powerdown) {
+        if(!on && settings.power_button != "screenoff") {
             while(!digitalRead(0)); // wait for button to release
             esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, LOW);
+            // wake up in 60 seconds                
+            if(settings.power_button != "powersave")
+                esp_sleep_enable_timer_wakeup(60 * 1000 * 1000);
             printf("going to sleep\n");
             ledcDetach(14);
             pinMode(14, OUTPUT);  // strap for display
             digitalWrite(14, 0);
-
             esp_deep_sleep_start();
         }
     } else if (held(KEY_PWR))

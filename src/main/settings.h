@@ -54,7 +54,7 @@ struct settings_t {
     bool show_status;
     int rotation; // 0-3 are set, 4 is auto
     int mirror; // 2 is auto
-    bool powerdown; // power down or just turn of screen on power button
+    std::string power_button; // power down or just turn of screen on power button
 
     std::string enabled_pages;
 

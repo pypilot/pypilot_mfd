@@ -123,35 +123,24 @@ struct history
             float &llvalue_min = min_llvalue[range];
             float &llvalue_max = max_llvalue[range];
 
-
             uint32_t range_time = history_range_time[range];
             int range_timeout = range_time / 80;
 
             uint32_t fronttime = data[range].empty() ? 0 : data[range].front().time;
-            uint32_t dt = time - fronttime;
 
             //if(range > 0)
             //printf("valus %d %d %d %d %f %ld %d\n", range, data[range].size(), data_high[range].size(), data_low[range].size(), value, dt, range_timeout);
-
-
-            if(dt < range_timeout)
+            if(time - fronttime < range_timeout)
                 break;
 
-            float minv, maxv;
+            float minv = value, maxv = value;
             if(range > 0) {
                 // average previous range data
-                value = 0;
-                minv = INFINITY;
-                maxv = -INFINITY;
                 int count = 0;
                 for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) 
                 {
                     if(!isnan(it->value)) {
                         value += it->value;
-                        if(it->value < minv)
-                            minv = it->value;
-                        if(it->value > maxv)
-                            maxv = it->value;
                         count++;
                     }
                     if(it->time < time - range_timeout)
@@ -162,8 +151,21 @@ struct history
 
                 store_packet(range-1, index, HISTORY_VALUE, time, value);
                 value /= count;
-            } else
-                minv = value, maxv = value;
+
+                for(std::list<history_element>::iterator it = data_low[range-1].begin(); it != data_low[range-1].end(); it++) {
+                    if(it->value < minv)
+                        minv = it->value;
+                    if(it->time < time - range_timeout*2)
+                        break;
+                }                    
+
+                for(std::list<history_element>::iterator it = data_high[range-1].begin(); it != data_high[range-1].end(); it++) {
+                    if(it->value > maxv)
+                        maxv = it->value;
+                    if(it->time < time - range_timeout*2)
+                        break;
+                }                
+            }
 
             data[range].push_front(history_element(value, time));
 
@@ -173,19 +175,20 @@ struct history
             else if(llvalue_max < lvalue_max && lvalue_max >= maxv) {
                 data_high[range].push_front(history_element(lvalue_max, time));
                 if(range > 0)
-                    store_packet(range-1, index, HISTORY_HIGH, time, value);
+                    store_packet(range-1, index, HISTORY_HIGH, time, lvalue_max);
             }
             if(data_low[range].empty())
                 data_low[range].push_front(history_element(minv, time));
             else if(llvalue_min > lvalue_min && lvalue_min <= minv) {
                 data_low[range].push_front(history_element(lvalue_min, time));
                 if(range > 0)
-                    store_packet(range-1, index, HISTORY_LOW, time, value);
+                    store_packet(range-1, index, HISTORY_LOW, time, lvalue_min);
             }
 
             llvalue_min = lvalue_min;
             lvalue_min = minv;
 
+            
             llvalue_max = lvalue_max;
             lvalue_max = maxv;
 
@@ -239,25 +242,25 @@ std::list<history_element> *history_find(display_item_e item, int r, int &total_
     for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
         if(history_items[i] == item) {
             total_seconds = history_range_time[r];
-            std::list<history_element> &data_high = histories[i].data_high[r];
-            std::list<history_element> &data_low = histories[i].data_low[r];
+            history &h = histories[i];
+            std::list<history_element> &data_high = h.data_high[r];
+            std::list<history_element> &data_low = h.data_low[r];
             // compute range
             if(histories[i].data[r].empty())
                 return 0;
-            float v = histories[i].data[r].front().value;
-            high = v;
+
+            high = h.max_lvalue[r];
             for(std::list<history_element>::iterator it = data_high.begin(); it!=data_high.end(); it++)
                 if(it->value > high || isnan(high))
                     high = it->value;
 
-            low = v;
+            low = h.min_lvalue[r];
             for(std::list<history_element>::iterator it = data_low.begin(); it!=data_low.end(); it++)
                 if(it->value < low || isnan(low))
                     low = it->value;
             return &histories[i].data[r];
         }
 
-         // error
     printf("history item not found!! %d\n", item);
     return 0;
 }
@@ -308,7 +311,6 @@ std::string history_get_data(display_item_e item, history_range_e range)
 
     return buffer.GetString();
 }
-
 
 /* history is stored in i2c eeprom to allow retrieval in the event of power loss
    64kb of eeprom is divided into 4 regions relative to the data range (hour, day, month, year)
@@ -499,7 +501,6 @@ static void eeprom_store(int position, uint8_t index, uint8_t type, uint32_t tim
         
     eeprom_store_packet(position, packet);
 }
-
 
 RTC_DATA_ATTR int eeprom_rel_write[4], eeprom_rel_write_wrapped[4];
 
@@ -725,7 +726,6 @@ void history_reset()
     for(int i=0; i<4; i++)
         history_eeprom_range[i].state = history_eeprom_range_t::INIT;
 }
-
 
 void history_poll()
 {

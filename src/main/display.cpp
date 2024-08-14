@@ -1878,9 +1878,13 @@ void display_set_mirror_rotation(int r) {
         rotation = r;
 }
 
-void display_toggle(bool on) {
-    display_on = on ? true : !display_on;
+bool display_toggle(bool on) {
+    if(on)
+        display_on = true;
+    else
+        display_on = !display_on;
     digitalWrite(PWR_LED, !display_on);
+    return display_on;
 }
 
 static int display_data_timeout[DISPLAY_COUNT];

@@ -67,9 +67,6 @@ extern "C" void app_main(void)
 
     accel_setup();
     printf("accel_setup_done, %ld\n", millis());
-
-    keys_setup();
-    printf("keys_setup_done, %ld\n", millis());
     
     settings_load();
     printf("settings_load_done, %ld\n", millis());
@@ -80,6 +77,32 @@ extern "C" void app_main(void)
     history_setup();
     printf("history_setup_done, %ld\n", millis());
 
+    alarm_setup();
+    printf("alarm_setup %ld\n", millis());
+
+    keys_setup();
+    printf("keys_setup_done, %ld\n", millis());
+
+    // if we woke up to log data (power save) just do that for 5 seconds
+    // then go back to sleep
+    if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER &&
+       settings.power_button == "powersave") {
+        while(keys_pwr_pressed()) {
+            serial_poll();
+            wireless_poll(); // receive sensor data
+            history_poll();
+            alarm_poll();
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            
+            if(millis() > 10000) { // pwr not pressed, go back to sleep
+                printf("going back to sleep\n");
+                esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, LOW);
+                esp_sleep_enable_timer_wakeup(60 * 1000 * 1000);
+                esp_deep_sleep_start();
+            }
+        }
+    }
+    
     mdns_setup();
     printf("mdns_setup_done, %ld\n", millis());
 
@@ -90,10 +113,7 @@ extern "C" void app_main(void)
     if (ss < 16384)
         printf("WARNING STACK TOO SMALL, %ld\n", millis());
     printf("Stack Size %d\n", ss);
-
-    alarm_setup();
-    printf("alarm_setup %ld\n", millis());
-
+    
     accel_read();
     display_setup();
     printf("display_setup  %ld\n", millis());

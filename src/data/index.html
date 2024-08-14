@@ -171,8 +171,12 @@
           <span><input type='checkbox' name='mirror' id='mirror' %MIRROR%>
             <label for='mirror'>Mirror display</label>
           </span>
-          <span><input type='checkbox' name='powerdown' id='powerdown' %POWERDOWN%>
-            <label for='powerdown'>Powerdown display</label>
+          <span>Power button function
+            <select id='power_button'>
+              <option value='powerdown'>powerdown (lowest power consumption)</option>
+              <option value='powersave'>wake every minute to log sensor data</option>
+              <option value='screenoff'>turn screen/backlight off, remain running</option>
+            </select>
           </span>
         </div>
         <div class='col3-grid'>

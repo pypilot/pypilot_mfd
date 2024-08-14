@@ -135,7 +135,7 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_B(show_status, true)
     LOAD_SETTING_I(rotation, 4)
     LOAD_SETTING_I(mirror, 2)
-    LOAD_SETTING_B(powerdown, false)
+    LOAD_SETTING_S(power_button, "powersave")
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
     printf("settings load 4 %ld\n", millis());
@@ -250,7 +250,7 @@ static bool settings_store_suffix(std::string suffix="")
     STORE_SETTING_B(show_status)
     STORE_SETTING_I(rotation)
     STORE_SETTING_B(mirror)
-    STORE_SETTING_B(powerdown)
+    STORE_SETTING_S(power_button)
 
     STORE_SETTING_S(enabled_pages)
 

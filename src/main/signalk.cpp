@@ -18,13 +18,14 @@
 #include "esp_transport_ssl.h"
 #include "esp_transport_ws.h"
 
-
 #include "signalk.h"
 #include "display.h"
 #include "zeroconf.h"
 #include "utils.h"
 #include "settings.h"
 #include "history.h"
+
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
 //std::string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2UiOiJweXBpbG90X21mZC0wMzgyMjQ2OTg4MCIsImlhdCI6MTcxMTY5MDA0MCwiZXhwIjoxNzQzMjQ3NjQwfQ.T-g3vkQMz5e6lbp9UGNEZgo6mEJex0i8eOeOUGUCGOI";
 std::string access_url;
