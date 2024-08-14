@@ -1,0 +1,1 @@
+idf.py -B build-esp32 -DSDKCONFIG=sdkconfig.esp32 $1

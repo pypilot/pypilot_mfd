@@ -7,23 +7,28 @@
  */
 
 
- // note 80mhz cpu speed is plenty!
+// note 80mhz cpu speed is plenty!
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
+#include "string.h"
+
+#include "esp_netif.h"
 #include <esp_now.h>
 #include <esp_wifi.h>
-#include <WiFi.h>
+#include "esp_timer.h"
 
 #include "driver/i2c.h"
-#include <SPI.h>
-#include <EEPROM.h>
-#include <Wire.h>
+#include "driver/spi_master.h"
 
 // Global copy of chip
 esp_now_peer_info_t chip;
 
 // data in packet
+#define I2C_MASTER_NUM I2C_NUM_0
 #define ID 0xf179
 #define CHANNEL_ID 0x0a21
+
+#define I2C_MASTER_TIMEOUT_MS 1000
 
 struct packet_t {
     uint16_t id;             // packet identifier
@@ -41,49 +46,32 @@ struct packet_channel_t {
     uint16_t crc16;
 };
 
-void reboot()
+spi_device_handle_t spi;
+
+/* WiFi should start before using ESPNOW */
+static void wifi_init(void)
 {
-    Serial.println("Reset ESP");
-    delay(30);
-    ESP.restart();  // reset
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
+    ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_AP) );
+    ESP_ERROR_CHECK( esp_wifi_start());
+//    ESP_ERROR_CHECK( esp_wifi_set_channel(CONFIG_ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
+
+#if CONFIG_ESPNOW_ENABLE_LONG_RANGE
+    ESP_ERROR_CHECK( esp_wifi_set_protocol(ESPNOW_WIFI_IF, WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N|WIFI_PROTOCOL_LR) );
+#endif
+
+    esp_wifi_disconnect();
 }
 
-// Init ESP Now with fallback
-void InitESPNow()
+void reboot()
 {
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
-
-    esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
-    if (esp_now_init() == ESP_OK) {
-        //Serial.println("ESPNow Init Success");
-    } else {
-        Serial.println("ESPNow Init Failed");
-        reboot();
-    }
-
-    esp_now_register_recv_cb(OnDataRecv);
-
-    // chip not paired, attempt pair
-    esp_err_t addStatus = esp_now_add_peer(&chip);
-    if (addStatus == ESP_OK)
-    // Pair successf
-    // Serial.println("Pair success");
-        return;
-    else if (addStatus == ESP_ERR_ESPNOW_NOT_INIT)
-    // How did we get so far!!
-        Serial.println("ESPNOW Not Init");
-    else if (addStatus == ESP_ERR_ESPNOW_ARG)
-        Serial.println("Invalid Argument");
-    else if (addStatus == ESP_ERR_ESPNOW_FULL)
-        Serial.println("Peer list full");
-    else if (addStatus == ESP_ERR_ESPNOW_NO_MEM)
-        Serial.println("Out of memory");
-    else if (addStatus == ESP_ERR_ESPNOW_EXIST)
-        Serial.println("Peer Exists");
-    else
-        Serial.println("Not sure what happened");
-    reboot();
+    printf("Reset ESP\n");
+    vTaskDelay(30);
+    abort();
 }
 
 uint16_t crc16(const uint8_t *data_p, int length)
@@ -106,115 +94,46 @@ void sendData()
     packet.crc16 = crc16((uint8_t *)&packet, sizeof(packet) - 2);
 
     const uint8_t *peer_addr = chip.peer_addr;
-    //Serial.print("Sending...");
+    //print("Sending...");
     esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
-    //Serial.print("Send Status: ");
+    //print("Send Status: ");
     if (result == ESP_OK) {
-        //Serial.println("Success");
+        //printf("Success\n");
         return;
     } else if (result == ESP_ERR_ESPNOW_NOT_INIT)
         // How did we get so far!!
-        Serial.println("ESPNOW not Init.");
+        printf("ESPNOW not Init.\n");
     else if (result == ESP_ERR_ESPNOW_ARG)
-       Serial.println("Invalid Argument");
+       printf("Invalid Argument\n");
     else if (result == ESP_ERR_ESPNOW_INTERNAL)
-        Serial.println("Internal Error");
+        printf("Internal Error\n");
     else if (result == ESP_ERR_ESPNOW_NO_MEM)
-        Serial.println("ESP_ERR_ESPNOW_NO_MEM");
+        printf("ESP_ERR_ESPNOW_NO_MEM\n");
     else if (result == ESP_ERR_ESPNOW_NOT_FOUND)
-        Serial.println("Peer not found.");
+        printf("Peer not found.\n");
     else
-        Serial.println("Not sure what happened");
+        printf("Not sure what happened\n");
 
     reboot();
 }
 
-// callback when data is sent from Master to chip
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
-{
-    char macStr[18];
-    snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-             mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    Serial.print("Last Packet Sent to: ");
-    Serial.println(macStr);
-    Serial.print("Last Packet Send Status: ");
-    Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
-}
-
 volatile unsigned int rotation_count;
-volatile uint16_t lastperiod;
+volatile uint32_t lastperiod;
 
-void IRAM_ATTR isr_anemometer_count()
+void IRAM_ATTR isr_anemometer_count(void *)
 {
     static uint16_t lastt;
-    uint16_t t = millis();
-    uint16_t period = t - lastt;
+    uint32_t t = esp_timer_get_time();
+    uint32_t period = t - lastt;
     if (period > 10) {
         lastt = t;
-        lastperiod += period;
-        rotation_count++;
+        lastperiod = lastperiod + period;
+        rotation_count = rotation_count + 1;
     }
 }
 
 #define DEVICE_ADDRESS 0x19  // 0x32  // LIS2DW12TR
 #define LIS2DW12_CTRL 0x1F   // CTRL1 is CTRL+1
-/*
-void i2c_init()
-{
-    i2c_config_t conf;
-    conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = GPIO_NUM_21;  // the GPIO pin connected to SDA
-    conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.scl_io_num = GPIO_NUM_22;  // the GPIO pin connected to SCL
-    conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.master.clk_speed = 100000;  // desired I2C clock frequency
-
-    i2c_param_config(I2C_NUM_0, &conf);
-    i2c_driver_install(I2C_NUM_0, conf.mode, 0, 0, 0);
-
-    i2c_write(LIS2DW12_CTRL + 1, 0x44);  // high performance
-    i2c_write(LIS2DW12_CTRL + 6, 0x10);  // set +/- 4g FS, LP filter ODR/2
-    // enable block data update (bit 3) and auto register address increment (bit 2)
-    i2c_write(LIS2DW12_CTRL + 2, 0x08 | 0x04);
-}
-
-void i2c_write(uint8_t address, uint8_t data) {
-    uint8_t d[2] = { address, data };
-    // i2c_master_write_to_device(I2C_NUM_0, DEVICE_ADDRESS, d, 2, pdMS_TO_TICKS(1000));
-}
-
-void i2c_read()
-{
-    uint8_t data[6] = { 0 };
-    i2c_cmd_handle_t cmd;
-
-    // Create I2C command to read 6 bytes from the device
-    cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (DEVICE_ADDRESS << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_write_byte(cmd, 0x28, true);
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (DEVICE_ADDRESS << 1) | I2C_MASTER_READ, true);
-    i2c_master_read(cmd, data, 6, I2C_MASTER_LAST_NACK);
-    i2c_master_stop(cmd);
-
-    // Execute the command
-    i2c_master_cmd_begin(I2C_NUM_0, cmd, 1000 / portTICK_RATE_MS);
-    i2c_cmd_link_delete(cmd);
-
-    // For example, print it to the console
-    Serial.println("Received i2c: ");
-    for (int i = 0; i < 6; i++) {
-        Serial.print(data[i]);
-        Serial.print(" ");
-    }
-    Serial.println();
-
-    packet.accelx = (data[0] << 8) | data[1];
-    //packet.accelz = (data[2] << 8) | data[3];
-    packet.accely = (data[4] << 8) | data[5];
-}
-*/
 bool parityCheck(uint16_t data)
 {
     data ^= data >> 8;
@@ -225,19 +144,39 @@ bool parityCheck(uint16_t data)
     return (~data) & 1;
 }
 
-#define MT6816_CS 5
+#define MT6816_CS GPIO_NUM_5
+
+uint16_t spi_transfer16(uint16_t d)
+{
+    spi_transaction_t t = {
+        .flags = SPI_TRANS_USE_RXDATA,
+        .length = 16,
+        .user = 0,
+        .tx_buffer = &d,
+    };
+    spi_device_polling_transmit(spi, &t);
+
+    return *(uint16_t*)t.rx_data;
+}
+
 void MT6816_read()
 {
-    digitalWrite(MT6816_CS, LOW);
-    uint16_t angle = SPI.transfer16(0x8300) << 8;
-    digitalWrite(MT6816_CS, HIGH);
+    gpio_set_level(MT6816_CS, 0);
+    //digitalWrite(MT6816_CS, LOW);
+    uint16_t angle = spi_transfer16(0x8300) << 8;
+    //uint16_t angle = SPI.transfer16(0x8300) << 8;
+    gpio_set_level(MT6816_CS, 1);
+    //digitalWrite(MT6816_CS, HIGH);
 
-    digitalWrite(MT6816_CS, LOW);
-    angle |= SPI.transfer16(0x8400) & 0xff;
-    digitalWrite(MT6816_CS, HIGH);
+    gpio_set_level(MT6816_CS, 0);
+    //digitalWrite(MT6816_CS, LOW);
+    angle |= spi_transfer16(0x8400) & 0xff;
+    //angle |= SPI.transfer16(0x8400) & 0xff;
+    gpio_set_level(MT6816_CS, 1);
+    //digitalWrite(MT6816_CS, HIGH);
 
     if (!parityCheck(angle)) {
-        Serial.println("parity failed");
+        printf("parity failed\n");
         return;
     }
 
@@ -247,14 +186,13 @@ void MT6816_read()
         packet.angle = angle >> 2;
 }
 
-static portMUX_TYPE my_mutex;
-
+//static portMUX_TYPE my_mutex;
 void convert_speed()
 {
     static portMUX_TYPE _spinlock = portMUX_INITIALIZER_UNLOCKED;
 
     taskENTER_CRITICAL(&_spinlock);
-    uint16_t period = lastperiod;
+    uint32_t period = lastperiod;
     uint16_t rcount = rotation_count;
     rotation_count = 0;
     lastperiod = 0;
@@ -268,7 +206,7 @@ void convert_speed()
     const int nowindtimeout = 30;
     if (rcount) { 
         if (nowindcount != nowindtimeout && period < 6000)
-            packet.period = period*10/rcount;  // packet period is units of 100uS   
+            packet.period = period/(100*rcount);  // packet period is units of 100uS   
         nowindcount = 0;
     } else {
         if (nowindcount < nowindtimeout)
@@ -278,102 +216,178 @@ void convert_speed()
     }
 }
 
-void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
-{
+void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
+    //uint8_t *mac_addr = recv_info->src_addr;
     if(data_len != sizeof(packet_channel_t)) {
-        //Serial.println("wrong packet size");
+        //printf("wrong packet size\n");
         return;
     }
 
     packet_channel_t *packet = (packet_channel_t*)data;
     if(packet->id != CHANNEL_ID) {
-        //Serial.println("ID mismatch");
+        //printf("ID mismatch\n");
     }
 
     uint16_t crc = crc16(data, data_len-2);
     if(crc != packet->crc16) {
-        Serial.printf("crc failed %x %x\n", crc, packet->crc16);
+        printf("crc failed %x %x\n", crc, packet->crc16);
             return;
     }
 
     if(chip.channel != packet->channel) {
         chip.channel = packet->channel;
-        EEPROM.put(0, packet->channel);
-        EEPROM.commit();
+//        EEPROM.put(0, packet->channel);
+//        EEPROM.commit();
     }
+}
+
+static esp_err_t i2c_write_byte(uint8_t reg_addr, uint8_t data)
+{
+    int ret;
+    uint8_t write_buf[2] = {reg_addr, data};
+
+    ret = i2c_master_write_to_device(I2C_MASTER_NUM, DEVICE_ADDRESS, write_buf, sizeof(write_buf), I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+
+    return ret;
+}
+
+static esp_err_t i2c_read(uint8_t reg_addr, uint8_t *data, size_t len)
+{
+    return i2c_master_write_read_device(I2C_MASTER_NUM, DEVICE_ADDRESS, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
 static void setup_accel()
 {
-    // init communication with accelerometer
-//    Wire.setClock(10000);
-    Wire.begin();
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    Wire.write(LIS2DW12_CTRL + 1);
-    Wire.write(0x44);  // high performance
-    Wire.endTransmission();
+    i2c_port_t i2c_master_port = I2C_MASTER_NUM;
 
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    Wire.write(LIS2DW12_CTRL + 6);
-    Wire.write(0x10);  // set +/- 4g FS, LP filter ODR/2
-    Wire.endTransmission();
+    i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = 21,
+        .scl_io_num = 22,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master = {.clk_speed = 100000}
+    };
 
-    // enable block data update (bit 3) and auto register address increment (bit 2)
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    Wire.write(LIS2DW12_CTRL + 2);
-    Wire.write(0x08 | 0x04);
-    Wire.endTransmission();
+    i2c_param_config(i2c_master_port, &conf);
+
+    i2c_driver_install(i2c_master_port, conf.mode, 0, 0, 0);
+    i2c_write_byte(LIS2DW12_CTRL + 1, 0x44);
+    i2c_write_byte(LIS2DW12_CTRL + 6, 0x10);
+    i2c_write_byte(LIS2DW12_CTRL + 2, 0x08 | 0x04);
+}
+
+static void init_mt6816()
+{
+#if 1
+    spi_bus_config_t buscfg={
+        .mosi_io_num=23,
+        .miso_io_num=19,
+        .sclk_io_num=18,
+        .quadwp_io_num=-1,
+        .quadhd_io_num=-1,
+        .max_transfer_sz=2
+    };
+    
+    spi_device_interface_config_t devcfg={
+        .mode = 3,          //SPI mode 3
+        .clock_speed_hz = 1000000,
+        .spics_io_num = -1, // cs manually controlled
+        .flags = SPI_DEVICE_POSITIVE_CS,
+        .queue_size = 1,
+    };
+    //Attach the EEPROM to the SPI bus
+    ESP_ERROR_CHECK(spi_bus_initialize(HSPI_HOST, &buscfg, SPI_DMA_DISABLED));
+    ESP_ERROR_CHECK(spi_bus_add_device(HSPI_HOST, &devcfg, &spi));
+#else
+    SPI.begin();
+    SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
+#endif
+
+#if 1
+    gpio_config_t cs_cfg = {
+        .pin_bit_mask = (1ULL<<MT6816_CS),
+        .mode = GPIO_MODE_OUTPUT,
+    };
+    gpio_config(&cs_cfg);
+    gpio_set_level(MT6816_CS, 1);
+#else    
+    pinMode(MT6816_CS, OUTPUT);
+    digitalWrite(MT6816_CS, HIGH);
+#endif
+}
+
+static void espnow_init(void)
+{
+    /* Initialize ESPNOW and register sending and receiving callback function. */
+    esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
+    if (esp_now_init() == ESP_OK) {
+        //printf("ESPNow Init Success\n");
+    } else {
+        printf("ESPNow Init Failed\n");
+        reboot();
+    }
+
+    ESP_ERROR_CHECK( esp_now_register_recv_cb(OnDataRecv) );
+
+#if CONFIG_ESPNOW_ENABLE_POWER_SAVE
+    ESP_ERROR_CHECK( esp_now_set_wake_window(CONFIG_ESPNOW_WAKE_WINDOW) );
+    ESP_ERROR_CHECK( esp_wifi_connectionless_module_set_wake_interval(CONFIG_ESPNOW_WAKE_INTERVAL) );
+#endif
+    /* Set primary master key. */
+//    ESP_ERROR_CHECK( esp_now_set_pmk((uint8_t *)CONFIG_ESPNOW_PMK) );
+
+    ESP_ERROR_CHECK( esp_now_add_peer(&chip) );
 }
 
 void setup()
 {
-    Serial.begin(115200);
     //Set device in STA mode to begin with
-    Serial.println("Wind Transmitter");
+    printf("Wind Transmitter\n");
   
     memset(&chip, 0, sizeof(chip));
     for (int ii = 0; ii < 6; ++ii)
         chip.peer_addr[ii] = (uint8_t)0xff;
-    EEPROM.begin(sizeof chip.channel);
-    EEPROM.get(0, chip.channel);  // pick a channel
-    EEPROM.end();
+//    EEPROM.begin(sizeof chip.channel);
+//    EEPROM.get(0, chip.channel);  // pick a channel
+//    EEPROM.end();
     if(chip.channel > 12 || chip.channel == 0)
         chip.channel = 6;
 
+    //chip.ifidx = ESPNOW_WIFI_IF;  ???
     chip.encrypt = 0;        // no encryption
 
     packet.id = ID;  // initialize packet ID
 
     // init communication with angular hall sensor
-    SPI.begin();
-    SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
-    pinMode(MT6816_CS, OUTPUT);
-    digitalWrite(MT6816_CS, HIGH);
+    init_mt6816();
 
-    pinMode(0, INPUT);
+//    pinMode(0, INPUT);
 
     // setup interrupt to read wind speed pulses
-    const int interruptPin = 34;
+#if 1
+    const gpio_num_t interruptPin = GPIO_NUM_34;
+    gpio_config_t cs_cfg = {
+        .pin_bit_mask = (1ULL<<interruptPin),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE
+    };
+    gpio_config(&cs_cfg);
+    gpio_set_intr_type(interruptPin, GPIO_INTR_POSEDGE);
+    
+    gpio_isr_register(isr_anemometer_count, 0, ESP_INTR_FLAG_LEVEL3, 0);
+#else
     pinMode(interruptPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(interruptPin), isr_anemometer_count, RISING);
-
+#endif
     setup_accel();
-    Serial.println("setup complete");
+    printf("setup complete\n");
 }
 
 void read_accel()
 {
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    Wire.write(0x28);
-    Wire.endTransmission();
-    Wire.requestFrom(DEVICE_ADDRESS, 6);
-    int i = 0;
     uint8_t data[6] = { 0 };
-    while (Wire.available() && i < 6)
-        data[i++] = Wire.read();
-        //printf("read %d\n", i);
-    if (i != 6)
-        return;
+    i2c_read(0x28, data, 6);
 
     packet.accelx = (data[3] << 8) | data[2];
     packet.accely = (data[5] << 8) | data[4];
@@ -381,23 +395,26 @@ void read_accel()
 
 void loop()
 {
-    unsigned int t0 = millis();
-    InitESPNow();
+    uint64_t t0 = esp_timer_get_time()/1000L;        
+    wifi_init();
+    espnow_init();
+
     MT6816_read();
     read_accel();
     convert_speed();
-    unsigned int t1 = millis();
+    uint64_t t1 = esp_timer_get_time()/1000L;        
     sendData();
 
     // Prepare for sleep
-    delay(10); //Short delay to finish transmit before esp_now_deinit()
+    vTaskDelay(10); //Short delay to finish transmit before esp_now_deinit()
     if (esp_now_deinit() != ESP_OK)   //De-initialize ESP-NOW. (all information of paired devices will be deleted)
-        Serial.println("esp_now_deinit() failed"); 
-    WiFi.mode(WIFI_OFF);
+        printf("esp_now_deinit() failed"); 
+
+    //WiFi.mode(WIFI_OFF);
 
     int period = 100;
     for(;;) {
-        unsigned int tx = millis();
+        uint64_t tx = esp_timer_get_time()/1000L;        
         int d = tx - t0;
 
         if (d >= period)
@@ -405,7 +422,7 @@ void loop()
 
         d = period - d;
 #if 1
-        delay(d);
+        vTaskDelay(d / portTICK_PERIOD_MS);
 #else
         gpio_wakeup_enable(GPIO_NUM_34, digitalRead(34) ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
     	esp_sleep_enable_gpio_wakeup();
@@ -417,8 +434,16 @@ void loop()
 
 #if 0 // for debugging
     float angle = (packet.angle == 0xffff) ? NAN : packet.angle * 360.0 / 16384;
-    Serial.printf("%.02f %.02f %d %.02f %d %d\n", packet.accelx * 4.0 / 32768, packet.accely * 4.0 / 32768, packet.period, angle, t1 - t0, t1 - t0);
+    printf("%.02f %.02f %d %.02f %d %d\n", packet.accelx * 4.0 / 32768, packet.accely * 4.0 / 32768, packet.period, angle, t1 - t0, t1 - t0);
 
 #endif
     //printf("pos %d\n", digitalRead(34));
 }
+
+extern "C" void app_main(void)
+{
+    setup();
+    for(;;)
+        loop();
+}
+
