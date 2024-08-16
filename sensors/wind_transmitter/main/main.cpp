@@ -15,6 +15,8 @@
 #include "esp_netif.h"
 #include <esp_now.h>
 #include <esp_wifi.h>
+#include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_timer.h"
 
 #include "driver/i2c.h"
@@ -60,9 +62,8 @@ static void wifi_init(void)
     ESP_ERROR_CHECK( esp_wifi_start());
 //    ESP_ERROR_CHECK( esp_wifi_set_channel(CONFIG_ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
 
-#if CONFIG_ESPNOW_ENABLE_LONG_RANGE
-    ESP_ERROR_CHECK( esp_wifi_set_protocol(ESPNOW_WIFI_IF, WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N|WIFI_PROTOCOL_LR) );
-#endif
+    ESP_ERROR_CHECK( esp_wifi_set_protocol(WIFI_IF_AP, /*WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N|*/WIFI_PROTOCOL_LR) );
+//    ESP_ERROR_CHECK(esp_wifi_config_espnow_rate(WIFI_IF_AP, WIFI_PHY_RATE_LORA_250K /*WIFI_PHY_RATE_LORA_500K*/));
 
     esp_wifi_disconnect();
 }
@@ -74,6 +75,44 @@ void reboot()
     abort();
 }
 
+static void read_channel()
+{
+    nvs_handle_t handle;
+    esp_err_t res = nvs_open("CHANNEL", NVS_READWRITE, &handle);
+    if (res != ESP_OK) {
+        printf("Unable to open NVS namespace: %d", res);
+        return;
+    }
+    
+    int32_t channel = 1;
+    res = nvs_get_i32(handle, "channel", &channel);
+    if (res != ESP_OK && res != ESP_ERR_NVS_NOT_FOUND) {
+        printf("Unable to read NVS key: %d", res);
+        return;
+    }
+    
+    chip.channel = channel;
+    nvs_close(handle);
+}
+
+static void write_channel()
+{
+    nvs_handle_t handle;
+    esp_err_t res = nvs_open("CHANNEL", NVS_READWRITE, &handle);
+    if (res != ESP_OK) {
+        printf("Unable to open NVS namespace: %d", res);
+        return;
+    }
+    
+    res = nvs_set_i32(handle, "channel", chip.channel);
+    if (res != ESP_OK) {
+        printf("Unable to read NVS key: %d", res);
+        return;
+    }
+    
+    nvs_commit(handle);
+    nvs_close(handle);
+}
 uint16_t crc16(const uint8_t *data_p, int length)
 {
     uint8_t x;
@@ -216,7 +255,7 @@ void convert_speed()
     }
 }
 
-void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
+void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len){
     //uint8_t *mac_addr = recv_info->src_addr;
     if(data_len != sizeof(packet_channel_t)) {
         //printf("wrong packet size\n");
@@ -236,8 +275,7 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int dat
 
     if(chip.channel != packet->channel) {
         chip.channel = packet->channel;
-//        EEPROM.put(0, packet->channel);
-//        EEPROM.commit();
+        write_channel();
     }
 }
 
@@ -328,6 +366,14 @@ static void espnow_init(void)
         reboot();
     }
 
+    struct esp_now_rate_config rate_config = {
+        .phymode = WIFI_PHY_MODE_LR,
+        .rate = WIFI_PHY_RATE_LORA_250K /*WIFI_PHY_RATE_LORA_500K*/,
+        .ersu = true,
+        .dcm = false };
+        
+    ESP_ERROR_CHECK(esp_now_set_peer_rate_config(chip.peer_addr, &rate_config));
+
     ESP_ERROR_CHECK( esp_now_register_recv_cb(OnDataRecv) );
 
 #if CONFIG_ESPNOW_ENABLE_POWER_SAVE
@@ -348,9 +394,8 @@ void setup()
     memset(&chip, 0, sizeof(chip));
     for (int ii = 0; ii < 6; ++ii)
         chip.peer_addr[ii] = (uint8_t)0xff;
-//    EEPROM.begin(sizeof chip.channel);
-//    EEPROM.get(0, chip.channel);  // pick a channel
-//    EEPROM.end();
+
+    read_channel();
     if(chip.channel > 12 || chip.channel == 0)
         chip.channel = 6;
 

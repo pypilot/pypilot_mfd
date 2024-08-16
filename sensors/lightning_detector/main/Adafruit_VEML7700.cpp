@@ -39,7 +39,10 @@ Adafruit_VEML7700::Adafruit_VEML7700(void) {}
  *    @param  theWire An optional pointer to an I2C interface
  *    @return True if initialization was successful, otherwise false.
  */
-bool Adafruit_VEML7700::begin(TwoWire *theWire) {
+bool Adafruit_VEML7700::begin(uint8_t gain, TwoWire *theWire) {
+  const uint8_t gains[] = {VEML7700_GAIN_1_8, VEML7700_GAIN_1_4,
+                           VEML7700_GAIN_1, VEML7700_GAIN_2};
+    
   i2c_dev = new Adafruit_I2CDevice(VEML7700_I2CADDR_DEFAULT, theWire);
 
   if (!i2c_dev->begin()) {
@@ -72,8 +75,9 @@ bool Adafruit_VEML7700::begin(TwoWire *theWire) {
   enable(false);
   interruptEnable(false);
   setPersistence(VEML7700_PERS_1);
-  setGain(VEML7700_GAIN_1_8);
-  setIntegrationTime(VEML7700_IT_100MS);
+  setGain(gain);
+  //setIntegrationTime(VEML7700_IT_100MS, false);
+  setIntegrationTime(VEML7700_IT_25MS, false);
   powerSaveEnable(false);
   enable(true);
 
@@ -416,7 +420,6 @@ float Adafruit_VEML7700::autoLux(void) {
   // Serial.print("ALS initial = "); Serial.println(ALS);
 
   if (ALS <= 100) {
-
     // increase first gain and then integration time as needed
     // compute lux using simple linear formula
     while ((ALS <= 100) && !((gainIndex == 3) && (itIndex == 5))) {
@@ -428,9 +431,7 @@ float Adafruit_VEML7700::autoLux(void) {
       ALS = readALS(true);
       // Serial.print("ALS low lux = "); Serial.println(ALS);
     }
-
   } else {
-
     // decrease integration time as needed
     // compute lux using non-linear correction
     useCorrection = true;

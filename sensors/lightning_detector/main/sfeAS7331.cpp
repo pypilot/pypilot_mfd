@@ -1078,6 +1078,6 @@ void SfeAS7331Driver::setDefaultSettings()
     _sensorGain = GAIN_2;         // Gain of 2x.
     _cclk = CCLK_1_024_MHZ;       // 1.024 MHz conversion clock
     _mmode = MEAS_MODE_CMD;       // Command/One Shot Mode.
-    _conversionTime = TIME_64MS;  // 64 ms conversion time.
+    _conversionTime = TIME_32MS;  // 64 ms conversion time.
     _dividerRange = DIV_2;        // Predivider 2x.
 }

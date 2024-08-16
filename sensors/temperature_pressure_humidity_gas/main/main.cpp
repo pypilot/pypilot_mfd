@@ -49,7 +49,7 @@ struct packet_channel_t {
 
 void reboot()
 {
-    Serial.println("Reset ESP");
+    printf("Reset ESP\n");
     delay(30);
     ESP.restart();  // reset
 }
@@ -62,9 +62,9 @@ void InitESPNow()
 
     esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
     if (esp_now_init() == ESP_OK) {
-        //Serial.println("ESPNow Init Success");
+        //printf("ESPNow Init Success\n");
     } else {
-        Serial.println("ESPNow Init Failed");
+        printf("ESPNow Init Failed\n");
         reboot();
     }
 
@@ -74,21 +74,21 @@ void InitESPNow()
     esp_err_t addStatus = esp_now_add_peer(&chip);
     if (addStatus == ESP_OK)
     // Pair successf
-    // Serial.println("Pair success");
+    // printf("Pair success\n");
         return;
     else if (addStatus == ESP_ERR_ESPNOW_NOT_INIT)
     // How did we get so far!!
-        Serial.println("ESPNOW Not Init");
+        printf("ESPNOW Not Init\n");
     else if (addStatus == ESP_ERR_ESPNOW_ARG)
-        Serial.println("Invalid Argument");
+        printf("Invalid Argument\n");
     else if (addStatus == ESP_ERR_ESPNOW_FULL)
-        Serial.println("Peer list full");
+        printf("Peer list full\n");
     else if (addStatus == ESP_ERR_ESPNOW_NO_MEM)
-        Serial.println("Out of memory");
+        printf("Out of memory\n");
     else if (addStatus == ESP_ERR_ESPNOW_EXIST)
-        Serial.println("Peer Exists");
+        printf("Peer Exists\n");
     else
-        Serial.println("Not sure what happened");
+        printf("Not sure what happened\n");
     reboot();
 }
 
@@ -116,21 +116,21 @@ void sendData()
     esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
     //Serial.print("Send Status: ");
     if (result == ESP_OK) {
-        //Serial.println("Success");
+        //printf("Success\n");
         return;
     } else if (result == ESP_ERR_ESPNOW_NOT_INIT)
         // How did we get so far!!
-        Serial.println("ESPNOW not Init.");
+        printf("ESPNOW not Init.\n");
     else if (result == ESP_ERR_ESPNOW_ARG)
-       Serial.println("Invalid Argument");
+       printf("Invalid Argument\n");
     else if (result == ESP_ERR_ESPNOW_INTERNAL)
-        Serial.println("Internal Error");
+        printf("Internal Error\n");
     else if (result == ESP_ERR_ESPNOW_NO_MEM)
-        Serial.println("ESP_ERR_ESPNOW_NO_MEM");
+        printf("ESP_ERR_ESPNOW_NO_MEM\n");
     else if (result == ESP_ERR_ESPNOW_NOT_FOUND)
-        Serial.println("Peer not found.");
+        printf("Peer not found.\n");
     else
-        Serial.println("Not sure what happened");
+        printf("Not sure what happened\n");
 
     reboot();
 }
@@ -142,9 +142,9 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
     snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
     Serial.print("Last Packet Sent to: ");
-    Serial.println(macStr);
-    Serial.print("Last Packet Send Status: ");
-    Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+    printf(macStr);
+    Serial.print("Last Packet Send Status: \n");
+    printf(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success\n" : "Delivery Fail");
 }
 
 
@@ -152,13 +152,13 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
 {
     if(data_len != sizeof(packet_channel_t)) {
-        //Serial.println("wrong packet size");
+        //printf("wrong packet size\n");
         return;
     }
 
     packet_channel_t *packet = (packet_channel_t*)data;
     if(packet->id != CHANNEL_ID) {
-        //Serial.println("ID mismatch");
+        //printf("ID mismatch\n");
     }
 
     uint16_t crc = crc16(data, data_len-2);
@@ -179,7 +179,7 @@ void setup()
     delay(500);
     Serial.begin(115200);
     //Set device in STA mode to begin with
-    Serial.println("BME680 Transmitter");
+    printf("BME680 Transmitter\n");
   
     memset(&chip, 0, sizeof(chip));
     for (int ii = 0; ii < 6; ++ii)
@@ -205,7 +205,7 @@ void setup()
 
     Wire.begin();
     bme680_setup();
-    Serial.println("setup complete");
+    printf("setup complete\n");
 }
 
 void loop()
@@ -215,7 +215,6 @@ void loop()
     InitESPNow();
     unsigned int t1 = millis();
     bme680_read();
-
 
     packet.pressure = int16_t(pressure - 100000);
     packet.temperature = int16_t((temperature)*100);
@@ -243,10 +242,9 @@ void loop()
    // printf("values %d %d %d %d %f %f %f\n", analogRead(26), val2v5, val1v24, valvcc, voltage, scale, offset);
     packet.voltage = voltage * 100;
 
-
     delay(10); //Short delay to finish transmit before esp_now_deinit()
     if (esp_now_deinit() != ESP_OK)   //De-initialize ESP-NOW. (icall information of paired devices will be deleted)
-        Serial.println("esp_now_deinit() failed"); 
+        printf("esp_now_deinit() failed\n"); 
     WiFi.mode(WIFI_OFF);
     int period = 10000;
     for(;;) {
@@ -268,6 +266,6 @@ void loop()
    //     printf("sleep time %d %d\n", d,  millis()-tx);
     }
 #if 0 // for debugging
-    Serial.printf("%d %d %d %d %d %d\n", packet.pressure, packet.temperature, packet.rel_humidity, packet.air_quality, t1 - t0, t1 - t0);
+    printf("%d %d %d %d %d %d\n", packet.pressure, packet.temperature, packet.rel_humidity, packet.air_quality, t1 - t0, t1 - t0);
 #endif
 }

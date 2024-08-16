@@ -83,7 +83,7 @@ typedef enum {
 class Adafruit_VEML7700 {
 public:
   Adafruit_VEML7700();
-  bool begin(TwoWire *theWire = &Wire);
+    bool begin(uint8_t gain, TwoWire *theWire = &Wire);
 
   void enable(bool enable);
   bool enabled(void);
@@ -112,13 +112,13 @@ public:
   uint16_t readALS(bool wait = false);
   uint16_t readWhite(bool wait = false);
   float readLux(luxMethod method = VEML_LUX_NORMAL);
+  float computeLux(uint16_t rawALS, bool corrected = false);
 
 private:
   const float MAX_RES = 0.0036;
   const float GAIN_MAX = 2;
   const float IT_MAX = 800;
   float getResolution(void);
-  float computeLux(uint16_t rawALS, bool corrected = false);
   float autoLux(void);
   void readWait(void);
   unsigned long lastRead;
