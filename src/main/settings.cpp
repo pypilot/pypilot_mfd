@@ -138,6 +138,7 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_S(power_button, "powersave")
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
+    LOAD_SETTING_I(cur_page, 0)
     printf("settings load 4 %ld\n", millis());
 
     // alarms
@@ -253,6 +254,7 @@ static bool settings_store_suffix(std::string suffix="")
     STORE_SETTING_S(power_button)
 
     STORE_SETTING_S(enabled_pages)
+    STORE_SETTING_I(cur_page)
 
     // alarms
     STORE_SETTING_B(anchor_alarm)

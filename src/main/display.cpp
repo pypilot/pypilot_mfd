@@ -307,7 +307,7 @@ struct dir_angle_text_display : public angle_text_display {
         if (isnan(v))
             return "---";
         if (settings.use_360 && has360)
-            return float_to_str(resolv(v, 180));
+            return float_to_str(resolv(v, 180), digits);
 
         return float_to_str(fabsf(v), digits);
     }
@@ -1771,7 +1771,6 @@ struct pageX : public page {
 
 
 static std::vector<page *> pages;
-static int cur_page = 0;
 route_info_t route_info;
 std::vector<page_info> display_pages;
 
@@ -1881,10 +1880,17 @@ void display_set_mirror_rotation(int r) {
 bool display_toggle(bool on) {
     if(on)
         display_on = true;
-    else
+    else {
         display_on = !display_on;
+    }
     digitalWrite(PWR_LED, !display_on);
     return display_on;
+}
+
+void display_pwr_led(bool on)
+{
+    pinMode(PWR_LED, OUTPUT);
+    digitalWrite(PWR_LED, on);
 }
 
 static int display_data_timeout[DISPLAY_COUNT];
@@ -1945,7 +1951,6 @@ void display_setup() {
     digitalWrite(PWR_LED, LOW);
 
     draw_setup(rotation);
-    cur_page = 'C' - 'A';
 
     for (int i = 0; i < pages.size(); i++)
         delete pages[i];
@@ -1986,6 +1991,15 @@ void display_setup() {
     setup_analog_pins();
 }
 
+static unsigned int cur_page()
+{
+    if (settings.cur_page >= (int)display_pages.size())
+        settings.cur_page = 0;
+    else if (settings.cur_page < 0)
+        settings.cur_page = display_pages.size() - 1;
+    return settings.cur_page;
+}
+
 void display_change_page(int dir) {
     if (rotation == 2 || rotation == 3)
         dir = -dir;
@@ -1996,31 +2010,25 @@ void display_change_page(int dir) {
     }
 
     if (dir == 0) {
-        if (display_pages[cur_page].enabled)
+        if (display_pages[cur_page()].enabled)
             return;
         dir = 1;
     } else
         buzzer_buzz(500, 20, 0);
 
     int looped = 0;
-    while (looped < 2) {
-        cur_page += dir;
-        if (cur_page >= (int)display_pages.size()) {
-            looped++;
-            cur_page = 0;
-        } else if (cur_page < 0) {
-            looped++;
-            cur_page = display_pages.size() - 1;
-        }
-        if (display_pages[cur_page].enabled) {
-            printf("changed to page %c\n", 'A' + cur_page);
+    while (looped < display_pages.size()) {
+        settings.cur_page += dir;
+        looped++;
+        if (display_pages[cur_page()].enabled) {
+            printf("changed to page %c\n", 'A' + cur_page());
             return;
         }
     }
 
     // all pages disabled??
     display_pages[0].enabled = true;
-    cur_page = 0;
+    settings.cur_page = 0;
     printf("warning, all pages disabled, enabling first page");
 }
 
@@ -2067,7 +2075,7 @@ static void render_status() {
 
     // show page letter
     char letter[] = "A";
-    letter[0] += cur_page;
+    letter[0] += cur_page();
     int w = draw_text_width(letter);
 
     draw_text(page_width - w, y, letter);
@@ -2089,6 +2097,9 @@ void data_timeout() {
 #if defined(USE_U8G2) || defined(USE_RGB_LCD)
 
 void display_poll() {
+    if (!display_on)
+        return;
+
     uint32_t t0 = millis();
 #ifdef USE_U8G2    
     static uint32_t last_render;
@@ -2099,13 +2110,9 @@ void display_poll() {
     read_analog_pins();
 
     //printf("draw clear %d\n", display_on);
-    draw_clear(display_on);
     uint32_t t1 = millis();
-    if (!display_on) {
-        draw_send_buffer();
-        return;
-    }
 
+    draw_clear(true);
     draw_color(WHITE);
 
     static uint32_t safetemp_time;
@@ -2149,7 +2156,7 @@ void display_poll() {
     if (in_menu)
         menu_render();
     else
-        pages[cur_page]->render();
+        pages[cur_page()]->render();
 
     if (settings.show_status)
         render_status();

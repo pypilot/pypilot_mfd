@@ -57,6 +57,7 @@ struct settings_t {
     std::string power_button; // power down or just turn of screen on power button
 
     std::string enabled_pages;
+    int cur_page;
 
     // alarms
     bool anchor_alarm;

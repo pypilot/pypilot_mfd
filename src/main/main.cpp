@@ -37,6 +37,8 @@
 extern "C" void app_main(void)
 {
     initArduino();
+    display_pwr_led(true);
+
     uint32_t t0 = millis();
 
     // Arduino-like setup()
@@ -87,6 +89,7 @@ extern "C" void app_main(void)
     // then go back to sleep
     if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER &&
        settings.power_button == "powersave") {
+        printf("woke into power save loop\n");
         while(keys_pwr_pressed()) {
             serial_poll();
             wireless_poll(); // receive sensor data
@@ -123,6 +126,7 @@ extern "C" void app_main(void)
 
     printf("Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
 
+    display_pwr_led(false);
     int dt=1;
     for(;;) {
         t0 = millis();

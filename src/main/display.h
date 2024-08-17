@@ -41,6 +41,7 @@ enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, COMPUTED_DATA, DA
 
 void display_setup();
 bool display_toggle(bool on=false);
+void display_pwr_led(bool on);
 void display_set_mirror_rotation(int);
 void display_change_page(int dir);
 void display_enter_exit_menu();

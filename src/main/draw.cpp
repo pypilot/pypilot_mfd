@@ -164,6 +164,7 @@ void draw_clear(bool display_on)
 
     if(!display_on) {
         u8g2.clearBuffer();
+        draw_send_buffer();
         return;
     }
 

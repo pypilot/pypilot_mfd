@@ -45,9 +45,9 @@ bool Adafruit_VEML7700::begin(uint8_t gain, TwoWire *theWire) {
     
   i2c_dev = new Adafruit_I2CDevice(VEML7700_I2CADDR_DEFAULT, theWire);
 
-  if (!i2c_dev->begin()) {
-    return false;
-  }
+  //if (!i2c_dev->begin()) {
+//    return false;
+//  }
 
   ALS_Config =
       new Adafruit_I2CRegister(i2c_dev, VEML7700_ALS_CONFIG, 2, LSBFIRST);
