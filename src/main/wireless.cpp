@@ -294,7 +294,7 @@ void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
 static void setup_wifi() {
     //settings_wifi_ap_mode=true;
     //printf("wifi mode %d\n", settings_wifi_ap_mode);
-    if (1||settings_wifi_ap_mode) {
+    if (settings_wifi_ap_mode) {
         //Set device in AP mode to begin with
         WiFi.mode(WIFI_AP);
         // configure device AP mode
@@ -311,12 +311,11 @@ static void setup_wifi() {
         printf("AP MAC: %s\n", WiFi.softAPmacAddress().c_str());
 
     } else {
-        //WiFi.mode(WIFI_AP_STA);
         WiFi.mode(WIFI_STA);
 
         WiFi.onEvent(WiFiStationGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
 
-        if (0 && !settings.ssid.empty()) {
+        if (0&&!settings.ssid.empty()) {
             printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
 
             // setting a custom "country" locks the wifi in a particular channel
@@ -767,7 +766,7 @@ void wireless_toggle_mode() {
 }
 
 void wireless_setup() {
-    printf("wireless setup\n");
+    //printf("wireless setup\n");
     memset(&chip, 0, sizeof(chip));
     for (int ii = 0; ii < 6; ++ii)
         chip.peer_addr[ii] = (uint8_t)0xff;

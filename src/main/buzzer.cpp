@@ -13,6 +13,7 @@ static int buzzer_pattern;
 
 void buzzer_buzz(int freq, int duration, int pattern)
 {
+    return;
     if(buzzer_timeout)
         ledcDetach(4);
 

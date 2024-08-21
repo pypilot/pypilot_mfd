@@ -251,9 +251,6 @@ static int vsynccount;
 static int rotation;
 
 #define DRAW_LCD_PIXEL_CLOCK_HZ     (18 * 1000 * 1000)
-#define DRAW_LCD_BK_LIGHT_ON_LEVEL  1
-#define DRAW_LCD_BK_LIGHT_OFF_LEVEL !DRAW_LCD_BK_LIGHT_ON_LEVEL
-#define DRAW_PIN_NUM_BK_LIGHT       GPIO_NUM_42
 #define DRAW_PIN_NUM_HSYNC          -1//47
 #define DRAW_PIN_NUM_VSYNC          -1//48
 #define DRAW_PIN_NUM_DE             45
@@ -293,17 +290,10 @@ static int rotation;
 
 // we use two semaphores to sync the VSYNC event and the LVGL task, to avoid potential tearing effect
 
-SemaphoreHandle_t sem_vsync_end;
-SemaphoreHandle_t sem_gui_ready;
-
 static bool IRAM_ATTR example_on_vsync_event(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *event_data, void *user_data)  
 {
-    BaseType_t high_task_awoken = pdFALSE;
-    if (xSemaphoreTakeFromISR(sem_gui_ready, &high_task_awoken) == pdTRUE) {
-        xSemaphoreGiveFromISR(sem_vsync_end, &high_task_awoken);
-    }  else
-        vsynccount++;
-    return high_task_awoken == pdTRUE;
+    vsynccount++;
+    return pdTRUE;
 }
 static esp_lcd_panel_handle_t panel_handle = NULL;
 #endif
@@ -314,25 +304,7 @@ void draw_setup(int r)
     rotation = r;
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
-
-    printf("draw: Create semaphores");
-    sem_vsync_end = xSemaphoreCreateBinary();
-    assert(sem_vsync_end);
-    sem_gui_ready = xSemaphoreCreateBinary();
-    assert(sem_gui_ready);
-   
-#if DRAW_PIN_NUM_BK_LIGHT >= 0
-    printf("draw: Turn off LCD backlight");
-    gpio_config_t bk_gpio_config = {
-        .pin_bit_mask = 1ULL << DRAW_PIN_NUM_BK_LIGHT,
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE
-    };
-    ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
-#endif
-    printf("draw: Install RGB LCD panel driver");
+    printf("draw: Install RGB LCD panel driver\n");
     esp_lcd_rgb_panel_config_t panel_config = {
         .clk_src = LCD_CLK_SRC_DEFAULT,
         .timings = {
@@ -391,7 +363,7 @@ void draw_setup(int r)
     };
     ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(&panel_config, &panel_handle));
 
-    printf("draw: Register event callbacks");
+    printf("draw: Register event callbacks\n");
     esp_lcd_rgb_panel_event_callbacks_t cbs = {
         .on_vsync = example_on_vsync_event,
         .on_bounce_empty = 0,
@@ -399,7 +371,7 @@ void draw_setup(int r)
     };
     ESP_ERROR_CHECK(esp_lcd_rgb_panel_register_event_callbacks(panel_handle, &cbs, NULL));
 
-    printf("draw: Initialize RGB LCD panel");
+    printf("draw: Initialize RGB LCD panel\n");
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
 
@@ -408,11 +380,6 @@ void draw_setup(int r)
 
     printf("got the framebuffers %p %p %p\n", framebuffers[0], framebuffers[1], framebuffers[2]);
     
-#if DRAW_PIN_NUM_BK_LIGHT >= 0
-    printf("draw: Turn on LCD backlight");
-    gpio_set_level(DRAW_PIN_NUM_BK_LIGHT, DRAW_LCD_BK_LIGHT_ON_LEVEL);
-#endif
-
 #if 1
     printf("SETTING GPIO HIGH\n");
     gpio_reset_pin(GPIO_NUM_39);
@@ -479,7 +446,7 @@ static void putpixel(int x, int y, uint8_t c)
 static void convert_coords(int &x, int &y)
 {
     switch(rotation) {
-    case 1: {
+    case 3: {
         int t = x;
         x = y;
         y = DRAW_LCD_V_RES - t - 1;
@@ -488,7 +455,7 @@ static void convert_coords(int &x, int &y)
         x = DRAW_LCD_H_RES - x - 1;
         y = DRAW_LCD_V_RES - y - 1;
         break;
-    case 3: {
+    case 1: {
         int t = x;
         x = DRAW_LCD_H_RES - y - 1;
         y = t;
@@ -780,41 +747,80 @@ void draw_circle(int xm, int ym, int r, int th)
                 uint8_t len = (buf[i]>>3) + 1;
 
                 uint8_t value = palette[color][c];
-                int idx1 = DRAW_LCD_H_RES*(ym-r+y)+xm-r+x;
-                int idx2 = DRAW_LCD_H_RES*(ym+r-y)+xm-r+x;
                 int len1 = len, len2=0;
                 if(len1 + x > 2*r) {
                     len1 = 2*r+1 - x;
                     len2 = len - len1;
                 }
-                
-                if(c == GRAYS-1) {
-                    memset(framebuffer + idx1, value, len1);
-                    memset(framebuffer + idx2, value, len1);
+
+                int idx1 = DRAW_LCD_H_RES*(ym-r+y);
+                int idx2 = DRAW_LCD_H_RES*(ym+r-y);
+                int lenr = len1;
+                int xp = xm - r + x;
+                if(xp < 0) {
+                    lenr += xp;
+                    xp = 0;
                 } else {
-                    for(int i=0; i<len1; i++)
-                        framebuffer[idx1++] |= value;
-                    for(int i=0; i<len1; i++)
-                        framebuffer[idx2++] |= value;
+                    idx1 += xp;
+                    idx2 += xp;
+                }
+                
+                if(xp + lenr >= DRAW_LCD_H_RES)
+                    lenr = DRAW_LCD_H_RES - 1 - xp;
+
+                if(lenr > 0) {
+                    if(c == GRAYS-1) {
+                        if(idx1 > 0 && idx1 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                            memset(framebuffer + idx1, value, lenr);
+                        if(idx2 > 0 && idx2 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                            memset(framebuffer + idx2, value, lenr);
+                    } else {
+                        if(idx1 > 0 && idx1 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                            for(int i=0; i<lenr; i++)
+                                framebuffer[idx1++] |= value;
+                        if(idx2 > 0 && idx2 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                            for(int i=0; i<lenr; i++)
+                                framebuffer[idx2++] |= value;
+                    }
                 }
                 x+=len1;
                 if(x > 2*r) {
                     x -= 2*r+1;
                     y++;
                 }
-
+                
                 // len2
                 if(len2) {
-                    idx1 = DRAW_LCD_H_RES*(ym-r+y)+xm-r+x;
-                    idx2 = DRAW_LCD_H_RES*(ym+r-y)+xm-r+x;
-                    if(c == GRAYS-1) {
-                        memset(framebuffer + idx1, value, len2);
-                        memset(framebuffer + idx2, value, len2);
+                    idx1 = DRAW_LCD_H_RES*(ym-r+y);
+                    idx2 = DRAW_LCD_H_RES*(ym+r-y);
+
+                    int lenr = len2;
+                    xp = xm - r + x;
+                    if(xp < 0) {
+                        lenr += xp;
+                        xp = 0;
                     } else {
-                        for(int i=0; i<len2; i++)
-                            framebuffer[idx1++] |= value;
-                        for(int i=0; i<len2; i++)
-                            framebuffer[idx2++] |= value;
+                        idx1 += xp;
+                        idx2 += xp;
+                    }
+                
+                    if(xp + lenr >= DRAW_LCD_H_RES)
+                        lenr = DRAW_LCD_H_RES - 1 - xp;
+
+                    if(lenr > 0) {
+                        if(c == GRAYS-1) {
+                            if(idx1 > 0 && idx1 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                                memset(framebuffer + idx1, value, lenr);
+                            if(idx2 > 0 && idx2 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                                memset(framebuffer + idx2, value, lenr);
+                        } else {
+                            if(idx1 > 0 && idx1 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                                for(int i=0; i<lenr; i++)
+                                    framebuffer[idx1++] |= value;
+                            if(idx2 > 0 && idx2 + lenr < DRAW_LCD_H_RES*DRAW_LCD_V_RES)
+                                for(int i=0; i<lenr; i++)
+                                    framebuffer[idx2++] |= value;
+                        }
                     }
                     x+=len2;
                 }
@@ -1032,7 +1038,7 @@ void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3)
 void draw_box(int x0, int y0, int w, int h, bool invert)
 {
     switch(rotation) {
-    case 1: {
+    case 3: {
         int t = x0;
         x0 = y0;
         y0 = DRAW_LCD_V_RES - t - w-1;
@@ -1042,7 +1048,7 @@ void draw_box(int x0, int y0, int w, int h, bool invert)
         x0 = DRAW_LCD_H_RES - x0 - w-1;
         y0 = DRAW_LCD_V_RES - y0 - h-1;
         break;
-    case 3: {
+    case 1: {
         int t = x0;
         x0 = DRAW_LCD_H_RES - y0 - h-1;
         y0 = t;
@@ -1110,14 +1116,14 @@ static int render_glyph(char c, int x, int y)
 
     // convert to correct corner of glyph
     switch(rotation) {
-    case 1:
+    case 3:
         y -= h;
         break;
     case 2:
         x -= w;
         y -= h;
         break;
-    case 3:
+    case 1:
         x -= w;
         break;
     case 0:
@@ -1144,9 +1150,9 @@ static int render_glyph(char c, int x, int y)
             int cx, cy;
             for(int j=0; j<cnt; j++) {
                 switch(rotation) {
-                case 1: cx = by, cy = h-1-bx;     break;
+                case 3: cx = by, cy = h-1-bx;     break;
                 case 2: cx = w-1-bx, cy = h-1-by; break;
-                case 3: cx = w-1-by, cy = bx;      break;
+                case 1: cx = w-1-by, cy = bx;      break;
                 default: cx = bx, cy = by;         break;
                 }
                     
@@ -1248,13 +1254,13 @@ void draw_text(int x, int y, const std::string &str)
     convert_coords(x, y);
     for(int i=0; i<str.length(); i++) {
         switch(rotation) {
-        case 1:
+        case 3:
             y -= render_glyph(str[i], x, y);
             break;
         case 2: // rotate 180
             x -= render_glyph(str[i], x, y);
             break;
-        case 3:
+        case 1:
             y += render_glyph(str[i], x, y);
             break;
         default: // no conversion
@@ -1302,8 +1308,6 @@ void draw_send_buffer()
     uint32_t t1 = esp_timer_get_time();
     esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, DRAW_LCD_H_RES, DRAW_LCD_V_RES, framebuffer);
         
-//    xSemaphoreGive(sem_gui_ready);
-//    xSemaphoreTake(sem_vsync_end, portMAX_DELAY);
     uint32_t t2 = esp_timer_get_time();
 #endif
     if(framebuffer == framebuffers[0])

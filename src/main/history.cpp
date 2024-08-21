@@ -137,6 +137,7 @@ struct history
             if(range > 0) {
                 // average previous range data
                 int count = 0;
+                value = 0;
                 for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) 
                 {
                     if(!isnan(it->value)) {
@@ -149,8 +150,8 @@ struct history
                 if(count == 0)
                     break;
 
-                store_packet(range-1, index, HISTORY_VALUE, time, value);
                 value /= count;
+                store_packet(range-1, index, HISTORY_VALUE, time, value);
 
                 for(std::list<history_element>::iterator it = data_low[range-1].begin(); it != data_low[range-1].end(); it++) {
                     if(it->value < minv)
@@ -177,6 +178,7 @@ struct history
                 if(range > 0)
                     store_packet(range-1, index, HISTORY_HIGH, time, lvalue_max);
             }
+
             if(data_low[range].empty())
                 data_low[range].push_front(history_element(minv, time));
             else if(llvalue_min > lvalue_min && lvalue_min <= minv) {
@@ -200,6 +202,7 @@ struct history
     }
 
     void put_back(int32_t time, float value, int range, type t) {
+        //printf("put back %ld %f %d %d\n", time, value, range, t);
         std::list<history_element> *d;
         switch(t) {
         case HISTORY_VALUE: d = &data[range]; break;
@@ -396,11 +399,11 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
     while (Wire.available() && i < 8)
         data[i++] = Wire.read();
     if(i != 8 || data[7] != crc8(data, 7)) {
-        printf("bail, history fail crc %x %x\n", data[7], crc8(data, 7));
+        printf("history bail, history fail crc %x %x\n", data[7], crc8(data, 7));
         return false;
     }
 
-    // printf("GOT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+    //printf("GOT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
 
     // time on eeprom is absolute since epoch
     int32_t time = *(uint32_t*)data;
@@ -411,7 +414,7 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
 
     // sanity check, if history data is after current time, it is invalid, maybe our epoch is wrong?
     if(time > curtime) {
-        printf("bail, history after cur time %ld %ld\n", time, curtime);
+        printf("history bail, history after cur time %ld %ld\n", time, curtime);
         return false;
     }
 
@@ -420,7 +423,7 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
     uint8_t item = data[6]&0xf;
 
     if(item >= HISTORY_ITEM_COUNT) {
-        printf("bail corrupt item %d\n", item);
+        printf("history bail corrupt item %d\n", item);
         return false; // invalid, corrupted data?
     }
     
@@ -441,7 +444,7 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
     
     uint32_t max_age = history_range_time[range+1];
     if(age > max_age) {
-        printf("bail max age %ld %ld\n", age, max_age);
+        printf("history bail max age %ld %ld\n", age, max_age);
         return false;// range == 4; // at higher range if our time is out of range, we are done
     }
 
@@ -454,7 +457,7 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
 static void eeprom_store_packet(int position, uint8_t data[8]) {
     int offset = position * 8;
 
-    // printf("PUT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+    //printf("PUT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
 
     uint32_t t = millis();
     int d = EEPROM_WRITE_DELAY - (t - eeprom_write_time);
@@ -478,6 +481,7 @@ static void eeprom_store_packet(int position, uint8_t data[8]) {
 
 static void eeprom_store(int position, uint8_t index, uint8_t type, uint32_t time, float value)
 {
+    //printf("eeprom store %d %d %d %ld %f\n", position, index, type, time, value);
     uint8_t packet[8];
 
     int64_t t = cold_time();
@@ -740,11 +744,8 @@ void history_poll()
 
 void history_setup()
 {
-//    Wire.begin();
-    printf("i2c clock is %ld\n", Wire.getClock());
-
-//    printf("i2c set clock %d\n", Wire.setClock(10000));
-//    printf("i2c clock is %ld\n", Wire.getClock());
+    uint32_t frequency = Wire.getClock();
+    printf("i2c clock is %ld\n", frequency);
     
     Wire.beginTransmission(DEVICE_ADDRESS);
     int error = Wire.endTransmission();

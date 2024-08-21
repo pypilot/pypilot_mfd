@@ -36,16 +36,7 @@ std::string get_wifi_data_str()
 static bool settings_load_suffix(std::string suffix="")
 {
     settings.usb_baud_rate = 115200;
-#ifndef __linux__
-    if (!SPIFFS.begin(true)) {
-        printf("SPIFFS Mount Failed\n");
-        return false;
-    }
-#endif    
-    //listDir(SPIFFS, "/", 0);
     //settings.channel = 6;
-
-    printf("settings load 1 %ld\n", millis());
 
     // start with default settings
     settings.magic = MAGIC;
@@ -56,7 +47,6 @@ static bool settings_load_suffix(std::string suffix="")
 #ifndef __linux__
     String sfilename = filename.c_str();
     File file = SPIFFS.open(sfilename, "r");
-    printf("settings load 2 %ld\n", millis());
 
     if(file && !file.isDirectory()) {
         std::string data;
@@ -64,7 +54,7 @@ static bool settings_load_suffix(std::string suffix="")
             data += file.readString().c_str();
         file.close();
 
-        //printf("READ SETTINGS %s\n", data.c_str());
+        printf("READ SETTINGS %s\n", data.c_str());
 
         if(s.Parse(data.c_str()).HasParseError()) {
             printf("settings file '%s' invalid/corrupted, will ignore data\n", filename.c_str());
@@ -79,12 +69,11 @@ static bool settings_load_suffix(std::string suffix="")
         ret = false;
         printf("settings file '%s' magic identifier failed, will ignore data\n", filename.c_str());
     }
-    printf("settings load 3 %ld\n", millis());
 
     if(!ret) {
         if(suffix.empty())
             return false;
-         s.Parse("{}").HasParseError();
+        s.Parse("{}").HasParseError();
     }        
 
 #define LOAD_SETTING_B(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsBool()) settings.NAME = s[#NAME].GetBool(); else settings.NAME = DEFAULT;
@@ -139,7 +128,6 @@ static bool settings_load_suffix(std::string suffix="")
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
     LOAD_SETTING_I(cur_page, 0)
-    printf("settings load 4 %ld\n", millis());
 
     // alarms
     LOAD_SETTING_B(anchor_alarm, false)
@@ -190,11 +178,9 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_S(signalk_addr, "10.10.10.1")
     LOAD_SETTING_I(signalk_port, 3000)
 
-    printf("settings load 5 %ld\n", millis());
     // transmitters
     if(s.HasMember("transmitters"))
         wireless_read_transmitters(s["transmitters"]);
-    printf("settings load 6 %ld\n", millis());
 
     return ret;
 }
@@ -245,8 +231,8 @@ static bool settings_store_suffix(std::string suffix="")
     STORE_SETTING_S(lat_lon_format)
     STORE_SETTING_B(invert)
     STORE_SETTING_S(color_scheme)
-    STORE_SETTING_B(contrast)
-    STORE_SETTING_B(backlight)
+    STORE_SETTING_I(contrast)
+    STORE_SETTING_I(backlight)
     
     STORE_SETTING_B(show_status)
     STORE_SETTING_I(rotation)
@@ -325,6 +311,14 @@ static bool settings_store_suffix(std::string suffix="")
 
 void settings_load()
 {
+#ifndef __linux__
+    if (!SPIFFS.begin(true)) {
+        printf("SPIFFS Mount Failed\n");
+        return;
+    }
+#endif    
+    listDir(SPIFFS, "/", 0);
+
     if (settings_load_suffix())
         settings_store_suffix(".bak");
     else

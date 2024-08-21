@@ -1,9 +1,17 @@
-This repository contains code for a multifunction display
+This repository contains code for an open source multifunction marine display.
 
 The data formats currently are nmea0183, signalK, and direct communication to pypilot.
 
 It supports zeroconf (mDNS) to detect pypilot and signalk servers.   There is support for wifi, usb (serial port) and nmea0183 (rs422) communications.
 
-Many displays are supported by u8g2 library or tft_spi library, but I specifically target jlx256160 and the ttgo_t_display.
+The esp32s3 can drive high resolution (800x480) RGB parallel dayligth visible lcd.
 
-Wireless wind sensors that transmit data via esp-now can be received and displayed or relayed over the various data interfaces.
+A standard esp32 can be used for monochrome displays eg: jlx256160
+
+3d printed enclosures may be waterproofed by treating (100% infill and soaking with dichtol) (FDM) or by printing with SLA/SLS.  The plexiglass cover is sealed with a rubber oring tested submerged under water for prolonged periods.
+
+Wireless sensors are implemented specifically:
+-  3d printed wind sensors using ceramic bearings and hall effect sensors (non contact)  Multiple wind sensors can be used mounted in different locations on the boat, and the sensors can compensate motion using inertial sensors.
+-  pressure, humidity and air quality sensors (bme680)
+-  lightning, uv and visible light sensors
+-  (planned but not fully implemented)  sonar for depth, water speed, water temperature.

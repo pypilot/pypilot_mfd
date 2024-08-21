@@ -8,6 +8,7 @@
 
 #include <iostream>
 
+#include <Update.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 
@@ -488,6 +489,62 @@ void web_setup()
 
         request->send(200, "text/plain", data.c_str());
     });
+
+    server.on("/update", HTTP_OPTIONS, [](AsyncWebServerRequest *request)
+                {
+            AsyncWebServerResponse* response = request->beginResponse(200,F("text/html"), String(F("y")));
+            response->addHeader("Access-Control-Allow-Headers", "*");
+            response->addHeader("Access-Control-Allow-Origin", "*");
+            request->send(response); 
+                });
+
+    server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request)
+        {
+            printf("on update \n");
+        if (Update.hasError())
+        {
+            AsyncWebServerResponse *response = request->beginResponse(200, F("text/html"), String(F("Update error: ")) + Update.errorString());
+            response->addHeader("Access-Control-Allow-Headers", "*");
+            response->addHeader("Access-Control-Allow-Origin", "*");
+            response->addHeader("Connection", "close");
+            request->send(response);
+            printf(" update error \n");
+        }
+        else
+        {
+            printf("on success \n");
+            request->redirect("/update_success.html");
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+            ESP.restart();
+        }
+        },
+        [&](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final)
+        {
+            // handler for the file upload, gets the sketch bytes, and writes
+            // them through the Update object
+            //printf("UPDATE REQUES %d %d %d\n", index, len, final);
+
+            if (!index)
+            {
+                printf("OTA Update: %s\n", filename.c_str());
+                //uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+                if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) // start with max available size
+                    printf("%s\n", Update.errorString());
+            }
+
+            if (len && !Update.getError())
+            {
+                if (Update.write(data, len) != len)
+                    printf("%s\n", Update.errorString());
+            }
+
+            if(final) {
+                if(!Update.end(true))
+                    printf("%s\n", Update.errorString());
+            }
+        });
+    
 
     // serve all files
     unsigned int i, num_files = (sizeof data_files)/(sizeof *data_files);

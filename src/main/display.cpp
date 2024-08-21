@@ -24,6 +24,7 @@
 // autocompensate contrast based on light and temperature
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 
+#define BACKLIGHT_PIN 42
 #define NTC_PIN -1 // s3 has internal temp sensor
 #define PHOTO_RESISTOR_PIN 1
 #define PWR_LED 18
@@ -635,9 +636,9 @@ struct gauge : public display_item {
         x0 = xc + (r - u) * s;
         y0 = yc - (r - u) * c;
         int v = 3;
-        int x1 = xc + r * s;
+        int x1 = xc + (r-1) * s;
         int xp = v * c;
-        int y1 = yc - r * c;
+        int y1 = yc - (r-1) * c;
         int yp = v * s;
         draw_triangle(x1 - xp, y1 - yp, x0, y0, x1 + xp, y1 + yp);
     }
@@ -1818,7 +1819,12 @@ static void setup_analog_pins() {
 
     analogReadResolution(12);
 
-#ifndef CONFIG_IDF_TARGET_ESP32S3
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    ledcAttachChannel(BACKLIGHT_PIN, 200, 8, 3);
+//    ledcWriteChannel(3, 254);
+//    pinMode(BACKLIGHT_PIN, OUTPUT);
+//    digitalWrite(BACKLIGHT_PIN, HIGH);
+#else
     ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3);
     ledcWriteChannel(3, 0);
 #endif
@@ -1828,7 +1834,10 @@ static void setup_analog_pins() {
 static bool over_temperature = false;
 static void read_analog_pins() {
     int val = analogRead(PHOTO_RESISTOR_PIN);
-#ifndef CONFIG_IDF_TARGET_ESP32S3
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    //printf("temp is %f\n", temperatureRead());
+    over_temperature = temperatureRead() > 75;
+#else
     //int32_t t0 = esp_timer_get_time();
     int ntc = analogRead(NTC_PIN);
 
@@ -1852,6 +1861,14 @@ static void read_analog_pins() {
     over_temperature = ntc < 532;
 #endif
 
+
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+
+#if 1
+    ledcWriteChannel(3, 255);
+#endif
+    
+#else
     // set backlight level
     static bool backlight_on;
     if (!display_on)
@@ -1860,8 +1877,6 @@ static void read_analog_pins() {
         backlight_on = false;
     else if (!backlight_on && val < 3400)
         backlight_on = true;
-
-#ifndef CONFIG_IDF_TARGET_ESP32S3
     if (backlight_on)
         ledcWriteChannel(3, 1 + settings.backlight * settings.backlight * 5 / 2);
     else
@@ -2188,11 +2203,14 @@ void display_setup() {
 }
 
 void display_poll() {
+
     static bool last_settings_wifi_ap_mode;
+
     if (settings_wifi_ap_mode != last_settings_wifi_ap_mode) {
         tft.fillScreen(TFT_BLACK);
         last_settings_wifi_ap_mode = settings_wifi_ap_mode;
     }
+
     if (settings_wifi_ap_mode) {
         tft.setTextColor(TFT_RED, TFT_BLACK);
         tft.drawString("WIFI AP", 0, 0, 4);

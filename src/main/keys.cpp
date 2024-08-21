@@ -53,6 +53,8 @@ static void readkeys()
 {
     for (int i = 0; i < KEY_COUNT; i++)
         keys[i] = !digitalRead(key_pin[i]);
+//    printf("read keys %d %d %d %d\n", keys[0], keys[1] ,keys[2], keys[3]);
+//    printf("read key times %ld %ld %ld %ld\n", key_times[0], key_times[1] ,key_times[2], key_times[3]);
 }
 
 static bool pressed(int key, bool repeat=true)
@@ -87,8 +89,6 @@ static bool held(int key)
 
 void keys_poll()
 {
-    readkeys();
-
     if(keys[KEY_PAGE_UP] && keys[KEY_PAGE_DOWN])
         wireless_toggle_mode();
     else if (pressed(KEY_PAGE_UP)) {

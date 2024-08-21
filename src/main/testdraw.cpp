@@ -51,7 +51,7 @@ void display() {
 
     static int ri=100;
     ri++;
-    draw_circle(240, 240, 233, 6 );
+    draw_circle(240, 300, 233, 6 );
     //draw_thick_line(0,0,100, 30, 10);
     if(ri>80)
         ri = 40;

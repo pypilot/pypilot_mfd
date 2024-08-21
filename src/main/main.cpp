@@ -14,6 +14,11 @@
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_system.h"
+#include <esp_ota_ops.h>
+
+///
+#include "driver/i2c.h"
+///
 
 #include "Arduino.h"
 
@@ -34,18 +39,22 @@
 #include "alarm.h"
 #include "history.h"
 
+
 extern "C" void app_main(void)
 {
     initArduino();
+ 
     display_pwr_led(true);
 
     uint32_t t0 = millis();
 
     // Arduino-like setup()
-    //delay(1500);
     serial_setup();
     printf("pypilot_mfd, %ld\n", millis());
 
+    const esp_partition_t *partition = esp_ota_get_running_partition();
+    printf("Currently running partition: %s\r\n", partition->label);
+    
     /* Print chip information */
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
@@ -129,6 +138,7 @@ extern "C" void app_main(void)
     display_pwr_led(false);
     int dt=1;
     for(;;) {
+
         t0 = millis();
         wireless_poll();
         keys_poll();
@@ -136,7 +146,7 @@ extern "C" void app_main(void)
         nmea_poll();
 
 //        signalk_poll();
-//        pypilot_client_poll();
+        pypilot_client_poll();
         alarm_poll();
         buzzer_poll();
         web_poll();
