@@ -14,11 +14,10 @@
 #define USE_RGB_LCD     // color lcd
 #endif
 
-enum color_e {WHITE, RED, GREEN, BLUE, CYAN, MAGENTA, YELLOW, GREY, ORANGE, COLOR_COUNT};
+enum color_e {WHITE, RED, GREEN, BLUE, CYAN, MAGENTA, YELLOW, GREY, ORANGE, BLACK, COLOR_COUNT};
 
 void draw_setup(int rotation);
 void draw_thick_line(int x1, int y1, int x2, int y2, int w);
-void draw_circle_orig(int x, int y, int r, int thick=0);
 void draw_circle(int x, int y, int r, int thick=0);
 void draw_line(int x1, int y1, int x2, int y2, bool convert=true);
 void draw_box(int x, int y, int w, int h, bool invert=false);

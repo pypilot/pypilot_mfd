@@ -10,10 +10,9 @@
 
 #include <esp_now.h>
 #include <esp_wifi.h>
-#include <WiFi.h>
-#include <Wire.h>
-
-#include <EEPROM.h>
+#include <esp_sleep.h>
+#include "esp_timer.h"
+#include <string.h>
 
 #include "bme680.h"
 
@@ -25,8 +24,7 @@
 esp_now_peer_info_t chip;
 
 // data in packet
-#define AIR_ID 0xa41b
-#define CHANNEL_ID 0x0a21
+#define ID 0xa41b
 
 struct air_packet_t {
   uint16_t id;
@@ -41,179 +39,123 @@ struct air_packet_t {
 
 air_packet_t packet;
 
-struct packet_channel_t {
-    uint16_t id;             // packet identifier
-    uint16_t channel;
-    uint16_t crc16;
-};
+#include "../../common/common.h"
 
-void reboot()
+//#define ADC_CONTINUOUS
+
+#ifdef ADC_CONTINUOUS
+#include "esp_log.h"
+#include "esp_adc/adc_continuous.h"
+static const char *TAG = "ADC_CONTINOUS";
+
+adc_continuous_handle_t adc_handle = NULL;
+
+#else
+
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
+
+adc_oneshot_unit_handle_t adc1_handle;
+
+#endif
+
+const int READ_LEN = 256;
+
+void init_adc()
 {
-    printf("Reset ESP\n");
-    delay(30);
-    ESP.restart();  // reset
+#ifdef ADC_CONTINUOUS
+    adc_continuous_handle_cfg_t adc_config = {
+        .max_store_buf_size = 1024,
+        .conv_frame_size = READ_LEN,
+    };
+    ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
+
+    adc_continuous_config_t dig_cfg = {
+        .sample_freq_hz = 20 * 1000,
+        .conv_mode = ADC_CONV_SINGLE_UNIT_1,
+        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE1,
+    };
+
+    adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX] = {0};
+    dig_cfg.pattern_num = 2;
+    int channel[3] = {ADC_CHANNEL_3, ADC_CHANNEL_4, ADC_CHANNEL_5};
+    for (int i = 0; i < dig_cfg.pattern_num; i++) {
+        adc_pattern[i].atten = ADC_ATTEN_DB_12;
+        adc_pattern[i].channel = channel[i] & 0x7;
+        adc_pattern[i].unit = ADC_UNIT_1;
+        adc_pattern[i].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
+
+        ESP_LOGI(TAG, "adc_pattern[%d].atten is :%"PRIx8, i, adc_pattern[i].atten);
+        ESP_LOGI(TAG, "adc_pattern[%d].channel is :%"PRIx8, i, adc_pattern[i].channel);
+        ESP_LOGI(TAG, "adc_pattern[%d].unit is :%"PRIx8, i, adc_pattern[i].unit);
+    }
+    dig_cfg.adc_pattern = adc_pattern;
+    ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &dig_cfg));
+    ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
+#else
+    //-------------ADC1 Init---------------//
+    adc_oneshot_unit_init_cfg_t init_config1 = {
+       .unit_id = ADC_UNIT_1,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
+
+    //-------------ADC1 Config---------------//
+    adc_oneshot_chan_cfg_t config = {
+        .atten = ADC_ATTEN_DB_12,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    // pin 1V24 30 ADC1_3
+    // pin 2V5 32 ADC1_4
+    // pin VCC 33 ADC1_5
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_3, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_4, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_5, &config));
+
+    //-------------ADC1 Calibration Init---------------//
+#if 0    
+    adc_cali_handle_t adc1_cali_chan3_handle = NULL;
+    adc_cali_handle_t adc1_cali_chan4_handle = NULL;
+    adc_cali_handle_t adc1_cali_chan5_handle = NULL;
+    bool do_calibration1_chan0 = example_adc_calibration_init(ADC_UNIT_1, EXAMPLE_ADC1_CHAN0, EXAMPLE_ADC_ATTEN, &adc1_cali_chan0_handle);
+    bool do_calibration1_chan1 = example_adc_calibration_init(ADC_UNIT_1, EXAMPLE_ADC1_CHAN1, EXAMPLE_ADC_ATTEN, &adc1_cali_chan1_handle);
+#endif
+#endif
 }
 
-// Init ESP Now with fallback
-void InitESPNow()
+#ifndef ADC_CONTINUOUS
+uint16_t read_adc(adc_channel_t channel, int samples)
 {
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
-
-    esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
-    if (esp_now_init() == ESP_OK) {
-        //printf("ESPNow Init Success\n");
-    } else {
-        printf("ESPNow Init Failed\n");
-        reboot();
+    uint32_t total = 0;
+    for(int i=0; i<samples; i++) {
+        int v;
+        ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, channel, &v));
+        total += v;
     }
-
-    esp_now_register_recv_cb(OnDataRecv);
-
-    // chip not paired, attempt pair
-    esp_err_t addStatus = esp_now_add_peer(&chip);
-    if (addStatus == ESP_OK)
-    // Pair successf
-    // printf("Pair success\n");
-        return;
-    else if (addStatus == ESP_ERR_ESPNOW_NOT_INIT)
-    // How did we get so far!!
-        printf("ESPNOW Not Init\n");
-    else if (addStatus == ESP_ERR_ESPNOW_ARG)
-        printf("Invalid Argument\n");
-    else if (addStatus == ESP_ERR_ESPNOW_FULL)
-        printf("Peer list full\n");
-    else if (addStatus == ESP_ERR_ESPNOW_NO_MEM)
-        printf("Out of memory\n");
-    else if (addStatus == ESP_ERR_ESPNOW_EXIST)
-        printf("Peer Exists\n");
-    else
-        printf("Not sure what happened\n");
-    reboot();
+    return total / samples;
 }
+#endif
 
-uint16_t crc16(const uint8_t *data_p, int length)
+extern "C" void app_main(void)
 {
-    uint8_t x;
-    uint16_t crc = 0xFFFF;
-
-    while (length--) {
-        x = crc >> 8 ^ *data_p++;
-        x ^= x >> 4;
-        crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x << 5)) ^ ((uint16_t)x);
-    }
-    return crc;
-}
-
-// send data
-void sendData()
-{
-    // compute checksum
-    packet.crc16 = crc16((uint8_t *)&packet, sizeof(packet) - 2);
-
-    const uint8_t *peer_addr = chip.peer_addr;
-    //Serial.print("Sending...");
-    esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
-    //Serial.print("Send Status: ");
-    if (result == ESP_OK) {
-        //printf("Success\n");
-        return;
-    } else if (result == ESP_ERR_ESPNOW_NOT_INIT)
-        // How did we get so far!!
-        printf("ESPNOW not Init.\n");
-    else if (result == ESP_ERR_ESPNOW_ARG)
-       printf("Invalid Argument\n");
-    else if (result == ESP_ERR_ESPNOW_INTERNAL)
-        printf("Internal Error\n");
-    else if (result == ESP_ERR_ESPNOW_NO_MEM)
-        printf("ESP_ERR_ESPNOW_NO_MEM\n");
-    else if (result == ESP_ERR_ESPNOW_NOT_FOUND)
-        printf("Peer not found.\n");
-    else
-        printf("Not sure what happened\n");
-
-    reboot();
-}
-
-// callback when data is sent from Master to chip
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
-{
-    char macStr[18];
-    snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-             mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    Serial.print("Last Packet Sent to: ");
-    printf(macStr);
-    Serial.print("Last Packet Send Status: \n");
-    printf(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success\n" : "Delivery Fail");
-}
-
-
-
-void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
-{
-    if(data_len != sizeof(packet_channel_t)) {
-        //printf("wrong packet size\n");
-        return;
-    }
-
-    packet_channel_t *packet = (packet_channel_t*)data;
-    if(packet->id != CHANNEL_ID) {
-        //printf("ID mismatch\n");
-    }
-
-    uint16_t crc = crc16(data, data_len-2);
-    if(crc != packet->crc16) {
-        Serial.printf("crc failed %x %x\n", crc, packet->crc16);
-            return;
-    }
-
-    if(chip.channel != packet->channel) {
-        chip.channel = packet->channel;
-        EEPROM.put(0, packet->channel);
-        EEPROM.commit();
-    }
-}
-
-void setup()
-{
-    delay(500);
-    Serial.begin(115200);
+//    vTaskDelay(1500 / portTICK_PERIOD_MS); // remove after debugged
     //Set device in STA mode to begin with
-    printf("BME680 Transmitter\n");
+    printf("BME680 Transmitter!\n");
   
-    memset(&chip, 0, sizeof(chip));
-    for (int ii = 0; ii < 6; ++ii)
-        chip.peer_addr[ii] = (uint8_t)0xff;
-    EEPROM.begin(sizeof chip.channel);
-    EEPROM.get(0, chip.channel);  // pick a channel
-    EEPROM.end();
-    if(chip.channel > 12 || chip.channel == 0)
-        chip.channel = 6;
+    read_channel();
 
-    chip.encrypt = 0;        // no encryption
+    packet.id = ID;  // initialize packet ID
 
-    packet.id = AIR_ID;  // initialize packet ID
+    init_adc();
+    i2c_setup();
 
-    pinMode(0, INPUT);
-
-    adcAttachPin(26);
-
-    // adc
-       /* adcAttachPin(PIN_2V5);
-        adcAttachPin(PIN_1V24);
-        adcAttachPin(PIN_VCC);*/
-
-    Wire.begin();
     bme680_setup();
     printf("setup complete\n");
-}
 
-void loop()
-{
-   // printf("loop\n");
-    unsigned int t0 = millis();
-    InitESPNow();
-    unsigned int t1 = millis();
+    // printf("loop\n");
+    wifi_init();
+    espnow_init();
+    
     bme680_read();
 
     packet.pressure = int16_t(pressure - 100000);
@@ -222,50 +164,80 @@ void loop()
     packet.air_quality = uint16_t(air_quality*100);
     packet.reserved = 0;
 
-    sendData();
-    // Prepare for sleep
-    int val2v5 = analogRead(PIN_2V5);
-    int val1v24 = analogRead(PIN_1V24);
-    int valvcc = analogRead(PIN_VCC);
+    int val1v24, val2v5, valvcc;
+#ifdef ADC_CONTINUOUS
+    esp_err_t ret;
+    uint32_t ret_num = 0;
+    uint8_t result[READ_LEN] = {0};
+    memset(result, 0xcc, READ_LEN);
 
+    uint32_t values[3] = {0}, counts[3] = {0};
+
+    ret = adc_continuous_read(adc_handle, result, READ_LEN, &ret_num, 0);
+    if (ret == ESP_OK) {
+        ESP_LOGI("TASK", "ret is %x, ret_num is %"PRIu32" bytes", ret, ret_num);
+        for (int i = 0; i < ret_num; i += SOC_ADC_DIGI_RESULT_BYTES) {
+            adc_digi_output_data_t *p = (adc_digi_output_data_t *)&result[i];
+            uint32_t chan_num = p->type1.channel;
+            uint32_t data = p->type1.data;
+            /* Check the channel number validation, the data is invalid if the channel num exceed the maximum channel */
+            if (chan_num < SOC_ADC_CHANNEL_NUM(ADC_UNIT_1)) {
+                values[chan_num] += data;
+                counts[chan_num] ++;
+            } else {
+                ESP_LOGW(TAG, "Invalid data [1_%"PRIu32"_%"PRIx32"]", chan_num, data);
+            }
+        }
+    }
+    ESP_ERROR_CHECK(adc_continuous_stop(adc_handle));
+    ESP_ERROR_CHECK(adc_continuous_deinit(adc_handle));
+
+
+    val2v5 = values[0] / counts[0];
+    val1v24 = values[1] / counts[1];
+    valvcc = values[2] / counts[2];
+#else
+    const int samples = 16;
+//    int32_t t0 = esp_timer_get_time();
+    val1v24 = read_adc(ADC_CHANNEL_3, samples);
+//    int32_t t1 = esp_timer_get_time();
+//    printf("took %ld\n", t1-t0);
+//    val2v5 = read_adc(ADC_CHANNEL_4, samples);
+    valvcc = read_adc(ADC_CHANNEL_5, samples);
+   
     val2v5 = 2800;
-
+#endif
+        
     //2.5 = scale * val2v5 + offset;
     //1.24 = scale * val1v24 + offset;
     //1.26 = scale*(val2v5 - val1v24)
     float scale = (2.5f-1.24f) / (val2v5 - val1v24);
     float offset = 2.5f - scale*val2v5;
-
+    
     float vin = scale * valvcc + offset;
     // vin = 10/91 * voltage;
     float voltage = 91/10.0f * vin;
-   // printf("values %d %d %d %d %f %f %f\n", analogRead(26), val2v5, val1v24, valvcc, voltage, scale, offset);
+//    printf("values %d %d %d %f %f %f\n", val2v5, val1v24, valvcc, voltage, scale, offset);
     packet.voltage = voltage * 100;
 
-    delay(10); //Short delay to finish transmit before esp_now_deinit()
+#if 1 
+    sendData();
+#else
+    // continuous debugging
+    for(;;) {
+        sendData();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+#endif
+    //Short delay to finish transmit before esp_now_deinit()
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+
     if (esp_now_deinit() != ESP_OK)   //De-initialize ESP-NOW. (icall information of paired devices will be deleted)
         printf("esp_now_deinit() failed\n"); 
-    WiFi.mode(WIFI_OFF);
+
     int period = 10000;
-    for(;;) {
-        unsigned int tx = millis();
-        int d = tx - t0;
-
-        if (d >= period)
-            break;
-
-        d = period - d;
-#if 0
-        delay(d);
-#else
-        gpio_wakeup_enable(GPIO_NUM_34, digitalRead(34) ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
-    	esp_sleep_enable_gpio_wakeup();
-        esp_sleep_enable_timer_wakeup(d * 1000);  //light sleep 100ms
-        esp_light_sleep_start();
-#endif
-   //     printf("sleep time %d %d\n", d,  millis()-tx);
-    }
-#if 0 // for debugging
-    printf("%d %d %d %d %d %d\n", packet.pressure, packet.temperature, packet.rel_humidity, packet.air_quality, t1 - t0, t1 - t0);
-#endif
+    
+    // Prepare for sleep
+    esp_sleep_enable_timer_wakeup(period * 1000);
+    esp_deep_sleep_start();
 }

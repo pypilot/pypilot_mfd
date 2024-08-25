@@ -23,6 +23,7 @@
 #include "history.h"
 #include "zeroconf.h"
 #include "signalk.h"
+#include "serial.h"
 #include "web.h"
 
 #include "data.h"
@@ -133,23 +134,38 @@ std::string Checked(bool value) {
 
 std::string processor(const std::string& var)
 {
-    //println(var);
     if(var == "WIFI_NETWORKS") return wifi_networks_html;
-    if(var == "SSID")       return settings.ssid;
-    if(var == "PSK")        return settings.psk;
+    if(var == "WIFI_MODE") return get_wifi_mode_str();
+    if(var == "AP_SSID")       return settings.ap_ssid;
+    if(var == "AP_PSK")        return settings.ap_psk;
+    if(var == "CLIENT_SSID")       return settings.client_ssid;
+    if(var == "CLIENT_PSK")        return settings.client_psk;
     if(var == "CHANNEL")    return int_to_str(settings.channel);
     if(var == "INPUTUSB")   return Checked(settings.input_usb);
     if(var == "OUTPUTUSB")  return Checked(settings.output_usb);
-    if(var == "INPUTWIFI")  return Checked(settings.input_wifi);
-    if(var == "OUTPUTWIFI") return Checked(settings.output_wifi);
     if(var == "USB_BAUD_RATE") return int_to_str(settings.usb_baud_rate);
-    if(var == "RS422_BAUD_RATE") return int_to_str(settings.rs422_baud_rate);
+    if(var == "RS422_1_BAUD_RATE") return int_to_str(settings.rs422_1_baud_rate);
+    if(var == "RS422_2_BAUD_RATE") return int_to_str(settings.rs422_2_baud_rate);
+
+    if(var == "INPUT_NMEA_PYPILOT")   return Checked(settings.input_nmea_pypilot);
+    if(var == "OUTPUT_NMEA_PYPILOT")  return Checked(settings.output_nmea_pypilot);
+    if(var == "INPUT_NMEA_SIGNALK")   return Checked(settings.input_nmea_signalk);
+    if(var == "OUTPUT_NMEA_SIGNALK")  return Checked(settings.output_nmea_signalk);
+    if(var == "INPUT_NMEA_CLIENT")   return Checked(settings.input_nmea_client);
+    if(var == "OUTPUT_NMEA_CLIENT")  return Checked(settings.output_nmea_client);
+    if(var == "INPUT_NMEA_SERVER")   return Checked(settings.input_nmea_server);
+    if(var == "OUTPUT_NMEA_SERVER")  return Checked(settings.output_nmea_server);
+    if(var == "INPUT_SIGNALK")   return Checked(settings.input_signalk);
+    if(var == "OUTPUT_SIGNALK")  return Checked(settings.output_signalk);
+
+    if(var == "FORWARD_NMEA_SERIAL_TO_SERIAL")   return Checked(settings.forward_nmea_serial_to_serial);
+    if(var == "FORWARD_NMEA_SERIAL_TO_WIFI")   return Checked(settings.forward_nmea_serial_to_wifi);
+
     if(var == "COMPENSATE_WIND_WITH_ACCELEROMETER") return Checked(settings.compensate_wind_with_accelerometer);
     if(var == "COMPUTE_TRUEWIND_FROM_GPS") return Checked(settings.compute_true_wind_from_gps);
     if(var == "COMPUTE_TRUEWIND_FROM_WATERSPEED") return Checked(settings.compute_true_wind_from_water);
     if(var == "PYPILOT_ADDR") return(pypilot_discovered==2 ? settings.pypilot_addr : "not detected");
     if(var == "SIGNALK_ADDR") return(signalk_discovered==2 ? (settings.signalk_addr + ":" + int_to_str(settings.signalk_port)) : "not detected");
-    if(var == "WIFIDATA")   return get_wifi_data_str();
     if(var == "NMEACLIENTADDR") return settings.nmea_client_addr;
     if(var == "NMEACLIENTPORT") return int_to_str(settings.nmea_client_port);
     if(var == "IPADDRESS") return WiFi.localIP().toString().c_str();    
@@ -351,12 +367,21 @@ void web_setup()
             AsyncWebParameter* p = request->getParam(i);
             std::string name = p->name().c_str(), value = p->value().c_str();
             //printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
-            if(name == "ssid")     settings.ssid = value;
-            else if(name == "psk") settings.psk = value;
+            if(name == "wifi_mode") {
+                if (value == "ap") settings.wifi_mode = WIFI_MODE_AP;
+                if (value == "client") settings.wifi_mode = WIFI_MODE_STA;
+                if (value == "none") settings.wifi_mode = WIFI_MODE_NULL;
+                else printf("post unknown wifi data setting %s\n", value.c_str());
+            }
+            else if(name == "ap_ssid")     settings.ap_ssid = value;
+            else if(name == "ap_ssid")     settings.ap_ssid = value;
+            else if(name == "client_psk") settings.client_psk = value;
+            else if(name == "client_psk") settings.client_psk = value;
             else printf("web post wifi unknown parameter %s %s\n", name.c_str(), value.c_str());
         }
         request->redirect("/");
         settings_store();
+        wireless_setup();
     });
 
     server.on("/scan_wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -372,7 +397,19 @@ void web_setup()
     server.on("/data", HTTP_POST, [](AsyncWebServerRequest *request) {
         //printf("post data %d\n", request->params());
         settings.input_usb = settings.output_usb = false;
-        settings.input_wifi = settings.output_wifi = false;
+        settings.input_nmea_pypilot = false;
+        settings.output_nmea_pypilot = false;
+        settings.input_nmea_signalk = false;
+        settings.output_nmea_signalk = false;
+        settings.input_nmea_client = false;
+        settings.output_nmea_client = false;
+        settings.input_nmea_server = false;
+        settings.output_nmea_server = false;
+        settings.input_signalk = false;
+        settings.output_signalk = false;
+        settings.forward_nmea_serial_to_serial = false;
+        settings.forward_nmea_serial_to_wifi = false;
+
         settings.compensate_wind_with_accelerometer = false;
         settings.compute_true_wind_from_gps = false;
         settings.compute_true_wind_from_water = false;
@@ -383,20 +420,25 @@ void web_setup()
             if     (name == "input_usb")   settings.input_usb = true;
             else if(name == "output_usb")  settings.output_usb = true;
             else if(name == "usb_baud_rate")  settings.usb_baud_rate = str_to_int(value);
-            else if(name == "rs422_baud_rate")  settings.rs422_baud_rate = str_to_int(value);
-            else if(name == "input_wifi")  settings.input_wifi = true;
-            else if(name == "output_wifi") settings.output_wifi = true;
+            else if(name == "rs422_1_baud_rate")  settings.rs422_1_baud_rate = str_to_int(value);
+            else if(name == "rs422_2_baud_rate")  settings.rs422_2_baud_rate = str_to_int(value);
+            else if(name == "input_nmea_pypilot")  settings.input_nmea_pypilot = true;
+            else if(name == "output_nmea_pypilot")  settings.output_nmea_pypilot = true;
+            else if(name == "input_nmea_signalk")  settings.input_nmea_signalk = true;
+            else if(name == "output_nmea_signalk")  settings.output_nmea_signalk = true;
+            else if(name == "input_nmea_client")  settings.input_nmea_client = true;
+            else if(name == "output_nmea_client")  settings.output_nmea_client = true;
+            else if(name == "input_nmea_server")  settings.input_nmea_server = true;
+            else if(name == "output_nmea_server")  settings.output_nmea_server = true;
+            else if(name == "input_signalk")  settings.input_signalk = true;
+            else if(name == "output_signalk")  settings.output_signalk = true;
+
+            else if(name == "forward_nmea_serial_to_serial") settings.forward_nmea_serial_to_serial = true;
+            else if(name == "forward_nmea_serial_to_wifi") settings.forward_nmea_serial_to_wifi = true;
+
             else if(name == "compensate_wind_with_accelerometer") settings.compensate_wind_with_accelerometer = true;
             else if(name == "compute_true_wind_from_gps") settings.compute_true_wind_from_gps = true;
             else if(name == "compute_true_wind_from_water_speed") settings.compute_true_wind_from_water = true;
-            else if(name == "wifidata") {
-                if      (value == "nmea_pypilot") settings.wifi_data = NMEA_PYPILOT;
-                else if (value == "nmea_signalk") settings.wifi_data = NMEA_SIGNALK;
-                else if (value == "nmea_client") settings.wifi_data = NMEA_CLIENT;
-                else if (value == "nmea_server") settings.wifi_data =  NMEA_SERVER;
-                else if (value == "signalk") settings.wifi_data =  SIGNALK;
-                else printf("post unknown wifi data setting %s\n", value.c_str());
-            }
             else if(name == "nmea_tcp_client_addr") settings.nmea_client_addr = value;
             else if(name == "nmea_tcp_client_port") settings.nmea_client_port = str_to_int(value);
             else if(name == "nmea_tcp_server_port") settings.nmea_server_port = str_to_int(value);
@@ -404,16 +446,44 @@ void web_setup()
         }
         request->redirect("/");
         settings_store();
+        serial_setup();
     });
 
+    server.on("/display_auto", HTTP_POST, [](AsyncWebServerRequest *request) {
+        display_auto();
+        request->redirect("/");
+    });
+
+    server.on("/display_pages", HTTP_POST, [](AsyncWebServerRequest *request) {
+        std::string enabled_pages = "";
+        for(int i=0; i < display_pages.size(); i++)
+            display_pages[i].enabled = false;
+
+        for (int i = 0; i < request->params(); i++) {
+            AsyncWebParameter* p = request->getParam(i);
+            std::string name = p->name().c_str(), value = p->value().c_str();
+            //printf("POST[%s]: %s\n", name.c_str(), value.c_str());
+
+            for(int j=0; j < display_pages.size(); j++) {
+                page_info &page = display_pages[j];
+                if(std::string(1, page.name) == name)
+                    page.enabled = true;
+            }
+            enabled_pages += name;
+        }
+
+        printf("enabled pages %s\n", enabled_pages.c_str());
+        settings.enabled_pages = enabled_pages;
+        request->redirect("/");
+        settings_store();
+        display_change_page(0);
+    });
+    
     server.on("/display", HTTP_POST, [](AsyncWebServerRequest *request) {
         settings.use_360 = settings.use_fahrenheit = false;
         settings.use_inHg = settings.use_depth_ft = false;
         settings.invert = false;
-        settings.mirror = false;
-        std::string enabled_pages = "";
-        for(int i=0; i < display_pages.size(); i++)
-            display_pages[i].enabled = false;
+        settings.mirror = 0;
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
             std::string name = p->name().c_str(), value = p->value().c_str();
@@ -435,29 +505,14 @@ void web_setup()
             else if(p->name() == "backlight")
                 settings.backlight = min(max(str_to_int(value), 0), 20);
             else if(p->name() == "mirror")
-                settings.mirror = true;
+                settings.mirror = 1;
             else if(p->name() == "power_button")
                 settings.power_button = value;
-            else {
-                for(int j=0; j < display_pages.size(); j++) {
-                    page_info &page = display_pages[j];
-                    if(std::string(1, page.name) == name)
-                        page.enabled = true;
-                }
-                enabled_pages += name;
-            }
         }
-        settings.enabled_pages = enabled_pages;
         request->redirect("/");
         settings_store();
         signalk_subscribe();
         //display_set_mirror_rotation();
-        display_change_page(0);
-    });
-
-    server.on("/display_auto", HTTP_POST, [](AsyncWebServerRequest *request) {
-        display_auto();
-        request->redirect("/");
     });
 
     server.on("/history", HTTP_GET, [](AsyncWebServerRequest *request) {

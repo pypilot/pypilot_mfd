@@ -7,5 +7,7 @@
  */
 
 bool nmea_parse_line(const char*, data_source_e);
+void nmea_write_serial(const char *buf, HardwareSerial *source=0);
+void nmea_write_wifi(const char *buf);
 void nmea_send(const char *buf);
 void nmea_poll();

@@ -1,5 +1,4 @@
-/*
-#   Copyright (C) 2024 Sean D'Epagnier
+/*  Copyright (C) 2024 Sean D'Epagnier
 #
 # This Program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public
@@ -152,3 +151,11 @@ function onWindMessage(msg) {
             delete wind_sensors[mac];
         }
 }
+
+function on_wifi_mode() {
+    var mode = document.getElementById('wifi_mode').value;
+    document.getElementById('wifi_ap').style.display = (mode == 'ap') ? 'grid' : 'none';
+    document.getElementById('wifi_client').style.display = (mode == 'client') ? 'grid' : 'none';
+}
+
+on_wifi_mode();

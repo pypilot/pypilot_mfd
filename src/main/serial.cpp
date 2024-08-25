@@ -44,6 +44,11 @@ struct SerialLinebuffer {
 
             if (enabled)
                 nmea_parse_line(line.c_str(), source);
+
+            if(settings.forward_nmea_serial_to_serial)
+                nmea_write_serial(line.c_str(), &serial);
+            if(settings.forward_nmea_serial_to_wifi)
+                nmea_write_wifi(line.c_str());
         }
     }
 
@@ -52,19 +57,38 @@ struct SerialLinebuffer {
     data_source_e source;
 };
 
-SerialLinebuffer SerialBuffer(Serial, USB_DATA);
+SerialLinebuffer Serial0Buffer(Serial0, USB_DATA);
+SerialLinebuffer Serial1Buffer(Serial1, RS422_DATA);
 SerialLinebuffer Serial2Buffer(Serial2, RS422_DATA);
 
 void serial_setup()
 {
-    Serial.begin(settings.usb_baud_rate == 38400 ? 38400 : 115200);
-    Serial.setTimeout(0);
-    Serial2.begin(settings.rs422_baud_rate == 4800 ? 4800 : 38400,
-                  SERIAL_8N1, 16, 17);  //Hardware Serial of ESP32
-    Serial2.setTimeout(0);
+    Serial0.end();
+    Serial0.begin(settings.usb_baud_rate);
+    Serial0.setTimeout(0);
+
+
+    // TODO: enable power for 422 if either serial is enabled
+
+    /*
+    Serial1.end();
+    if(settings.rs422_1_baud_rate) {
+        Serial1.begin(settings.rs422_1_baud_rate,
+                      SERIAL_8N1, 15, 2);  //Hardware Serial of ESP32
+        Serial1.setTimeout(0);
+    }
+    */
+
+    Serial2.end();
+    if(settings.rs422_2_baud_rate) {
+        Serial2.begin(settings.rs422_2_baud_rate,
+                      SERIAL_8N1, 16, 17);  //Hardware Serial of ESP32
+        Serial2.setTimeout(0);
+    }
 }
 
 void serial_poll() {
-    SerialBuffer.read(settings.input_usb);
-    Serial2Buffer.read();
+    Serial0Buffer.read(settings.input_usb);
+    //Serial1Buffer.read(settings.rs422_1_baud_rate);
+    Serial2Buffer.read(settings.rs422_2_baud_rate);
 }

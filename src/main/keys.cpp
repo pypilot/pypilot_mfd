@@ -23,7 +23,7 @@ enum keys { KEY_PAGE_UP,
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 int key_pin[KEY_COUNT] = { 5, 6, 7, 0 };
 #else
-int key_pin[KEY_COUNT] = { KEY_UP_IO, 32, 33, 0 };
+int key_pin[KEY_COUNT] = { 35, 32, 33, 0 };
 #endif
 
 static uint32_t key_times[KEY_COUNT];
@@ -89,6 +89,8 @@ static bool held(int key)
 
 void keys_poll()
 {
+    readkeys();
+
     if(keys[KEY_PAGE_UP] && keys[KEY_PAGE_DOWN])
         wireless_toggle_mode();
     else if (pressed(KEY_PAGE_UP)) {
@@ -112,9 +114,6 @@ void keys_poll()
         menu_reset();
         if(!on) {
             draw_clear(false);
-            ledcDetach(14);
-            pinMode(14, OUTPUT);  // strap for display
-            digitalWrite(14, 0);
             if(settings.power_button != "screenoff") {
                 while(!digitalRead(0)); // wait for button to release
                 esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, LOW);
@@ -122,6 +121,18 @@ void keys_poll()
                 if(settings.power_button == "powersave")
                     esp_sleep_enable_timer_wakeup(60 * 1000 * 1000);
                 printf("going to sleep\n");
+                if(hw_version != 1) {
+                    // disable rs422 power
+                    digitalWrite(14, 0);
+                    gpio_hold_en((gpio_num_t)14);
+
+                    // disable power led
+                    pinMode(26, OUTPUT);  // strap for display
+                    digitalWrite(26, 0);
+                    gpio_hold_en((gpio_num_t)26);
+                }
+                
+                gpio_deep_sleep_hold_en();
                 esp_deep_sleep_start();
             }
         }

@@ -41,10 +41,8 @@ void draw_setup(int rotation)
     u8g2.enableUTF8Print();
     u8g2.setFontPosTop();
 
-    if(settings.mirror == 2) {
-        settings.mirror = digitalRead(2);
-        //settings.mirror = 0;
-    }
+    if(settings.mirror == 2)
+        settings.mirror = !digitalRead(2);
 
     if(settings.mirror)
         rotation ^= 2;
@@ -92,8 +90,8 @@ void draw_circle(int x, int y, int r, int thick)
         thick += r-1;
         r = 1;
     }
-    for (int i = -thick; i < thick; i++)
-        for (int j = -thick; j < thick; j++)
+    for (int i = -(thick+1)/2; i <= thick/2; i++)
+        for (int j = -(thick+1)/1; j <= thick/2; j++)
             u8g2.drawCircle(x + i, y + j, r);
 }
 
@@ -231,6 +229,7 @@ uint8_t compute_color(color_e c, uint8_t b)
     case YELLOW:  v = rgb3(b, b, 0); break;
     case GREY:    v = rgb3(b/2, b/2, b/2); break;
     case ORANGE:  v = rgb3(b, b/2, 0); break;
+    case BLACK:   v = rgb3(0, 0, 0); break;
     default: break;
     }
 
@@ -607,7 +606,7 @@ void draw_circle_thin(int xm, int ym, int r)
 void draw_circle_orig(int xm, int ym, int r, int th)
 {
     /* draw anti-aliased ellipse inside rectangle with thick line... could be optimized considerably */
-    r--; // todo: is this correct??
+    //r--; // todo: is this correct??
     convert_coords(xm, ym);
     int x0 = xm - r, x1 = xm + r, y0 = ym - r, y1 = ym + r;
     

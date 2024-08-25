@@ -128,30 +128,10 @@ struct history
 
             uint32_t fronttime = data[range].empty() ? 0 : data[range].front().time;
 
-            //if(range > 0)
-            //printf("valus %d %d %d %d %f %ld %d\n", range, data[range].size(), data_high[range].size(), data_low[range].size(), value, dt, range_timeout);
-            if(time - fronttime < range_timeout)
-                break;
-
             float minv = value, maxv = value;
             if(range > 0) {
-                // average previous range data
-                int count = 0;
-                value = 0;
-                for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) 
-                {
-                    if(!isnan(it->value)) {
-                        value += it->value;
-                        count++;
-                    }
-                    if(it->time < time - range_timeout)
-                        break;
-                }
-                if(count == 0)
+                if(time - fronttime < range_timeout)
                     break;
-
-                value /= count;
-                store_packet(range-1, index, HISTORY_VALUE, time, value);
 
                 for(std::list<history_element>::iterator it = data_low[range-1].begin(); it != data_low[range-1].end(); it++) {
                     if(it->value < minv)
@@ -167,9 +147,7 @@ struct history
                         break;
                 }                
             }
-
-            data[range].push_front(history_element(value, time));
-
+            
             // log high/low
             if(data_high[range].empty())
                 data_high[range].push_front(history_element(maxv, time));
@@ -190,9 +168,36 @@ struct history
             llvalue_min = lvalue_min;
             lvalue_min = minv;
 
-            
             llvalue_max = lvalue_max;
             lvalue_max = maxv;
+
+            
+            //if(range > 0)
+            //printf("valus %d %d %d %d %f %ld %d\n", range, data[range].size(), data_high[range].size(), data_low[range].size(), value, dt, range_timeout);
+            if(time - fronttime < range_timeout)
+                break;
+
+            if(range > 0) {
+                // average previous range data
+                int count = 0;
+                value = 0;
+                for(std::list<history_element>::iterator it = data[range-1].begin(); it != data[range-1].end(); it++) 
+                {
+                    if(!isnan(it->value)) {
+                        value += it->value;
+                        count++;
+                    }
+                    if(it->time < time - range_timeout)
+                        break;
+                }
+                if(count == 0)
+                    break;
+
+                value /= count;
+                store_packet(range-1, index, HISTORY_VALUE, time, value);
+            }
+
+            data[range].push_front(history_element(value, time));
 
             // remove elements that expired
             expire(data[range], time, range_time);
@@ -744,8 +749,8 @@ void history_poll()
 
 void history_setup()
 {
-    uint32_t frequency = Wire.getClock();
-    printf("i2c clock is %ld\n", frequency);
+    //uint32_t frequency = Wire.getClock();
+    //printf("i2c clock is %ld\n", frequency);
     
     Wire.beginTransmission(DEVICE_ADDRESS);
     int error = Wire.endTransmission();

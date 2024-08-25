@@ -285,6 +285,7 @@ bool ais_parse_line(const char *line, data_source_e source)
     if(len < 10 || line[3] != 'V' || line[4] != 'D' || line[5] != 'M')
         return false;
 
+    //printf("parse ais %s\n", line);
     int fragcount, fragindex;
     if(sscanf(line+6, ",%d,%d,", &fragcount, &fragindex) != 2)
         return false;
@@ -320,6 +321,7 @@ bool ais_parse_line(const char *line, data_source_e source)
 
     if(fragindex == fragcount) {
         bool result = decode_ais_data(data);
+        //printf("decode ais data %d %d\n", result, source);
         data.clear();
         if(result)
             display_data_update(AIS_DATA, 0, source);

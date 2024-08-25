@@ -87,11 +87,11 @@ bool nmea_parse_line(const char *line, data_source_e source)
             return false;
 
         if(ref == 'R') {
-            display_data_update(WIND_DIRECTION, dir, source);
+            display_data_update(WIND_ANGLE, dir, source);
             display_data_update(WIND_SPEED, spd, source);
             return true;
         } if(ref != 'T') {
-            display_data_update(TRUE_WIND_DIRECTION, dir, source);
+            display_data_update(TRUE_WIND_ANGLE, dir, source);
             display_data_update(TRUE_WIND_SPEED, spd, source);
             return true;
         }
@@ -109,7 +109,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
         if(sscanf(c5, ",%f,N", &spd) != 1)
             return false;
         
-        display_data_update(TRUE_WIND_DIRECTION, dir, source);
+        display_data_update(TRUE_WIND_ANGLE, dir, source);
         display_data_update(TRUE_WIND_SPEED, spd, source);
         return true;
     }
@@ -131,10 +131,10 @@ bool nmea_parse_line(const char *line, data_source_e source)
             return false;
 
         if(line[5] == 'T') {
-            display_data_update(WIND_DIRECTION, dir, source);
+            display_data_update(WIND_ANGLE, dir, source);
             display_data_update(WIND_SPEED, spd, source);
         } else {
-            display_data_update(TRUE_WIND_DIRECTION, dir, source);
+            display_data_update(TRUE_WIND_ANGLE, dir, source);
             display_data_update(TRUE_WIND_SPEED, spd, source);
         }
         return true;
@@ -355,12 +355,16 @@ struct ClientSock
     int sock;
     uint32_t time;
     std::string data;
+
+    std::string addr;
+    int port;
 };
 
 static int server_sock;
-static ClientSock client;
+static ClientSock nmea_client;
+static ClientSock pypilot_nmea_client;
+static ClientSock signalk_nmea_client;
 static ClientSock clients[5];
-
 
 static void close_server() {
     if(!server_sock)
@@ -374,17 +378,20 @@ static void close_server() {
     server_sock = 0;
 }
 
-static bool connect_client(std::string addr, int port)
+static void connect_client(ClientSock &client, std::string addr, int port)
 {
+    if(client.addr != addr || client.port != port)
+        client.close();
+
     uint32_t t0 = millis();
     if(client.sock)
-        return false;
+        return;
 
     if(t0 - client.time < 10000)
-        return false;
+        return;
 
     if(addr.empty() || port == 0)
-        return false;
+        return;
 
     sockaddr_in dest_addr;
     printf("try connect %d %s\n", port, addr.c_str());
@@ -397,7 +404,7 @@ static bool connect_client(std::string addr, int port)
     if (client.sock < 0) {
         printf("Unable to create socket: errno %d", errno);
         client.sock = 0;
-        return false;
+        return;
     }
 
     // Set socket to non-blocking mode
@@ -410,13 +417,14 @@ static bool connect_client(std::string addr, int port)
     }
 
     printf("nmea client connected to %s:%d %d %d\n", addr.c_str(), port, err, errno);
+    client.addr = addr;
+    client.port = port;
     client.time = t0;
-    return true;
 }
 
-static bool connect_server()
+static void connect_server()
 {
-    printf("connect server\n");
+    printf("nmea connect server\n");
     int addr_family = AF_INET;
     int ip_protocol = 0;
 
@@ -432,7 +440,7 @@ static bool connect_server()
     if (server_sock < 0) {
         printf("unable to create server socket\n");
         server_sock = 0;
-        return false;
+        return;
     }
     int opt = 1;
     setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
@@ -441,23 +449,22 @@ static bool connect_server()
     if (err != 0) {
         printf("Socket unable to bind: errno %d\n", errno);
         close_server();
-        return false;
+        return;
     }
 
     err = listen(server_sock, 1);
     if (err != 0) {
         printf("Error occurred during listen: errno %d\n", errno);
         close_server();
-        return false;
+        return;
     }
 
     fcntl(server_sock, F_SETFL, fcntl(server_sock, F_GETFL, 0) | O_NONBLOCK);
 
     printf("nmea server setup %d\n", server_sock);
-    return true;
 }
 
-static void poll_client(ClientSock &c)
+static bool poll_client(ClientSock &c, bool input)
 {
     // read any data from client
     while(c.sock) {
@@ -470,15 +477,12 @@ static void poll_client(ClientSock &c)
                     printf("ERROR 113, restart??\n");
                     //ESP.restart();
                 }
-                if(settings.wifi_data == NMEA_PYPILOT) // find pypilot address again with mdns
-                    pypilot_discovered=0;
-                else if(settings.wifi_data == NMEA_SIGNALK) // find address again with mdns
-                    signalk_discovered=0;
                 c.close();
+                return false;
             } break;
         } else if(ret > 0) {
             buf[ret] = '\0';
-            if(settings.input_wifi)
+            if(input)
                 c.data += std::string(buf);
         } else
             break;
@@ -495,6 +499,7 @@ static void poll_client(ClientSock &c)
             c.data = c.data.substr(ind+1);
         }
     }
+    return true;
 }
 
 static void accept_server()
@@ -551,16 +556,19 @@ static void poll_server()
 {
     accept_server();
     for(int i=0; i<(sizeof clients) / (sizeof *clients); i++)
-        poll_client(clients[i]);
+        poll_client(clients[i], settings.input_nmea_server);
 }
 
-static wireless_data_e mode;
 void nmea_poll()
 {
-    if(WiFi.status() != WL_CONNECTED) {
+    if(!force_wifi_ap_mode &&
+       settings.wifi_mode != WIFI_MODE_AP &&
+       WiFi.status() != WL_CONNECTED) {
         //printf("not conn %d\n", server_sock);
         close_server();
-        client.close();
+        nmea_client.close();
+        pypilot_nmea_client.close();
+        signalk_nmea_client.close();
         return;
     }
 
@@ -571,55 +579,28 @@ void nmea_poll()
         return;
     last_poll_time = t0;
 
-    static std::string cur_addr;
-    static int cur_port;
-
-    std::string addr = cur_addr;
-    int port;
-    switch(settings.wifi_data) {
-        case NMEA_PYPILOT:
-            addr = settings.pypilot_addr;
-            port = 20220;
-            break;
-        case NMEA_SIGNALK:
-            addr = settings.signalk_addr;
-            port = 10110;
-            break;
-        case NMEA_CLIENT:
-            addr = settings.nmea_client_addr;
-            port = settings.nmea_client_port;
-            break;
-        case NMEA_SERVER:
-            port = settings.nmea_server_port;
-            break;
-        default:
-            //println("no nmea data set");
-            client.close();
-            close_server();
-            return;
+    if(settings.input_nmea_pypilot || settings.output_nmea_pypilot) {
+        connect_client(pypilot_nmea_client, settings.pypilot_addr, 20220);
+        if(!poll_client(pypilot_nmea_client, settings.input_nmea_pypilot))
+            // find pypilot address again with mdns                
+            pypilot_discovered=0;
     }
 
-    if(settings.wifi_data != mode || cur_addr != addr || cur_port != port) {
-        //printf("settings wifi %d %d\n", settings.wifi_data, settings.nmea_server_port);
-        client.close();
-        close_server();
-        mode = settings.wifi_data;
-        cur_addr = addr;
-        cur_port = port;
+    if(settings.input_nmea_signalk || settings.output_nmea_signalk) {
+        connect_client(signalk_nmea_client, settings.signalk_addr, 10110);
+        if(!poll_client(signalk_nmea_client, settings.input_nmea_signalk))
+            // find address again with mdns                
+            signalk_discovered=0;
     }
 
-    if(settings.wifi_data == NMEA_SERVER) {
-        if(!server_sock) {
-            if(!connect_server())
-                return;
-        }
+    if(settings.input_nmea_client || settings.output_nmea_client) {
+        connect_client(nmea_client, settings.nmea_client_addr, settings.nmea_client_port);
+        poll_client(nmea_client, settings.input_nmea_client);
+    }
+    
+    if(settings.input_nmea_server || settings.output_nmea_server) {
+        connect_server();
         poll_server();
-    } else {
-        if(!client.sock) {
-            if(!connect_client(cur_addr, cur_port))
-                return;
-        }
-        poll_client(client);
     }
 }
 
@@ -650,29 +631,33 @@ static void write_nmea_server(const char *buf)
         write_nmea_client(clients[i], buf);
 }
 
+void nmea_write_serial(const char *buf, HardwareSerial *source)
+{
+    if(settings.output_usb && &Serial0 != source)
+        Serial0.printf(buf);
+//    if(settings.rs422_1_baud_rate && &Serial1 != source)
+//        Serial1.printf(buf);
+    if(settings.rs422_2_baud_rate && &Serial2 != source)
+        Serial2.printf(buf);
+}
+
+void nmea_write_wifi(const char *buf)
+{
+    if(settings.output_nmea_pypilot)
+        write_nmea_client(pypilot_nmea_client, buf);
+    if(settings.output_nmea_client)
+        write_nmea_client(signalk_nmea_client, buf);
+    if(settings.output_nmea_client)
+        write_nmea_client(nmea_client, buf);
+    if(settings.output_nmea_server)
+        write_nmea_server(buf);
+}
+
 void nmea_send(const char *buf)
 {
-    return;
-    if(settings_wifi_ap_mode)
-        return;
     char buf2[64];
 
     snprintf(buf2, sizeof buf2, "$QY%s*%02x\r\n", buf, 0x08^checksum(buf));
-    if(settings.output_usb)
-        printf(buf2);
-    Serial2.printf(buf2); // always output on second serial port
-    
-    if(settings.output_wifi)
-    switch(settings.wifi_data) {
-    case NMEA_PYPILOT:
-    case NMEA_SIGNALK:
-    case NMEA_CLIENT:
-        write_nmea_client(client, buf2);
-        break;
-    case NMEA_SERVER:
-        write_nmea_server(buf2);
-        break;
-    default:
-        break;
-    }
+    nmea_write_serial(buf2);
+    nmea_write_wifi(buf2);
 }

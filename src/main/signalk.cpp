@@ -91,9 +91,9 @@ static bool signalk_parse_value(const rapidjson::Value &value)
     float v = val.GetDouble();
         
     if(path == "environment.wind.speedApparent") display_data_update(WIND_SPEED, to_knots(v), s); else
-    if(path == "environment.wind.angleApparent") display_data_update(WIND_DIRECTION, rad2deg(v), s); else
+    if(path == "environment.wind.angleApparent") display_data_update(WIND_ANGLE, rad2deg(v), s); else
     if(path == "environment.wind.speedTrue") display_data_update(TRUE_WIND_SPEED, v, s);     else
-    if(path == "environment.wind.angleTrue") display_data_update(TRUE_WIND_DIRECTION, v, s); else
+    if(path == "environment.wind.angleTrue") display_data_update(TRUE_WIND_ANGLE, v, s); else
     if(path == "environment.outside.temperature") display_data_update(AIR_TEMPERATURE, celcius(v), s); else
     if(path == "environment.outside.pressure") display_data_update(BAROMETRIC_PRESSURE, v, s); else
     if(path == "environment.depth.belowSurface") display_data_update(DEPTH, v, s); else
@@ -147,9 +147,9 @@ static std::string item_to_signalk_path(display_item_e item)
 {
     switch(item) {
         case WIND_SPEED:          return "environment.wind.speedApparent";
-        case WIND_DIRECTION:      return "environment.wind.angleApparent";
+        case WIND_ANGLE:      return "environment.wind.angleApparent";
         case TRUE_WIND_SPEED:     return "environment.wind.speedTrue";
-        case TRUE_WIND_DIRECTION: return "environment.wind.angleTrue";
+        case TRUE_WIND_ANGLE: return "environment.wind.angleTrue";
         case AIR_TEMPERATURE:     return "environment.outside.temperature";
         case BAROMETRIC_PRESSURE: return "environment.outside.pressure";
         case DEPTH:               return "environment.depth.belowSurface";
@@ -189,7 +189,7 @@ void signalk_subscribe()
 
     esp_websocket_client_send_text(ws_h, us.GetString(), us.GetSize(), portMAX_DELAY);
 
-    if(!settings.input_wifi)
+    if(!settings.input_signalk)
         return;
 
     std::list<display_item_e> items;
@@ -262,7 +262,7 @@ static void request_access()
         int code = client.POST("clientId="+x+"&description=pypilot_mfd");
         if(code != 202 && code != 400) {
             printf("signalk http request failed to post %s:%d %d\n", settings.signalk_addr.c_str(), settings.signalk_port, code);
-            settings.output_wifi = false;
+            settings.output_signalk = false;
         } else {
             String response = client.getString();
             //printf("signalk http response %s\n", response.c_str());
@@ -295,7 +295,7 @@ static void request_access()
     int code = client.GET();
     if(code != 200) {
         printf("signalk http get access url failed %d\n", code);
-        settings.output_wifi = false;
+        settings.output_signalk = false;
     } else {
         String response = client.getString(); // TODO change http client to not use arduino strings
         //printf("HTTP GET response %s %d\n", response.c_str(), code);
@@ -342,7 +342,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
         break;
     case WEBSOCKET_EVENT_DATA:
     {
-        if(!settings.input_wifi)
+        if(!settings.input_signalk)
             break;
         /*
         println("WEBSOCKET_EVENT_DATA");
@@ -465,7 +465,7 @@ void signalk_send(std::string key, float value)
 
 void signalk_poll()
 {
-    if(settings.wifi_data != SIGNALK || !(settings.input_wifi || settings.output_wifi)) {
+    if(!settings.input_signalk && !settings.output_signalk) {
         signalk_disconnect();
         return;
     }
@@ -478,7 +478,7 @@ void signalk_poll()
     if (!esp_websocket_client_is_connected(ws_h))
         return;
 
-    if(!settings.output_wifi)
+    if(!settings.output_signalk)
         return;
     
     if(settings.signalk_token.length() && !skupdates.empty()) {
