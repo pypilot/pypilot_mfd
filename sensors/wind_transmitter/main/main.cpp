@@ -6,7 +6,6 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-
 // note 80mhz cpu speed is plenty!
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 
@@ -19,18 +18,16 @@
 #include "nvs.h"
 #include "esp_timer.h"
 
-#include "driver/i2c.h"
+
 #include "driver/spi_master.h"
 
 // Global copy of chip
 esp_now_peer_info_t chip;
 
 // data in packet
-#define I2C_MASTER_NUM I2C_NUM_0
 #define ID 0xf179
-#define CHANNEL_ID 0x0a21
 
-#define I2C_MASTER_TIMEOUT_MS 1000
+#include "../../common/common.h"
 
 struct packet_t {
     uint16_t id;             // packet identifier
@@ -42,118 +39,18 @@ struct packet_t {
 
 packet_t packet;
 
-struct packet_channel_t {
-    uint16_t id;             // packet identifier
-    uint16_t channel;
-    uint16_t crc16;
-};
-
 spi_device_handle_t spi;
-
-/* WiFi should start before using ESPNOW */
-static void wifi_init(void)
+uint16_t spi_transfer16(uint16_t d)
 {
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-    ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_AP) );
-    ESP_ERROR_CHECK( esp_wifi_start());
-//    ESP_ERROR_CHECK( esp_wifi_set_channel(CONFIG_ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
+    spi_transaction_t t = {
+        .flags = SPI_TRANS_USE_RXDATA,
+        .length = 16,
+        .user = 0,
+        .tx_buffer = &d,
+    };
+    spi_device_polling_transmit(spi, &t);
 
-    ESP_ERROR_CHECK( esp_wifi_set_protocol(WIFI_IF_AP, /*WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N|*/WIFI_PROTOCOL_LR) );
-//    ESP_ERROR_CHECK(esp_wifi_config_espnow_rate(WIFI_IF_AP, WIFI_PHY_RATE_LORA_250K /*WIFI_PHY_RATE_LORA_500K*/));
-
-    esp_wifi_disconnect();
-}
-
-void reboot()
-{
-    printf("Reset ESP\n");
-    vTaskDelay(30);
-    abort();
-}
-
-static void read_channel()
-{
-    nvs_handle_t handle;
-    esp_err_t res = nvs_open("CHANNEL", NVS_READWRITE, &handle);
-    if (res != ESP_OK) {
-        printf("Unable to open NVS namespace: %d", res);
-        return;
-    }
-    
-    int32_t channel = 1;
-    res = nvs_get_i32(handle, "channel", &channel);
-    if (res != ESP_OK && res != ESP_ERR_NVS_NOT_FOUND) {
-        printf("Unable to read NVS key: %d", res);
-        return;
-    }
-    
-    chip.channel = channel;
-    nvs_close(handle);
-}
-
-static void write_channel()
-{
-    nvs_handle_t handle;
-    esp_err_t res = nvs_open("CHANNEL", NVS_READWRITE, &handle);
-    if (res != ESP_OK) {
-        printf("Unable to open NVS namespace: %d", res);
-        return;
-    }
-    
-    res = nvs_set_i32(handle, "channel", chip.channel);
-    if (res != ESP_OK) {
-        printf("Unable to read NVS key: %d", res);
-        return;
-    }
-    
-    nvs_commit(handle);
-    nvs_close(handle);
-}
-uint16_t crc16(const uint8_t *data_p, int length)
-{
-    uint8_t x;
-    uint16_t crc = 0xFFFF;
-
-    while (length--) {
-        x = crc >> 8 ^ *data_p++;
-        x ^= x >> 4;
-        crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x << 5)) ^ ((uint16_t)x);
-    }
-    return crc;
-}
-
-// send data
-void sendData()
-{
-    // compute checksum
-    packet.crc16 = crc16((uint8_t *)&packet, sizeof(packet) - 2);
-
-    const uint8_t *peer_addr = chip.peer_addr;
-    //print("Sending...");
-    esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
-    //print("Send Status: ");
-    if (result == ESP_OK) {
-        //printf("Success\n");
-        return;
-    } else if (result == ESP_ERR_ESPNOW_NOT_INIT)
-        // How did we get so far!!
-        printf("ESPNOW not Init.\n");
-    else if (result == ESP_ERR_ESPNOW_ARG)
-       printf("Invalid Argument\n");
-    else if (result == ESP_ERR_ESPNOW_INTERNAL)
-        printf("Internal Error\n");
-    else if (result == ESP_ERR_ESPNOW_NO_MEM)
-        printf("ESP_ERR_ESPNOW_NO_MEM\n");
-    else if (result == ESP_ERR_ESPNOW_NOT_FOUND)
-        printf("Peer not found.\n");
-    else
-        printf("Not sure what happened\n");
-
-    reboot();
+    return *(uint16_t*)t.rx_data;
 }
 
 volatile unsigned int rotation_count;
@@ -184,19 +81,6 @@ bool parityCheck(uint16_t data)
 }
 
 #define MT6816_CS GPIO_NUM_5
-
-uint16_t spi_transfer16(uint16_t d)
-{
-    spi_transaction_t t = {
-        .flags = SPI_TRANS_USE_RXDATA,
-        .length = 16,
-        .user = 0,
-        .tx_buffer = &d,
-    };
-    spi_device_polling_transmit(spi, &t);
-
-    return *(uint16_t*)t.rx_data;
-}
 
 void MT6816_read()
 {
@@ -253,45 +137,6 @@ void convert_speed()
         else
             packet.period = 0;
     }
-}
-
-void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len){
-    //uint8_t *mac_addr = recv_info->src_addr;
-    if(data_len != sizeof(packet_channel_t)) {
-        //printf("wrong packet size\n");
-        return;
-    }
-
-    packet_channel_t *packet = (packet_channel_t*)data;
-    if(packet->id != CHANNEL_ID) {
-        //printf("ID mismatch\n");
-    }
-
-    uint16_t crc = crc16(data, data_len-2);
-    if(crc != packet->crc16) {
-        printf("crc failed %x %x\n", crc, packet->crc16);
-            return;
-    }
-
-    if(chip.channel != packet->channel) {
-        chip.channel = packet->channel;
-        write_channel();
-    }
-}
-
-static esp_err_t i2c_write_byte(uint8_t reg_addr, uint8_t data)
-{
-    int ret;
-    uint8_t write_buf[2] = {reg_addr, data};
-
-    ret = i2c_master_write_to_device(I2C_MASTER_NUM, DEVICE_ADDRESS, write_buf, sizeof(write_buf), I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
-
-    return ret;
-}
-
-static esp_err_t i2c_read(uint8_t reg_addr, uint8_t *data, size_t len)
-{
-    return i2c_master_write_read_device(I2C_MASTER_NUM, DEVICE_ADDRESS, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 }
 
 static void setup_accel()
@@ -355,38 +200,17 @@ static void init_mt6816()
 #endif
 }
 
-static void espnow_init(void)
+void read_accel()
 {
-    /* Initialize ESPNOW and register sending and receiving callback function. */
-    esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
-    if (esp_now_init() == ESP_OK) {
-        //printf("ESPNow Init Success\n");
-    } else {
-        printf("ESPNow Init Failed\n");
-        reboot();
-    }
+    uint8_t data[6] = { 0 };
+    i2c_read(0x28, data, 6);
 
-    struct esp_now_rate_config rate_config = {
-        .phymode = WIFI_PHY_MODE_LR,
-        .rate = WIFI_PHY_RATE_LORA_250K /*WIFI_PHY_RATE_LORA_500K*/,
-        .ersu = true,
-        .dcm = false };
-        
-    ESP_ERROR_CHECK(esp_now_set_peer_rate_config(chip.peer_addr, &rate_config));
-
-    ESP_ERROR_CHECK( esp_now_register_recv_cb(OnDataRecv) );
-
-#if CONFIG_ESPNOW_ENABLE_POWER_SAVE
-    ESP_ERROR_CHECK( esp_now_set_wake_window(CONFIG_ESPNOW_WAKE_WINDOW) );
-    ESP_ERROR_CHECK( esp_wifi_connectionless_module_set_wake_interval(CONFIG_ESPNOW_WAKE_INTERVAL) );
-#endif
-    /* Set primary master key. */
-//    ESP_ERROR_CHECK( esp_now_set_pmk((uint8_t *)CONFIG_ESPNOW_PMK) );
-
-    ESP_ERROR_CHECK( esp_now_add_peer(&chip) );
+    packet.accelx = (data[3] << 8) | data[2];
+    packet.accely = (data[5] << 8) | data[4];
 }
 
-void setup()
+
+extern "C" void app_main(void)
 {
     //Set device in STA mode to begin with
     printf("Wind Transmitter\n");
@@ -427,15 +251,6 @@ void setup()
 #endif
     setup_accel();
     printf("setup complete\n");
-}
-
-void read_accel()
-{
-    uint8_t data[6] = { 0 };
-    i2c_read(0x28, data, 6);
-
-    packet.accelx = (data[3] << 8) | data[2];
-    packet.accely = (data[5] << 8) | data[4];
 }
 
 void loop()

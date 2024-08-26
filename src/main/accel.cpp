@@ -191,7 +191,7 @@ void accel_setup() {
 #else
     Wire.begin();
 #endif
-    printf("i2c clock1 %ld\n", Wire.getClock());
+    //printf("i2c clock1 %ld\n", Wire.getClock());
     // detect address
     if(!detect_address(DEVICE_ADDRESS0) && !detect_address(DEVICE_ADDRESS1)) {
         printf("failed to detect accelerometer at either address!\n");
@@ -205,13 +205,13 @@ void accel_setup() {
         Wire.write(0x44);  // high performance
     else if(who_am_i == 0x33)
         Wire.write(0x47);
-    printf("er %d\n",         Wire.endTransmission());
+    Wire.endTransmission();
 #if 0
     delay(10);
     Wire.beginTransmission(device_address);
     Wire.write(LIS2DW12_CTRL + 6);
     Wire.write(0x10);  // set +/- 4g FS, LP filter ODR/2
-    printf("e2 %d\n", Wire.endTransmission());
+    Wire.endTransmission();
 #endif
 #if 1
     if(who_am_i == 0x44) {
@@ -219,7 +219,7 @@ void accel_setup() {
         Wire.beginTransmission(device_address);
         Wire.write(LIS2DW12_CTRL + 2);
         Wire.write(0x08 | 0x04);
-        printf("er %d\n",         Wire.endTransmission());
+        Wire.endTransmission();
     }
 #endif
 }

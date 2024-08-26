@@ -48,8 +48,6 @@ extern "C" void app_main(void)
 
     uint32_t t0 = millis();
 
-    // Arduino-like setup()
-    serial_setup();
     printf("pypilot_mfd, %ld\n", millis());
 
     const esp_partition_t *partition = esp_ota_get_running_partition();
@@ -81,6 +79,9 @@ extern "C" void app_main(void)
     
     settings_load();
     printf("settings_load_done, %ld\n", millis());
+
+    // Arduino-like setup()
+    serial_setup();
 
     wireless_setup();
     printf("wireless_setup_done, %ld\n", millis());

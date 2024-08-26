@@ -6,6 +6,11 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+// TODO:  forward data to/from rs422/tcp/usb
+//        test auto displays
+//        allow multiple data interfaces
+//        test signalk
+
 #include <math.h>
 #include <WiFi.h>
 
@@ -31,7 +36,7 @@
 
 #else
 
-#define BACKLIGHT_PIN 14
+#define BACKLIGHT_PIN (hw_version == 1 ? 14 : 27)
 #define NTC_PIN 39
 #define PHOTO_RESISTOR_PIN 36
 #define PWR_LED 26
@@ -44,15 +49,20 @@ bool landscape = false;
 std::string display_get_item_label(display_item_e item) {
     switch (item) {
     case WIND_SPEED: return "Wind Speed";
-    case WIND_DIRECTION: return "Wind Angle";
-    case BAROMETRIC_PRESSURE: return "Baro Pressure";
-    case AIR_TEMPERATURE: return "Air Temp";
-    case WATER_TEMPERATURE: return "Water Temp";
+    case WIND_ANGLE: return "Wind Angle";
+    case TRUE_WIND_SPEED: return "True Wind Speed";
+    case TRUE_WIND_ANGLE: return "True Wind Angle";
     case GPS_SPEED: return "GPS Speed";
     case GPS_HEADING: return "GPS Heading";
     case LATITUDE: return "Lat";
     case LONGITUDE: return "Lon";
+    case BAROMETRIC_PRESSURE: return "Baro Pressure";
+    case AIR_TEMPERATURE: return "Air Temp";
+    case RELATIVE_HUMIDITY: return "Rel Humidity";
+    case AIR_QUALITY: return "Air Quality";
+    case BATTERY_VOLTAGE: return "Battery Voltage";
     case WATER_SPEED: return "Water Speed";
+    case WATER_TEMPERATURE: return "Water Temp";
     case COMPASS_HEADING: return "Compass Heading";
     case PITCH: return "Pitch";
     case HEEL: return "Heel";
@@ -73,7 +83,7 @@ std::string display_get_item_label(display_item_e item) {
    W is wifi either nmea0183 or signalk
    C is computed from other data, eg: true wind
 */
-const char *source_name[] = { "ESP", "USB", "RS422", "W", "C" };
+const char *source_name[] = { "ESP", "USB", "RS422", "C", "W" };
 
 struct display_data_t {
     display_data_t()
@@ -89,7 +99,7 @@ display_data_t display_data[DISPLAY_COUNT];
 uint32_t data_source_time[DATA_SOURCE_COUNT];
 
 static void compute_true_wind(float wind_dir) {
-    if (display_data[TRUE_WIND_DIRECTION].source != COMPUTED_DATA && !isnan(display_data[TRUE_WIND_DIRECTION].value))
+    if (display_data[TRUE_WIND_ANGLE].source != COMPUTED_DATA && !isnan(display_data[TRUE_WIND_ANGLE].value))
         return;  // already have true wind from a better source
 
     // first try to compute from water speed
@@ -111,10 +121,11 @@ static void compute_true_wind(float wind_dir) {
     float true_wind_speed = hypotf(windvx, windvy);
     float true_wind_dir = rad2deg(atan2f(windvx, windvy));
     display_data_update(TRUE_WIND_SPEED, true_wind_speed, COMPUTED_DATA);
-    display_data_update(TRUE_WIND_DIRECTION, true_wind_dir, COMPUTED_DATA);
+    display_data_update(TRUE_WIND_ANGLE, true_wind_dir, COMPUTED_DATA);
 }
 
 void display_data_update(display_item_e item, float value, data_source_e source) {
+    //printf("display_data_update %s %f %s\n", display_get_item_label(item).c_str(), value, source_name[source]);
     uint32_t time = millis();
     if (isnan(value))
         printf("invalid display data update %d %d\n", item, source);
@@ -133,7 +144,7 @@ void display_data_update(display_item_e item, float value, data_source_e source)
     display_data[item].source = source;
     data_source_time[source] = time;
 
-    if (item == WIND_DIRECTION)  // possibly compute true wind
+    if (item == WIND_ANGLE)  // possibly compute true wind
         compute_true_wind(value);
 }
 
@@ -174,21 +185,28 @@ struct text_display : public display_item {
     void fit() {
         ht = h;
 
-        if (centered) {  // if centered do not draw label either for now
+        if (centered)  // if centered do not draw label either for now
             label_w = label_h = 0;
-        } else {
+        else {
             std::string str = getLabel();
-            label_font = 8;
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+            label_font = 30;
+#else
+            label_font = 11;
+#endif
             draw_set_font(label_font);
             label_w = draw_text_width(str);
-            label_h = 8;
 
             if (label_w > w / 2 || label_h > h / 2) {
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+                label_font = 21;
+#else
                 label_font = 7;
+#endif
                 draw_set_font(label_font);
                 label_w = draw_text_width(str);
-                label_h = 7;
             }
+            label_h = label_font;
         }
     }
 
@@ -198,7 +216,7 @@ struct text_display : public display_item {
             if (!draw_set_font(ht))
                 return;
 
-            int width = draw_text_width(str);
+            int width = draw_text_width(str)+2;
             if ((width + label_w < wt || ht + label_h < h) && width < wt && ht < h) {
                 wt = width;
                 break;
@@ -231,14 +249,14 @@ struct text_display : public display_item {
                 yp += (label_h + h - ht)/2;
             // center bounds
             } else {  // right justify
-                xp = x + w - wt;
+                xp = x + w - wt - 1; //margin
                 x0 = label_w;
                 yp += (h - ht) / 2;
             }
         }
         //printf("draw text %s %d %d %d %d %d %d %d %d\n", str.c_str(), x, y, w, h, wt, ht, xp, yp);
         draw_text(xp, yp, str);
-        if (label_h && label_w < w && label_h < h) {
+        if (label_h && label_w < (w-wt) && label_h < h) {
             std::string label = getLabel();
             if (!label.empty()) {
                 int lx = x, ly = y;
@@ -246,6 +264,7 @@ struct text_display : public display_item {
                     lx += w / 2 - label_w / 2;
                 else if (wt + label_w < w)
                     ly += h / 2 - label_h / 2;
+                lx += 1; //margin
                 draw_set_font(label_font);
                 draw_text(lx, ly, label);
             }
@@ -439,11 +458,11 @@ struct position_text_display : public text_display {
     std::string getTextItem() {
         float v = display_data[item].value;
 
-        char s;
+        std::string s;
         if (item == LATITUDE)
-            s = (v < 0) ? 'S' : 'N';
+            s = (v < 0) ? "S" : "N";
         else
-            s = (v < 0) ? 'W' : 'E';
+            s = (v < 0) ? "W" : "E";
         v = fabsf(v);
         std::string str;
         if (settings.lat_lon_format == "degrees")
@@ -451,10 +470,10 @@ struct position_text_display : public text_display {
         else {
             float i;
             float f = modff(v, &i) * 60;
-            str = float_to_str(i) + ", ";
+            str = float_to_str(i, 0) + ",";
             if (settings.lat_lon_format == "seconds") {
                 f = modff(f, &i) * 60;
-                str += float_to_str(i) + ", " + float_to_str(f, 2);
+                str += float_to_str(i, 0) + "," + float_to_str(f, 2);
             } else
                 str += float_to_str(f, 4);
         }
@@ -618,23 +637,22 @@ struct gauge : public display_item {
         text.w = w / 1.8f;
         text.h = h / 3;
         text.fit();
+
+        xc = x + w / 2;
+        yc = y + h / 2;
     }
 
     void render_ring() {
-        xc = x + w / 2;
-        yc = y + h / 2;
-
-        int thick = r / 36;
-        //int r2 = r - thick - 1;
+        int thick = r / 30;
         draw_circle(xc, yc, r, thick);
     }
 
-    void render_tick(float angle, int u, int &x0, int &y0) {
+    void render_tick(float angle, int u) {
         float rad = deg2rad(angle);
         float s = sinf(rad), c = cosf(rad);
 
-        x0 = xc + (r - u) * s;
-        y0 = yc - (r - u) * c;
+        int x0 = xc + (r - u) * s;
+        int y0 = yc - (r - u) * c;
         int v = 3;
         int x1 = xc + (r-1) * s;
         int xp = v * c;
@@ -655,11 +673,6 @@ struct gauge : public display_item {
 #endif
         draw_set_font(th);
 
-        for (float angle = min_ang; angle <= max_ang; angle += ang_step) {
-            int x0, y0;
-            render_tick(angle, w / 12, x0, y0);
-        }
-
         float step = (int)(((float)max_v - min_v) / 8 + .5);
         for (float val = min_v; val <= max_v; val += step) {
             if (max_ang >= 160 && val > 160)
@@ -670,6 +683,7 @@ struct gauge : public display_item {
             float v = (ival - min_v) / (max_v - min_v);
             // now convert to gauge angle
             v = min_ang + v * (max_ang - min_ang);
+            render_tick(v, w / 12);
 
             float rad = deg2rad(v);
             float s = sinf(rad), c = cosf(rad);
@@ -702,10 +716,8 @@ struct gauge : public display_item {
     virtual void render_dial() {
         // draw actual arrow toward wind direction
         float val = display_data[item].value;
-        if (isnan(val)) {
-            //printf("ISNAN%f\n", val);
+        if (isnan(val))
             return;
-        }
 
         // map over range from 0 - 1
         float v = (val - min_v) / (max_v - min_v);
@@ -714,7 +726,7 @@ struct gauge : public display_item {
         v = min_ang + v * (max_ang - min_ang);
 
         float rad = deg2rad(v);
-        float s = sin(rad), c = cos(rad);
+        float s = sinf(rad), c = cosf(rad);
         int x0 = r * s;
         int y0 = -r * c;
         int u = 1 + w / 30;
@@ -740,11 +752,10 @@ struct gauge : public display_item {
         std::string label2 = space2 > 0 ? label.substr(space2) : "";
 
 #ifdef USE_RGB_LCD
-        const uint8_t fonts[] = { 30, 24, 21, 0 };
+        const uint8_t fonts[] = { 36, 30, 24, 21, 0 };
 #else
-        const uint8_t fonts[] = { 8, 7, 0 };
+        const uint8_t fonts[] = { 18, 15, 13, 11, 7, 0 };
 #endif
-        int fth[] = { 10, 8, 0 };
         int lw1, lw2=0;
         for (int i = 0; i < (sizeof fonts) / (sizeof *fonts); i++) {
             if (!fonts[i])
@@ -754,12 +765,12 @@ struct gauge : public display_item {
             lw1 = draw_text_width(label1);
             lw2 = draw_text_width(label2);
 
-            int x1 = -w / 2 + lw1, y12 = -h / 2 + fth[i];
+            int x1 = -w / 2 + lw1, y12 = -h / 2 + (fonts[i]*9/8);
             int x2 = w / 2 - lw2;
             int r1_2 = x1 * x1 + y12 * y12, r2_2 = x2 * x2 + y12 * y12;
             int mr = r * r * 9 / 10;
-            //printf("%s   %d %d %d   %d %d %d\n", label1.c_str(), x1, x2, y12, r1_2, r2_2, mr);
-            if (r1_2 < mr && r2_2 < mr)
+            //printf("%s %s   %d %d %d   %d %d %d\n", label1.c_str(), label2.c_str(), x1, x2, y12, r1_2, r2_2, mr);
+            if (r1_2 > mr && r2_2 > mr)
                 break;
         }
         draw_color(MAGENTA);
@@ -768,12 +779,12 @@ struct gauge : public display_item {
     }
 
     virtual void render() {
+        draw_color(GREEN);
+        render_ring();
         render_label();
         render_dial();
         draw_color(GREY);
         render_ticks(w > 60);
-        draw_color(GREEN);
-        render_ring();
     }
 
     text_display &text;
@@ -795,17 +806,18 @@ struct wind_direction_gauge : public gauge {
         gauge::render();
         // now compute true wind from apparent
         // render true wind indicator near ring
-        float twd = display_data[TRUE_WIND_DIRECTION].value;
+        float twd = display_data[TRUE_WIND_ANGLE].value;
         if (!isnan(twd)) {
-            float s = sin(twd), c = cos(twd);
+            float s = sinf(twd), c = cosf(twd);
 
             int x0 = s * r, y0 = c * r;
-            int x1 = x0 * 8 / 10, y1 = y0 * 8 / 10;
-            int xp = c * 3, yp = s * 3;
+            int x1 = x0 * 6 / 10, y1 = y0 * 6 / 10;
+            int pr = r/15;
+            int xp = c * pr, yp = s * pr;
             draw_color(GREEN);
-            draw_triangle(xc + x0 - xp, yc + y0 - yp,
+            draw_triangle(xc + x0 - xp, yc + y0 + yp,
                           xc + x1, yc + y1,
-                          xc + x0 + xp, yc + y0 + yp);
+                          xc + x0 + xp, yc + y0 - yp);
         }
     }
 };
@@ -827,7 +839,7 @@ struct heading_gauge : public gauge {
 
         int lx, ly;
         float rad = deg2rad(v);
-        float s = sin(rad), c = cos(rad);
+        float s = sinf(rad), c = cosf(rad);
         int lw = r / 25;
         for (int i = 0; i < (sizeof boat_coords) / (sizeof *boat_coords); i += 2) {
             float x = boat_coords[i], y = boat_coords[i + 1];
@@ -887,6 +899,136 @@ struct rate_of_turn_gauge : public gauge {
         : gauge(_text, -10, 10, -90, 90, 30) {}
 };
 
+struct gps_wind_display : public display_item {
+    gps_wind_display() : display_item(GPS_HEADING) {}
+
+    void fit() {
+        if (w > h)
+            w = h;
+        else
+            h = w;
+        r = min(w / 2, h / 2)*4/5;
+    }
+
+    void render_ring() {
+        int xc = x + w / 2;
+        int yc = y + h / 2;
+
+        int thick = r / 20;
+        draw_circle(xc, yc, r, thick);
+    }
+
+    void draw_tick(float v) {
+        float rad = deg2rad(v);
+        float s = sinf(rad), c = cosf(rad);
+        float r0 = r*4/5, r1 = r*5/4, r2 = r/20;
+
+        int xc = x + w / 2;
+        int yc = y + h / 2;
+
+        int x0 = xc+r0*s, y0 = yc+r0*c;
+        int x1 = xc+r1*s, y1 = yc+r1*c;
+        int x2 = x1-r2*c, y2 = y1+r2*s;
+        int x3 = x1+r2*c, y3 = y1-r2*s;
+
+        draw_triangle(x0, y0, x2, y2, x3, y3);
+    }
+
+    virtual void render() {
+        int ht = r/3, ht2 = r/4, wt;
+
+        float v;
+        std::string str;
+
+        // draw boat speed
+        v = display_data[GPS_SPEED].value;
+        str = float_to_str(v, 1);
+        draw_color(WHITE);
+        draw_set_font(ht);
+        draw_text(x, y, str);
+
+        draw_color(GREY);
+        draw_set_font(ht2);
+        draw_text(x, y+ht, "BSPD");
+
+        // draw true wind angle
+        v = resolv(display_data[TRUE_WIND_ANGLE].value, 180);
+        str = float_to_str(v, 0);
+        draw_color(WHITE);
+        draw_set_font(ht);
+        wt = draw_text_width(str);
+        draw_text(x+w-wt, y, str);
+
+        draw_color(GREY);
+        str = "TWA";
+        draw_set_font(ht2);
+        wt = draw_text_width(str);
+        draw_text(x+w-wt, y+ht, str);
+
+        // draw true wind direction
+        v = resolv(display_data[TRUE_WIND_ANGLE].value +
+                   display_data[GPS_HEADING].value, 180);
+        str = float_to_str(v, 0);
+        draw_color(WHITE);
+        draw_set_font(ht);
+        draw_text(x, y+h-ht, str);
+
+        draw_color(GREY);
+        str = "TWD";
+        draw_set_font(ht2);
+        draw_text(x, y+h-ht*3/2, str);
+        draw_set_font(ht);
+
+        // draw true wind speed
+        v = display_data[TRUE_WIND_SPEED].value;
+        str = float_to_str(v, 0);
+        draw_color(WHITE);
+        draw_set_font(ht);
+        wt = draw_text_width(str);
+        draw_text(x+w-wt, y+h-ht, str);
+
+        draw_color(GREY);
+        str = "TWS";
+        draw_set_font(ht2);
+        wt = draw_text_width(str);
+        draw_text(x+w-wt, y+h-ht*3/2, str);
+
+        // render ring
+        draw_color(GREY);
+        render_ring();
+
+        // render true wind triangle
+        draw_color(BLUE);
+        draw_tick(display_data[TRUE_WIND_ANGLE].value);
+
+        // render apparent wind triangle
+        draw_color(CYAN);
+        draw_tick(display_data[WIND_ANGLE].value);
+
+        draw_color(WHITE);
+        draw_set_font(ht2);
+        v = display_data[GPS_HEADING].value;
+        str = float_to_str(v, 0);
+        wt = draw_text_width(str);
+        draw_text(x+w/2-wt/2, y+h/2-r-ht/2, str);
+
+        // render heading box
+        wt = ht*5/2;
+        draw_box(x+w/2-wt/2, y+h/2-r-ht/2, wt, ht, true);
+        
+        draw_color(YELLOW);
+        int x0 = x+w/2, y0 = y-r*8/9;
+        int x1 = x+w/2-r/10, y1 = y-r*7/9;
+        int x2 = x-w/2-r/10, y2 = y-r*9/8;
+        int y3 = y-r*9/7;
+        draw_triangle(x0, y0, x1, y1, x2, y1);
+        draw_triangle(x0, y2, x1, y3, x2, y3);
+    }
+
+    int r;
+};
+
+
 uint32_t start_time;
 struct history_display : public display_item {
     history_display(text_display *_text, bool _min_zero = true, bool _inverted = false)
@@ -935,6 +1077,7 @@ struct history_display : public display_item {
             float rng = high - low;
             maxv = high + rng / 8;
             minv = low - rng / 8;
+            digits=3;
         }
 
         range = maxv - minv;
@@ -995,25 +1138,36 @@ struct history_display : public display_item {
 struct route_display : public display_item {
     route_display()
         : display_item(ROUTE_INFO) {}
+    void fit() {
+        if (w > h)
+            w = h;
+        else
+            h = w;
+    }
     void render() {
         float scog = display_data[GPS_HEADING].value;
         float course_error = resolv(route_info.target_bearing - scog);
-        int p = course_error / (w / 20);
+        int p;
+        if(isnan(course_error))
+            p = 0;
+        else
+            p = course_error / (w / 20);
+        draw_color(WHITE);
         draw_line(x + w / 2 + p - w / 8, y, x + w / 2 - w / 4, y + h);
         draw_line(x + w / 2 + p + w / 8, y, x + w / 2 + w / 4, y + h);
         draw_line(x + w / 2 + p, y, x + w / 2, y + h);
     }
 };
 
-static int ships_range = 2;
-static float ships_range_table[] = { 0.25, .5, 1, 2, 5, 10, 20 };
+static int ships_range = 1;
+static float ships_range_table[] = { .5, 1, 2, 5, 10 };
 struct ais_ships_display : public display_item {
     ais_ships_display()
         : display_item(AIS_DATA) {}
     void fit() {
         if (w < h) {
             xc = x + w / 2;
-            yc = y + xc;
+            yc = y + w / 2;
             r = w / 2 - 1;
             tx = 0;
             ty = w;
@@ -1021,9 +1175,9 @@ struct ais_ships_display : public display_item {
             th = h - w;
         } else {
             yc = y + h / 2;
-            xc = x + yc;
-            r = h / 2;
-            tx = w;
+            xc = x + h / 2;
+            r = h / 2 - 1;
+            tx = h;
             ty = 0;
             tw = w - h;
             th = h;
@@ -1039,10 +1193,16 @@ struct ais_ships_display : public display_item {
     void drawItem(const char *label, std::string text) {
         if (ty0 + tdy >= ty + th)
             return;
+
+        int rd8 = r/8;
+        draw_set_font(rd8);
         int ly = ty + ty0;
         int lw = tdyl ? 0 : draw_text_width(label);
         ty0 += tdyl;
+        draw_text(tx, ly, label);
 
+        int rd4 = r/4;
+        draw_set_font(rd4);
         int textw = draw_text_width(text);
         int scrolldist = textw - (tw - lw);
         if (scrolldist < 0)
@@ -1053,27 +1213,24 @@ struct ais_ships_display : public display_item {
         }
         draw_text(tx + tw - scrolldist, ty + ty0, text);
         ty0 += tdy;
-
-        draw_text(tx, ly, label);
     }
 
     void render_text(ship *closest) {
-        int ht = 8;
-        draw_set_font(ht);
+        int rd7 = r/7;
+        draw_set_font(rd7);
         // draw range in upper left corner
         std::string str = float_to_str(ships_range_table[ships_range], 1) + "NMi";
         int textw = draw_text_width(str);
-        draw_text(x + w - textw, y, str);
-
-        ht = 10;
-        draw_set_font(ht);
+        draw_text(x + 2*r - textw, y, str);
         draw_text(x, y, "AIS");
 
         ty0 = 0;
         tdy = 12;
         tdyl = tw > th ? 0 : tdy;
 
+        int rd4 = r/4;
         if (!closest) {
+            draw_set_font(rd4);
             draw_text(tx, ty, "no target");
             return;
         }
@@ -1089,25 +1246,42 @@ struct ais_ships_display : public display_item {
         float scog = display_data[GPS_HEADING].value;
         uint32_t gps_time = display_data[GPS_HEADING].time;
 
-        drawItem("Closest Target", str);
+        drawItem("Closest", str);
         closest->compute(slat, slon, ssog, scog, gps_time);
 
         drawItem("CPA", float_to_str(closest->cpa, 2));
 
         float tcpa = closest->tcpa, itcpa;
         tcpa = 60 * modff(tcpa / 60, &itcpa);
-        drawItem("TCPA", float_to_str(itcpa) + ":" + float_to_str(tcpa, 2));
+        drawItem("TCPA", float_to_str(itcpa, 0) + ":" + float_to_str(tcpa, 2));
 
-        drawItem("SOG", float_to_str(closest->sog));
-        drawItem("COG", float_to_str(closest->sog));
-        drawItem("Distance", float_to_str(closest->dist));
+        drawItem("SOG", float_to_str(closest->sog, 1) + "kts");
+        drawItem("COG", float_to_str(closest->cog, 0));
+        drawItem("Distance", float_to_str(closest->dist,2) + "NMi");
+    }
+
+    void render_ship() {
+        // draw the ship
+        float scog = display_data[GPS_HEADING].value;
+        if(isnan(scog))
+            return;
+
+        float rad = deg2rad(scog);
+        float s = sinf(rad), c = cosf(rad);
+        int d = r/10;
+        int x1 = xc + s*d, y1 = yc + c*d;
+        int x2 = xc - s*d - c*d, y2 = yc + c*d - s*d;
+        int x3 = xc - s*d + c*d, y3 = yc + c*d - s*d;
+
+        draw_triangle(x1, y1, x2, y2, x3, y3);
     }
 
     void render() {
+        draw_color(GREY);
         render_ring(1);
         render_ring(0.5);
-
-        float sr = 1 + w / 60, rp = w / 20;
+        
+        float sr = 1 + w / 90, rp = w / 20;
 
         ship *closest = NULL;
         float closest_dist = INFINITY;
@@ -1120,7 +1294,7 @@ struct ais_ships_display : public display_item {
             float x = ship.simple_x(slon);
             float y = ship.simple_y(slat);
 
-            float dist = hypot(x, y);
+            float dist = hypotf(x, y);
             if (dist > rng)
                 continue;
 
@@ -1133,16 +1307,30 @@ struct ais_ships_display : public display_item {
             y *= r / rng;
 
             int x0 = xc + x, y0 = yc - y;
+            if(isnan(ship.cog))
+                draw_color(GREY);
+            else {
+                if(ship.sog > 1)
+                    draw_color(GREEN);
+                else
+                    draw_color(BLUE);
+            }
+
             draw_circle(x0, y0, sr);
 
-            float rad = deg2rad(ship.cog);
-            float s = sin(rad), c = cos(rad);
-            int x1 = x0 + s * rp, y1 = y0 - c * rp;
-            x0 += s * sr, y0 -= c * sr;
-            draw_line(x0, y0, x1, y1);
+            if(!isnan(ship.cog)) {
+                float rad = deg2rad(ship.cog);
+                float s = sinf(rad), c = cosf(rad);
+                int x1 = x0 + s * rp, y1 = y0 - c * rp;
+                x0 += s * sr, y0 -= c * sr;
+                draw_line(x0, y0, x1, y1);
+            }
         }
-
+        draw_color(WHITE);
         render_text(closest);
+
+        draw_color(RED);
+        render_ship();
     }
 
     int xc, yc, r;
@@ -1171,7 +1359,7 @@ void grid_display::fit() {
         return;
     }
 
-    // adjust items to fit in grid
+    // adjust items to fit in grid    
     int min_row_height = 10;
     int min_col_width = 10;
 
@@ -1361,8 +1549,17 @@ page::page(std::string _description)
     cols = landscape ? 2 : 1;
 }
 
+void page::fit()
+{
+    grid_display::fit();
+
+    // center top level grid display on page
+    x = (page_width - w)/2;
+    y = (page_height - w)/2;
+}
+
 // mnemonics for all possible displays
-#define WIND_DIR_T new dir_angle_text_display(WIND_DIRECTION, true)
+#define WIND_DIR_T new dir_angle_text_display(WIND_ANGLE, true)
 #define WIND_DIR_G new wind_direction_gauge(WIND_DIR_T)
 #define WIND_SPEED_T new speed_text_display(WIND_SPEED)
 #define WIND_SPEED_G new speed_gauge(WIND_SPEED_T)
@@ -1407,8 +1604,6 @@ page::page(std::string _description)
 #define WATER_SPEED_S new stat_display(WATER_SPEED)
 #define WATER_TEMP_T new temperature_text_display(WATER_TEMPERATURE)
 
-#define AIS_SHIPS_DISPLAY new ais_ships_display()
-
 struct pageA : public page {
     pageA()
         : page("Wind gauges with stats") {
@@ -1449,13 +1644,22 @@ struct pageD : public page {
         d->add(WIND_DIR_G);
         d->add(WIND_SPEED_G);
 
-        grid_display *t = new grid_display(this, landscape ? 3 : 1);
-        t->expanding = false;
-        t->add(PRESSURE_T);
-        t->add(AIR_TEMP_T);
-        t->add(RELATIVE_HUMIDITY_T);
-        t->add(BATTERY_VOLTAGE_T);
-        t->add(AIR_QUALITY_T);
+        grid_display *u;
+        if(landscape) {
+            grid_display *t = new grid_display(this, 2);
+            t->expanding = false;
+            display *pd = PRESSURE_T;
+            pd->w = w/3;
+            t->add(pd);
+            u = new grid_display(t, 2);
+        } else {
+            u = new grid_display(this, 1);
+            u->expanding = false;
+        }
+        u->add(AIR_TEMP_T);
+        u->add(RELATIVE_HUMIDITY_T);
+        u->add(BATTERY_VOLTAGE_T);
+        u->add(AIR_QUALITY_T);
     }
 };
 
@@ -1551,33 +1755,40 @@ struct pageK : public page {
 struct pageL : public page {
     pageL()
         : page("GPS heading/speed text large") {
-        grid_display *c = new grid_display(this);
-        c->add(GPS_HEADING_T);
-        c->add(GPS_SPEED_T);
-        grid_display *d = new grid_display(this);
-        d->expanding = false;
-        d->add(LATITUDE_T);
-        d->add(LONGITUDE_T);
-        d->add(TIME_T);
+        cols = 1;
+        add(GPS_HEADING_T);
+        add(GPS_SPEED_T);
+        if(!landscape) {
+            grid_display *d = new grid_display(this);
+            d->expanding = false;
+            d->add(LATITUDE_T);
+            d->add(LONGITUDE_T);
+            d->add(TIME_T);
+        }
     }
 };
 
 struct pageM : public page {
     pageM()
         : page("Wind gauges, GPS and inertial text ") {
-        cols = landscape ? 3 : 2;
-        add(WIND_DIR_G);
-        add(WIND_SPEED_G);
-        add(PRESSURE_T);
-        add(AIR_TEMP_T);
-        add(COMPASS_T);
-        add(RATE_OF_TURN_T);
-        add(PITCH_T);
-        add(HEEL_T);
-        add(GPS_HEADING_T);
-        add(GPS_SPEED_T);
-        add(LATITUDE_T);
-        add(LONGITUDE_T);
+        cols = 1;
+        grid_display *d = new grid_display(this, 2);
+        d->add(WIND_DIR_G);
+        d->add(WIND_SPEED_G);
+        
+        grid_display *e = new grid_display(this, landscape ? 3 : 2);
+        e->expanding = false;
+        e->add(PRESSURE_T);
+        e->add(AIR_TEMP_T);
+        e->add(COMPASS_T);
+        e->add(RATE_OF_TURN_T);
+        if(!landscape)
+            e->add(PITCH_T);
+        e->add(HEEL_T);
+        e->add(GPS_HEADING_T);
+        e->add(GPS_SPEED_T);
+        e->add(LATITUDE_T);
+        e->add(LONGITUDE_T);
     }
 };
 
@@ -1663,7 +1874,7 @@ struct pageS : public page {
 
 struct pageT : public page {
     pageT()
-        : page("baro history") {
+        : page("all sensor text") {
         cols = landscape ? 3 : 2; 
         add(WIND_DIR_T);
         add(WIND_SPEED_T);
@@ -1689,11 +1900,13 @@ struct pageU : public page {
     pageU()
         : page("route display"), vmg(NAN) {
         add(new route_display());
-        add(new float_text_display(ROUTE_INFO, "XTE", route_info.xte, 1));
-        add(new float_text_display(ROUTE_INFO, "BRG", route_info.brg, 0));
-        add(new float_text_display(ROUTE_INFO, "VMG", vmg, 0));
-        add(new string_text_display(ROUTE_INFO, "RNG", srng));
-        add(new string_text_display(ROUTE_INFO, "TTG", sttg));
+        grid_display *d = new grid_display(this, landscape ? 1 : 2);
+        d->expanding=false;
+        d->add(new float_text_display(ROUTE_INFO, "XTE", route_info.xte, 1));
+        d->add(new float_text_display(ROUTE_INFO, "BRG", route_info.brg, 0));
+        d->add(new float_text_display(ROUTE_INFO, "VMG", vmg, 0));
+        d->add(new string_text_display(ROUTE_INFO, "RNG", srng));
+        d->add(new string_text_display(ROUTE_INFO, "TTG", sttg));
     }
 
     void render() {
@@ -1701,7 +1914,7 @@ struct pageU : public page {
         float tbrg = route_info.target_bearing;
         float sog = display_data[GPS_SPEED].value;
         float cog = display_data[GPS_HEADING].value;
-        vmg = sog * cos(deg2rad(tbrg - cog));
+        vmg = sog * cosf(deg2rad(tbrg - cog));
 
         // update rng
         float lat = display_data[LATITUDE].value;
@@ -1712,14 +1925,15 @@ struct pageU : public page {
         distance_bearing(lat, lon, wpt_lat, wpt_lon, &rng, &rbrg);
         float nrng = rng * cosf(deg2rad(rbrg - cog));
 
-        srng = std::string(rng, 2) + "/" + std::string(nrng, 2);
+        srng = float_to_str(rng, 2) + "/" + float_to_str(nrng, 2);
 
         // update ttg
-        if (vmg > 0.) {
+        if (vmg > 0) {
             float ttg_hr;
             float ttg_min = 60 * modff(rng / vmg, &ttg_hr);
             float ttg_sec = 60 * modff(ttg_min, &ttg_min);
-            sttg = std::string(ttg_hr, 0) + ":" + std::string(ttg_min, 0) + ":" + std::string(ttg_sec, 0);
+            sttg = float_to_str(ttg_hr, 0) + ":" +
+                float_to_str(ttg_min, 0) + ":" + float_to_str(ttg_sec, 0);
         } else
             sttg = "---";
 
@@ -1733,7 +1947,7 @@ struct pageU : public page {
 struct pageV : public page {
     pageV()
         : page("AIS display") {
-        add(AIS_SHIPS_DISPLAY);
+        add(new ais_ships_display);
     }
 };
 
@@ -1770,6 +1984,13 @@ struct pageX : public page {
     }
 };
 
+struct pageY : public page {
+    pageY()
+        : page("GPS Wind Display") {
+        add(new gps_wind_display);
+        cols = 1;
+    }
+};
 
 static std::vector<page *> pages;
 route_info_t route_info;
@@ -1820,10 +2041,10 @@ static void setup_analog_pins() {
     analogReadResolution(12);
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
-    ledcAttachChannel(BACKLIGHT_PIN, 200, 8, 3);
+//    ledcAttachChannel(BACKLIGHT_PIN, 200, 8, 3);
 //    ledcWriteChannel(3, 254);
 //    pinMode(BACKLIGHT_PIN, OUTPUT);
-//    digitalWrite(BACKLIGHT_PIN, HIGH);
+    digitalWrite(BACKLIGHT_PIN, HIGH);
 #else
     ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3);
     ledcWriteChannel(3, 0);
@@ -1864,9 +2085,6 @@ static void read_analog_pins() {
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 
-#if 1
-    ledcWriteChannel(3, 255);
-#endif
     
 #else
     // set backlight level
@@ -1899,6 +2117,14 @@ bool display_toggle(bool on) {
         display_on = !display_on;
     }
     digitalWrite(PWR_LED, !display_on);
+
+    if(!on) {
+        ledcDetach(BACKLIGHT_PIN);
+        pinMode(BACKLIGHT_PIN, OUTPUT);  // strap for display
+        digitalWrite(BACKLIGHT_PIN, 0);
+        gpio_hold_en((gpio_num_t)BACKLIGHT_PIN);
+    }
+    
     return display_on;
 }
 
@@ -1911,6 +2137,7 @@ void display_pwr_led(bool on)
 static int display_data_timeout[DISPLAY_COUNT];
 
 void display_setup() {
+    gpio_hold_dis((gpio_num_t)BACKLIGHT_PIN);
     for(int i=0; i<DISPLAY_COUNT; i++) {
         display_data_timeout[i] = 5000;
         display_data[i].value = NAN; // no data
@@ -1997,6 +2224,7 @@ void display_setup() {
     add(new pageV);
     add(new pageW);
     add(new pageX);
+    add(new pageY);
 
     for (int i = 0; i < settings.enabled_pages.length(); i++)
         for (int j = 0; j < (int)display_pages.size(); j++)
@@ -2016,7 +2244,7 @@ static unsigned int cur_page()
 }
 
 void display_change_page(int dir) {
-    if (rotation == 2 || rotation == 3)
+    if (rotation == 1 || rotation == 2)
         dir = -dir;
 
     if (in_menu) {
@@ -2083,8 +2311,8 @@ static void render_status() {
         if (dt < 5000) {
             draw_text(x, y, source_name[i]);
             x += draw_text_width(source_name[i]) + 5;
-            if (i == WIFI_DATA)
-                draw_text(x, y, get_wifi_data_str());
+            //if (i == WIFI_DATA)
+            //draw_text(x, y, get_wifi_data_str());
         }
     }
 
@@ -2149,7 +2377,7 @@ void display_poll() {
     }
     safetemp_time = t0;
     
-    if (settings_wifi_ap_mode) {
+    if (force_wifi_ap_mode) {
         int ht = 14;
         draw_set_font(ht);
         draw_text(0, 0, "WIFI AP");
@@ -2204,14 +2432,14 @@ void display_setup() {
 
 void display_poll() {
 
-    static bool last_settings_wifi_ap_mode;
+    static bool last_force_wifi_ap_mode;
 
-    if (settings_wifi_ap_mode != last_settings_wifi_ap_mode) {
+    if (force_wifi_ap_mode != last_force_wifi_ap_mode) {
         tft.fillScreen(TFT_BLACK);
-        last_settings_wifi_ap_mode = settings_wifi_ap_mode;
+        last_force_wifi_ap_mode = force_wifi_ap_mode;
     }
 
-    if (settings_wifi_ap_mode) {
+    if (force_wifi_ap_mode) {
         tft.setTextColor(TFT_RED, TFT_BLACK);
         tft.drawString("WIFI AP", 0, 0, 4);
 
@@ -2232,11 +2460,11 @@ void display_poll() {
     if (lpwind_dir >= 0) {
         const uint8_t xc = 67, yc = 67, r = 64;
         float wind_rad = deg2rad(lpwind_dir);
-        int x = r * sin(wind_rad);
-        int y = -r * cos(wind_rad);
+        int x = r * sinf(wind_rad);
+        int y = -r * cosf(wind_rad);
         int s = 4;
-        int xp = s * cos(wind_rad);
-        int yp = s * sin(wind_rad);
+        int xp = s * cosf(wind_rad);
+        int yp = s * sinf(wind_rad);
 
         coords[0][0] = xc - xp;
         coords[0][1] = yc - yp;
@@ -2245,7 +2473,7 @@ void display_poll() {
         coords[2][0] = xc + xp;
         coords[2][1] = yc + yp;
 
-        xp = -31.0 * sin(wind_rad), yp = 20.0 * cos(wind_rad);
+        xp = -31.0 * sinf(wind_rad), yp = 20.0 * cosf(wind_rad);
         static float nxp = 0, nyp = 0;
         nxp = (xp + 15 * nxp) / 16;
         nyp = (yp + 15 * nyp) / 16;

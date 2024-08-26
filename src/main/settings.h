@@ -9,37 +9,38 @@
 #include <string>
 #include <map>
 
-#define VERSION 0.11
-
-//#define OLD
-
-#ifdef OLD
-#define KEY_UP_IO 27
-#else
-#define KEY_UP_IO 35
-#endif
-
-enum wireless_data_e {NMEA_PYPILOT, NMEA_SIGNALK, NMEA_CLIENT, NMEA_SERVER, SIGNALK};
+#define VERSION 0.12
 
 struct settings_t {
     std::string magic;
 
-    std::string ssid;
-    std::string psk;
+    int wifi_mode;
+    
+    std::string ap_ssid;
+    std::string ap_psk;
+
+    std::string client_ssid;
+    std::string client_psk;
 
     int channel;
 
     bool input_usb, output_usb;
     int usb_baud_rate;
-    int rs422_baud_rate;
+    int rs422_1_baud_rate;
+    int rs422_2_baud_rate;
 
-    bool input_wifi, output_wifi;
-    wireless_data_e wifi_data;
+    bool input_nmea_pypilot, output_nmea_pypilot;
+    bool input_nmea_signalk, output_nmea_signalk;
+    bool input_nmea_client, output_nmea_client;
+    bool input_nmea_server, output_nmea_server;
+    bool input_signalk, output_signalk;
+
     std::string nmea_client_addr;
     int nmea_client_port, nmea_server_port;
 
-    int transmitter_count;
-
+    bool forward_nmea_serial_to_serial;
+    bool forward_nmea_serial_to_wifi;
+    
     bool compensate_wind_with_accelerometer;
     bool compute_true_wind_from_gps;
     bool compute_true_wind_from_water;
@@ -112,7 +113,12 @@ enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
 
 void settings_load();
 void settings_store();
-std::string get_wifi_data_str();
+std::string get_wifi_mode_str();
 
 extern settings_t settings;
-extern bool settings_wifi_ap_mode;
+extern bool force_wifi_ap_mode;
+extern uint8_t hw_version;
+
+void wireless_toggle_mode();
+void wireless_setup();
+void wireless_poll();

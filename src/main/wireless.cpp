@@ -292,18 +292,18 @@ void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
 }
 
 static void setup_wifi() {
-    //settings_wifi_ap_mode=true;
-    //printf("wifi mode %d\n", settings_wifi_ap_mode);
-    if (settings_wifi_ap_mode) {
+    //printf("wifi mode %d\n", force_wifi_ap_mode);
+    if (force_wifi_ap_mode || settings.wifi_mode == WIFI_MODE_AP) {
         //Set device in AP mode to begin with
         WiFi.mode(WIFI_AP);
         // configure device AP mode
-        const char *SSID = "pypilot_mfd";
-        bool result = WiFi.softAP(SSID, 0, settings.channel);
+        if(settings.ap_ssid.empty() || settings.ap_ssid.length()>20)
+            settings.ap_ssid = "pypilot_mfd";
+        bool result = WiFi.softAP(settings.ap_ssid.c_str(), 0, settings.channel);
         if (!result)
             printf("AP Config failed.\n");
         else
-            printf("AP Config Success. Broadcasting with AP: %s\n", SSID);
+            printf("AP Config Success. Broadcasting with AP: %s\n", settings.ap_ssid.c_str());
 
         printf("Soft-AP IP address = %s\n", WiFi.softAPIP().toString().c_str());
 
@@ -315,8 +315,8 @@ static void setup_wifi() {
 
         WiFi.onEvent(WiFiStationGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
 
-        if (0&&!settings.ssid.empty()) {
-            printf("connecting to SSID: %s  psk: %s\n", settings.ssid.c_str(), settings.psk.c_str());
+        if (settings.wifi_mode == WIFI_MODE_STA || !settings.client_ssid.empty()) {
+            printf("connecting to SSID: %s  psk: %s\n", settings.client_ssid.c_str(), settings.client_psk.c_str());
 
             // setting a custom "country" locks the wifi in a particular channel
             wifi_country_t myWiFi;
@@ -329,8 +329,8 @@ static void setup_wifi() {
             myWiFi.policy = WIFI_COUNTRY_POLICY_MANUAL;
 
             esp_wifi_set_country(&myWiFi);
-            printf("wifi begin %s\n", settings.ssid.c_str());
-            WiFi.begin(settings.ssid.c_str(), settings.psk.c_str());
+            printf("wifi begin %s\n", settings.client_ssid.c_str());
+            WiFi.begin(settings.client_ssid.c_str(), settings.client_psk.c_str());
         } else
             WiFi.disconnect();
 
@@ -463,7 +463,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     message_count++;
 //    printf("lpwind_dir %f\n", lpwind_dir);
 
-    if (settings.wifi_data == SIGNALK) {
+    if (settings.output_signalk) {
         if (!isnan(lpwind_dir))
             signalk_send("environment.wind.angleApparent", M_PI / 180.0f * lpwind_dir);
         signalk_send("environment.wind.speedApparent", wind_knots * .514444f);
@@ -473,7 +473,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
 
     display_data_update(WIND_SPEED, wind_knots, ESP_DATA);
     if (!isnan(lpwind_dir))
-        display_data_update(WIND_DIRECTION, lpwind_dir, ESP_DATA);
+        display_data_update(WIND_ANGLE, lpwind_dir, ESP_DATA);
 }
 
 
@@ -506,7 +506,7 @@ static void DataRecvAir(struct esp_now_data_t &data) {
     snprintf(buf, sizeof buf, "MTA,%.2f,C", wt.temperature);
     nmea_send(buf);
 
-    if (settings.wifi_data == SIGNALK) {
+    if (settings.output_signalk) {
         signalk_send("environment.outside.pressure", wt.pressure * 100000);
         signalk_send("environment.outside.relativeHumidity", wt.rel_humidity / 100);
         signalk_send("environment.outside.temperature", wt.temperature);
@@ -550,7 +550,7 @@ static void DataRecvWater(struct esp_now_data_t &data) {
     snprintf(buf, sizeof buf, "MTW,%.2f,C", wt.temperature);
     nmea_send(buf);
 
-    if (settings.wifi_data == SIGNALK) {
+    if (settings.output_signalk) {
         signalk_send("navigation.speedThroughWater", wt.speed);
         signalk_send("environment.depth.belowSurface", wt.depth);
         signalk_send("environment.water.temperature", wt.temperature);
@@ -595,9 +595,9 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int dat
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    printf("Last Packet Recv from: %s", macStrt);
+    printf("Last Packet Recv from: %s %d\n", macStrt, data_len);
     //print(" Last Packet Recv Data: "); print(*data);
-    printf(" Last Packet Recv Data Len: %s\n", data_len);
+
 #endif
     if (xSemaphoreTake(esp_now_sem, (TickType_t)10) == pdTRUE) {
         esp_now_data_t &pos = esp_now_rb[rb_start];
@@ -615,6 +615,15 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int dat
 // Init ESP Now with fallback
 static void InitESPNow() {
     printf("InitESPNow %d\n", chip.channel);
+    memset(&chip, 0, sizeof(chip));
+    for (int ii = 0; ii < 6; ++ii)
+        chip.peer_addr[ii] = (uint8_t)0xff;
+    chip.channel = settings.channel;
+    if (chip.channel > 12)
+        chip.channel = 1;
+
+    chip.encrypt = 0;
+
     esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
     if (esp_now_init() == ESP_OK) {
         printf("ESPNow Init Success\n");
@@ -709,7 +718,7 @@ void wireless_poll() {
     for (uint8_t i = 0; i < n; i++) {
         std::string ssid = WiFi.SSID(i).c_str();
         int channel = WiFi.channel(i);
-        if (ssid == settings.ssid)
+        if (ssid == settings.client_ssid)
             settings.channel = channel;
         if (wifi_networks.find(ssid) == wifi_networks.end()) {
             wifi_networks[ssid] = channel;
@@ -749,8 +758,6 @@ void wireless_scan_devices() {
     esp_now_deinit();
     WiFi.mode(WIFI_OFF);
 
-    chip.channel = settings.channel;
-
     setup_wifi();
     InitESPNow();
 }
@@ -759,7 +766,7 @@ void wireless_toggle_mode() {
     uint32_t t0 = millis();
     static int last_wifi_toggle_time;
     if (t0 - last_wifi_toggle_time > 2000) {
-        settings_wifi_ap_mode = !settings_wifi_ap_mode;
+        force_wifi_ap_mode = !force_wifi_ap_mode;
         last_wifi_toggle_time = t0;
         setup_wifi();
     }
@@ -767,18 +774,9 @@ void wireless_toggle_mode() {
 
 void wireless_setup() {
     //printf("wireless setup\n");
-    memset(&chip, 0, sizeof(chip));
-    for (int ii = 0; ii < 6; ++ii)
-        chip.peer_addr[ii] = (uint8_t)0xff;
-    chip.channel = settings.channel;
-    if (chip.channel > 12)
-        chip.channel = 1;
-
-    chip.channel = 6;
-    chip.encrypt = 0;
-
     // Init ESPNow with a fallback logic
-    esp_now_sem = xSemaphoreCreateMutex();
+    if(!esp_now_sem)
+        esp_now_sem = xSemaphoreCreateMutex();
 
     setup_wifi();
     InitESPNow();

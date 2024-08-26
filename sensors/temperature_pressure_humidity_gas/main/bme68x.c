@@ -164,6 +164,7 @@ int8_t bme68x_init(struct bme68x_dev *dev)
         }
         else
         {
+            printf("chip id %x %x\n", dev->chip_id, BME68X_CHIP_ID);
             rslt = BME68X_E_DEV_NOT_FOUND;
         }
     }

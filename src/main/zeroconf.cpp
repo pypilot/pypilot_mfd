@@ -98,11 +98,15 @@ void query_mdns_task(void *)
 {
     for(;;) {
         if(WiFi.status() == WL_CONNECTED) {  
-            if(pypilot_discovered <= (settings.wifi_data == NMEA_PYPILOT)) {
+            if(pypilot_discovered <= (settings.input_nmea_pypilot ||
+                                      settings.output_nmea_pypilot)) {
                 pypilot_discovered = 1;
                 find_mdns_service("_pypilot", "_tcp");
             }
-            if(signalk_discovered <= (settings.wifi_data == SIGNALK || settings.wifi_data == NMEA_SIGNALK)) {
+            if(signalk_discovered <= (settings.input_nmea_signalk ||
+                                      settings.output_nmea_signalk ||
+                                      settings.input_signalk ||
+                                      settings.output_signalk)) {
                 signalk_discovered = 1;
                 find_mdns_service("_http", "_tcp");
             }

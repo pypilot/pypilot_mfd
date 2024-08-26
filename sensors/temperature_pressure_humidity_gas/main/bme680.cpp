@@ -8,12 +8,12 @@
 
 #include <list>
 
+#include <math.h>
+#include <string.h>
 #include <stdint.h>
 #include <driver/i2c.h>
 
-#include <Wire.h>
-
-#include "Arduino.h"
+#include "rom/ets_sys.h"
 #include "bme68x.h"
 
 float pressure, temperature, rel_humidity, air_quality;
@@ -21,8 +21,7 @@ float pressure, temperature, rel_humidity, air_quality;
 
 #define DEVICE_ADDRESS 0x76
 
-
-
+#define I2C_MASTER_TIMEOUT_MS 1000
 
 /******************************************************************************/
 /*!                 Macro definitions                                         */
@@ -41,19 +40,7 @@ static uint8_t dev_addr;
  */
 BME68X_INTF_RET_TYPE bme68x_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, void *intf_ptr)
 {
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    int num = Wire.write(reg_addr);
-    Wire.endTransmission();
-
-    //printf("write %d\n", num);
-
-    int cnt = Wire.requestFrom(DEVICE_ADDRESS, len);
-    //printf("req %d\n", cnt);
-    for(int i=0; i< len; i++) {
-        if(!Wire.available())
-            return !BME68X_INTF_RET_SUCCESS;
-        reg_data[i] = Wire.read();
-    }
+    ESP_ERROR_CHECK(i2c_master_write_read_device((i2c_port_t)0, 0x76, &reg_addr, 1, reg_data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS));
     return BME68X_INTF_RET_SUCCESS;
 }
 
@@ -62,12 +49,11 @@ BME68X_INTF_RET_TYPE bme68x_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32
  */
 BME68X_INTF_RET_TYPE bme68x_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t len, void *intf_ptr)
 {
-
-    Wire.beginTransmission(DEVICE_ADDRESS);
-    Wire.write(reg_addr);
-    Wire.write(reg_data, len);
-    Wire.endTransmission();
-
+    uint8_t write_buf[len+1];
+    write_buf[0] = reg_addr;
+    memcpy(write_buf+1, reg_data, len);
+    
+    int ret = i2c_master_write_to_device((i2c_port_t)0, DEVICE_ADDRESS, write_buf, len+1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
     return BME68X_INTF_RET_SUCCESS;
 }
 
@@ -92,7 +78,7 @@ BME68X_INTF_RET_TYPE bme68x_spi_write(uint8_t reg_addr, const uint8_t *reg_data,
  */
 void bme68x_delay_us(uint32_t period, void *intf_ptr)
 {
-    delayMicroseconds(period);
+    ets_delay_us(period);
 }
 
 void bme68x_check_rslt(const char api_name[], int8_t rslt)
@@ -131,7 +117,6 @@ int8_t bme68x_interface_init(struct bme68x_dev *bme, uint8_t intf)
 {
     int8_t rslt = BME68X_OK;
 
-        delay(100);
     if (bme != NULL)
     {
         /* Bus configuration : I2C */
@@ -310,7 +295,7 @@ void bme680_read()
     del_period += (heatr_conf.heatr_dur_prof[0] * 1000);
         bme.delay_us(del_period, bme.intf_ptr);
 
-        time_ms = millis();
+//        time_ms = millis();
 
         rslt = bme68x_get_data(BME68X_SEQUENTIAL_MODE, data, &n_fields, &bme);
         bme68x_check_rslt("bme68x_get_data", rslt);
@@ -339,4 +324,5 @@ void bme680_read()
             air_quality = getIAQ(data+i);
             sample_count++;
         }
+        rslt = bme68x_set_op_mode(BME68X_SLEEP_MODE, &bme);
 }

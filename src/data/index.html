@@ -8,18 +8,30 @@
     <div class='box'>
       <h2>WIFI Network Configuration</h2>
       <form action='scan_wifi' method='post'>
-        <div class='col3-grid'>
+        <table style='width: 90%%;' id='wifi_networks_table'><tr><th>SSID</th><th>channel</th><th>Strength</th><th>Encryption</th></tr>%WIFI_NETWORKS%</table>                  <div class='col3-grid'>
           <div> </div>
           <input class='button' type='submit' style='width: 100%%' value='Scan'>
         </div>
       </form>
       <form action='network' method='post'>
-        <table style='width: 90%%;' id='wifi_networks_table'><tr><th>SSID</th><th>channel</th><th>Strength</th><th>Encryption</th></tr>%WIFI_NETWORKS%</table>
-          
         <div class='col2-grid'>
-          <span>SSID</span><input type='text' name='ssid' value='%SSID%' autofocus style='width: 60%%'>
-          <span>PSK</span><input type='text' name='psk' value='%PSK%' style='width: 60%%'>
-        <span>Wireless Channel</span><span name='channel'>%CHANNEL%</span>
+          <span>Wireless Mode</span>
+          <select id='wifi_mode' name='wifi_mode' onchange='on_wifi_mode()'>
+            <option value='ap'>Access Point</option>
+            <option value='client'>Client</option>
+            <option value='none'>None</option>
+          </select>
+        </div>
+        <div id="wifi_ap" class='col2-grid'>
+          <span>AP SSID</span><input type='text' name='ap_ssid' value='%AP_SSID%' autofocus style='width: 60%%'>
+          <span>AP PSK</span><input type='text' name='ap_psk' value='%AP_PSK%' style='width: 60%%'>
+        </div>
+        <div id="wifi_client" class='col2-grid'>
+          <span>Client SSID</span><input type='text' name='client_ssid' value='%CLIENT_SSID%' autofocus style='width: 60%%'>
+          <span>Client PSK</span><input type='text' name='client_psk' value='%CLIENT_PSK%' style='width: 60%%'>
+        </div>
+        <div class='col2-grid'>
+          <span>Wireless Channel</span><input type='number' name='channel' value=%CHANNEL% ></input>
         </div>
         <div class='col3-grid'>
           <div> </div>
@@ -53,64 +65,83 @@
           <span>USB data (NMEA0183)</span>
           <span>
             <input type='checkbox' name='input_usb' id='input_usb' %INPUTUSB%><label for='input_usb'>Input</label>
-            <input type='checkbox' name='output_usb' id='output_usb' %OUTPUTUSB%><label for='output_usb'>Output</label>
+            <input type='checkbox' name='output_usb' id='output_usb' %OUTPUTUSB%>
+            <label for='output_usb'>Output</label>
             <select id='usb_baud_rate' name='usb_baud_rate'>
               <option value='38400'>38400</option>
               <option value='115200'>115200</option>
             </select>
           </span>
-          <span>RS422 data (NMEA0183)</span>
+          <span>RS422 1 data (NMEA0183)</span>
           <div>
-            <select id='rs422_baud_rate' name='rs422_baud_rate' value='%RS422_BAUD_RATE%'>
+            <select id='rs422_1_baud_rate' name='rs422_1_baud_rate'>
+              <option value='0'>Disable</option>
               <option value='4800'>4800</option>
               <option value='38400'>38400</option>
+              <option value='115200'>115200</option>
             </select>
           </div>
-          <span>WIFI data</span>
+          <span>RS422 2 data (NMEA0183)</span>
           <div>
-            <span>
-              <input type='checkbox' name='input_wifi' id='input_wifi' %INPUTWIFI%><label for='input_wifi'>Input</label>
-              <input type='checkbox' name='output_wifi' id='output_wifi' %OUTPUTWIFI%><label for='output_wifi'>Output</label>
-            </span>
+            <select id='rs422_2_baud_rate' name='rs422_2_baud_rate'>
+              <option value='0'>Disable</option>
+              <option value='4800'>4800</option>
+              <option value='38400'>38400</option>
+              <option value='115200'>115200</option>
+            </select>
           </div>
         </div>
+        <span>WIFI data</span>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_pypilot' value='nmea_pypilot'>
-          <label for='nmea_pypilot'>pypilot NMEA0183 port 20220</label>
-          <span></span>
-          <label for='nmea_pypilot'>pypilot server: %PYPILOT_ADDR%</label>
+          <input type='checkbox' name='input_nmea_pypilot' id='input_nmea_pypilot' %INPUT_NMEA_PYPILOT%>
+          <label for='input_nmea_pypilot'>pypilot NMEA0183 port 20220</label>
+          <input type='checkbox' name='output_nmea_pypilot' id='output_nmea_pypilot' %OUTPUT_NMEA_PYPILOT%>
+          <label for='output_nmea_pypilot'>pypilot server: %PYPILOT_ADDR%</label>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_signalk' value='nmea_signalk'>
-          <label for='nmea_signalk'> signalk-server NMEA0183 port 10110</label>
-          <span></span>
-          <label for='nmea_signalk'>signalk server: %SIGNALK_ADDR%</label>
+          <input type='checkbox' name='input_nmea_signalk' id='input_nmea_signalk' %INPUT_NMEA_SIGNALK%>
+          <label for='input_nmea_signalk'> signalk-server NMEA0183 port 10110</label>
+          <input type='checkbox' name='output_nmea_signalk' id='output_nmea_signalk' %OUTPUT_NMEA_SIGNALK%>
+          <label for='output_nmea_signalk'>signalk server: %SIGNALK_ADDR%</label>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_client' value='nmea_client'></input>
-          <label for='nmea_client'>TCP client NMEA0183</label>
-          <span></span>            
-          <label for='nmea_client'>Host <input type='text' name='nmea_tcp_client_addr' style='width: 10em;' value=%NMEACLIENTADDR% > Port <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% ></label>
+          <input type='checkbox' name='input_nmea_client' id='input_nmea_client' %INPUT_NMEA_CLIENT%></input>
+          <label for='input_nmea_client'>TCP client NMEA0183</label>
+          <input type='checkbox' name='output_nmea_client' id='output_nmea_client' %OUTPUT_NMEA_CLIENT%></input>
+          <label for='output_nmea_client'>Host <input type='text' name='nmea_tcp_client_addr' style='width: 10em;' value=%NMEACLIENTADDR% > Port <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% ></label>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='nmea_server' value='nmea_server'></input>
-          <label for='nmea_server'>TCP server NMEA</label>
-          <span></span>            
-          <label for='nmea_server'>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server_port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>
+          <input type='checkbox' name='input_nmea_server' id='input_nmea_server' %INPUT_NMEA_SERVER%></input>
+          <label for='input_nmea_server'>TCP server NMEA</label>
+          <input type='checkbox' name='output_nmea_server' id='output_nmea_server' %OUTPUT_NMEA_SERVER%></input>
+          <label for='output_nmea_server'>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server_port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>
         </div>
         <div class='data-grid'>
-          <input type='radio' name='wifidata' id='signalk' value='signalk'></input>
-          <label for='signalk'>SignalK</label>
-          <span></span>
-          <label for='signalk'>SignalK server: %SIGNALK_ADDR%</span>
+          <input type='checkbox' name='input_signalk' id='input_signalk' %INPUT_SIGNALK%></input>
+          <label for='input_signalk'>SignalK</label>
+          <input type='checkbox' name='output_signalk' id='output_signalk' %OUTPUT_SIGNALK%></input>
+          <label for='output_signalk'>SignalK server: %SIGNALK_ADDR%</span>
           <span></span>
           <span>To output to signalk you may have to <a href='signalk.local:3000'>grant access</a></span>
         </div>
+        <span>Forward data</span>
+        <div class='data-grid'>
+          <input type='checkbox' name='forward_nmea_serial_to_serial' id='forward_nmea_serial_to_serial' %FORWARD_NMEA_SERIAL_TO_SERIAL%>
+          <label for='forward_nmea_serial_to_serial'>Forward nmea serial to serial </label>
+          <input type='checkbox' name='forward_nmea_serial_to_wifi' id='forward_nmea_serial_to_wifi' %FORWARD_NMEA_SERIAL_TO_WIFI%>
+          <label for='forward_nmea_serial_to_wifi'>Forward nmea serial to wifi </label>
+        </div>
         <div class='col1-grid'>
           <span>Computation</span>          
-          <span><input type='checkbox' name='compensate_wind_with_accelerometer' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%><label for='input_wifi'>Compensate wind with accelerometer</label></span>
+          <span>
+            <input type='checkbox' name='compensate_wind_with_accelerometer' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%>
+            <label for='compensate_wind_with_accelerometer'>Compensate wind with accelerometer</label>
+          </span>
           <span><input type='checkbox' name='compute_true_wind_from_gps' id='compute_true_wind_from_gps' %COMPUTE_TRUEWIND_FROM_GPS%><label for='output_wifi'>Compute True Wind from GPS</label></span>
-          <span><input type='checkbox' name='compute_true_wind_from_water_speed' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%><label for='output_wifi'>Compute True Wind from Water Speed</label></span>
+          <span>
+            <input type='checkbox' name='compute_true_wind_from_water_speed' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%>
+            <label for='compute_true_wind_from_water_speed'>Compute True Wind from Water Speed</label>
+          </span>
         </div>
         <div class='col3-grid'>
           <div></div>
@@ -118,12 +149,10 @@
         </div>
       </form>
       <script type='text/javascript'>
+        document.getElementById('wifi_mode').value='%WIFI_MODE%';
         document.getElementById('usb_baud_rate').value='%USB_BAUD_RATE%';
-        document.getElementById('rs422_baud_rate').value='%RS422_BAUD_RATE%';
-        var wifi_data = document.getElementById('%WIFIDATA%');
-        // Set the checked attribute to true
-        if (wifi_data)
-            wifi_data.checked = true;
+        document.getElementById('rs422_1_baud_rate').value='%RS422_1_BAUD_RATE%';
+        document.getElementById('rs422_2_baud_rate').value='%RS422_2_BAUD_RATE%';
       </script>
       <h4><a href='/data.html'>View Current Display Data</a></h4>
       <h4><a href='/history.html'>View History of Display Data</a></h4>
@@ -132,21 +161,25 @@
  
     <div class='box'>
       <h2>Display Pages</h2>
-      <form action='display' method='post'>
-        <div class='col1-grid'>
-          %DISPLAYPAGES%
-        </div>
-      </form>
-    </div>
-
-    <div class='box'>
-      <h2>Display</h2>
       <form action='display_auto' method='post'>
         <div class='col3-grid'>
           <div> </div>
           <input class='button' type='submit' style='width: 100%%' value='Auto-enable pages'>
         </div>
       </form>
+      <form action='display_pages' method='post'>
+        <div class='col1-grid'>
+          %DISPLAYPAGES%
+        </div>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='submit' value='Submit'>
+        </div>
+      </form>
+    </div>
+
+    <div class='box'>
+      <h2>Display</h2>
       <form action='display' method='post'>
         <div class='col1-grid'>
           <span><input type='checkbox' name='use360' id='use360' %USE360%>

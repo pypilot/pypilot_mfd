@@ -6,6 +6,9 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <esp_wifi.h>
+#include <nvs_flash.h>
+
 #include "rapidjson/document.h"
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/stringbuffer.h"
@@ -19,24 +22,22 @@
 
 settings_t settings;
 static std::string settings_filename = "/settings/settings.json";
-bool settings_wifi_ap_mode = false;
+bool force_wifi_ap_mode = false;
+uint8_t hw_version;
 
-std::string get_wifi_data_str()
+std::string get_wifi_mode_str()
 {
-    switch(settings.wifi_data) {
-        case NMEA_PYPILOT: return "nmea_pypilot";
-        case NMEA_SIGNALK: return "nmea_signalk";
-        case NMEA_CLIENT:  return "nmea_client";
-        case NMEA_SERVER:  return "nmea_server";
-        case SIGNALK:      return "signalk";
+    switch(settings.wifi_mode) {
+        case WIFI_MODE_AP: return "ap";
+        case WIFI_MODE_STA: return "client";
+        default:  break;
     }
-    return "";
+    return "none";    
 }
 
 static bool settings_load_suffix(std::string suffix="")
 {
     settings.usb_baud_rate = 115200;
-    //settings.channel = 6;
 
     // start with default settings
     settings.magic = MAGIC;
@@ -87,8 +88,12 @@ static bool settings_load_suffix(std::string suffix="")
     if(settings.NAME < MIN) settings.NAME = MIN; \
     if(settings.NAME > MAX) settings.NAME = MAX; \
 
-    LOAD_SETTING_S(ssid, "pypilot")
-    LOAD_SETTING_S(psk, "")
+    LOAD_SETTING_I(wifi_mode, WIFI_MODE_AP)
+    LOAD_SETTING_S(ap_ssid, "pypilot_mfd")
+    LOAD_SETTING_S(ap_psk, "")
+
+    LOAD_SETTING_S(client_ssid, "pypilot")
+    LOAD_SETTING_S(client_psk, "")
 
     LOAD_SETTING_I(channel, DEFAULT_CHANNEL);
     if(settings.channel == 0 || settings.channel > 12)
@@ -97,17 +102,31 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_B(input_usb, true)
     LOAD_SETTING_B(output_usb, true)
     LOAD_SETTING_I(usb_baud_rate, 115200)
-    LOAD_SETTING_I(rs422_baud_rate, 38400)
+    LOAD_SETTING_I(rs422_1_baud_rate, 0)
+    LOAD_SETTING_I(rs422_2_baud_rate, 38400)
 
-    LOAD_SETTING_B(input_wifi, true)
-    LOAD_SETTING_B(output_wifi, false)
-    LOAD_SETTING_E(wifi_data, wireless_data_e, NMEA_PYPILOT)
+    LOAD_SETTING_B(input_nmea_pypilot, true)
+    LOAD_SETTING_B(output_nmea_pypilot, false)
+    LOAD_SETTING_B(input_nmea_signalk, false)
+    LOAD_SETTING_B(output_nmea_signalk, false)
+    LOAD_SETTING_B(input_nmea_client, false)
+    LOAD_SETTING_B(output_nmea_client, false)
+    LOAD_SETTING_B(input_nmea_server, false)
+    LOAD_SETTING_B(output_nmea_server, false)
+    LOAD_SETTING_B(input_signalk, false)
+    LOAD_SETTING_B(output_signalk, false)
 
     LOAD_SETTING_S(nmea_client_addr, "")
     LOAD_SETTING_I(nmea_client_port, 0);
     LOAD_SETTING_I(nmea_server_port, 3600);
+
+    // forwarding data
+    LOAD_SETTING_B(forward_nmea_serial_to_serial, false)
+    LOAD_SETTING_B(forward_nmea_serial_to_wifi, true)
+    
+    // computations
     LOAD_SETTING_B(compensate_wind_with_accelerometer, false)
-    LOAD_SETTING_B(compute_true_wind_from_gps, false)
+    LOAD_SETTING_B(compute_true_wind_from_gps, true)
     LOAD_SETTING_B(compute_true_wind_from_water, true)
 
     //display
@@ -124,6 +143,7 @@ static bool settings_load_suffix(std::string suffix="")
     LOAD_SETTING_B(show_status, true)
     LOAD_SETTING_I(rotation, 4)
     LOAD_SETTING_I(mirror, 2)
+
     LOAD_SETTING_S(power_button, "powersave")
 
     LOAD_SETTING_S(enabled_pages, "ABCD")
@@ -202,22 +222,37 @@ static bool settings_store_suffix(std::string suffix="")
 
     STORE_SETTING_S(magic)
 
-    STORE_SETTING_S(ssid)
-    STORE_SETTING_S(psk)
+    STORE_SETTING_I(wifi_mode)
+    STORE_SETTING_S(ap_ssid)
+    STORE_SETTING_S(ap_psk)
+    STORE_SETTING_S(client_ssid)
+    STORE_SETTING_S(client_psk)
     STORE_SETTING_I(channel)
 
     STORE_SETTING_B(input_usb)
     STORE_SETTING_B(output_usb)
     STORE_SETTING_I(usb_baud_rate)
-    STORE_SETTING_I(rs422_baud_rate)
+    STORE_SETTING_I(rs422_1_baud_rate)
+    STORE_SETTING_I(rs422_2_baud_rate)
 
-    STORE_SETTING_B(input_wifi)
-    STORE_SETTING_B(output_wifi)
-    STORE_SETTING_E(wifi_data)
+    STORE_SETTING_B(input_nmea_pypilot)
+    STORE_SETTING_B(output_nmea_pypilot)
+    STORE_SETTING_B(input_nmea_signalk)
+    STORE_SETTING_B(output_nmea_signalk)
+    STORE_SETTING_B(input_nmea_client)
+    STORE_SETTING_B(output_nmea_client)
+    STORE_SETTING_B(input_nmea_server)
+    STORE_SETTING_B(output_nmea_server)
+    STORE_SETTING_B(input_signalk)
+    STORE_SETTING_B(output_signalk)
 
     STORE_SETTING_S(nmea_client_addr)
     STORE_SETTING_I(nmea_client_port)
     STORE_SETTING_I(nmea_server_port)
+
+    // forwarding data
+    STORE_SETTING_B(forward_nmea_serial_to_serial)
+    STORE_SETTING_B(forward_nmea_serial_to_wifi)
 
     STORE_SETTING_B(compensate_wind_with_accelerometer)
     STORE_SETTING_B(compute_true_wind_from_gps)
@@ -236,7 +271,7 @@ static bool settings_store_suffix(std::string suffix="")
     
     STORE_SETTING_B(show_status)
     STORE_SETTING_I(rotation)
-    STORE_SETTING_B(mirror)
+    STORE_SETTING_I(mirror)
     STORE_SETTING_S(power_button)
 
     STORE_SETTING_S(enabled_pages)
@@ -323,6 +358,25 @@ void settings_load()
         settings_store_suffix(".bak");
     else
         settings_load_suffix(".bak");
+
+    nvs_handle_t version_handle;
+    ESP_ERROR_CHECK(nvs_open("version", NVS_READONLY, &version_handle));
+
+    ESP_ERROR_CHECK(nvs_get_u8(version_handle, "hw_version", &hw_version));
+    nvs_close(version_handle);
+
+    printf("Hardware Version: %d\n", hw_version);
+
+    if(hw_version != 1) { // power 
+        gpio_hold_dis((gpio_num_t)14);
+        pinMode(14, OUTPUT);  // 422 power
+        digitalWrite(14, 1);  // enable 422 for now?  disable if settings disable it
+
+        // led pin
+        gpio_hold_dis((gpio_num_t)26);
+        pinMode(26, OUTPUT);
+        digitalWrite(26, 1);
+    }
 }
 
 void settings_store()

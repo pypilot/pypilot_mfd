@@ -11,9 +11,9 @@
 #include <vector>
 
 enum display_item_e { WIND_SPEED,
-                      WIND_DIRECTION,
+                      WIND_ANGLE,
                       TRUE_WIND_SPEED,
-                      TRUE_WIND_DIRECTION,
+                      TRUE_WIND_ANGLE,
                       GPS_SPEED,
                       GPS_HEADING,
                       LATITUDE,
@@ -37,7 +37,7 @@ enum display_item_e { WIND_SPEED,
                       PYPILOT,
                       DISPLAY_COUNT };
 
-enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, WIFI_DATA, COMPUTED_DATA, DATA_SOURCE_COUNT};
+enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, COMPUTED_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
 
 void display_setup();
 bool display_toggle(bool on=false);
@@ -97,6 +97,7 @@ struct grid_display : public display {
 struct page : public grid_display {
     page(std::string _description);
     virtual ~page() {}
+    void fit();
 
     std::string description;
 };
