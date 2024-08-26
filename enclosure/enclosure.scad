@@ -1,9 +1,9 @@
-    $fn=120;
+    $fn=20;
 
 use_threads = true     ;
 use_holes = false;
 //-3
-length = 124.5;
+length = 125;
 width = 95;
 height = 19;
 
@@ -12,7 +12,8 @@ board_width = 86.25-4;
 
 pane = [128,100, 3];
 
-thickness = 8;
+thickness = 9.5;
+groove_r = 7;
 bthickness = 1.8;
 
 conn = [19, 4.5];
@@ -85,16 +86,16 @@ all()
 module side_groove() {
         translate([length/2,0,0])
         rotate([90,0,0])
-            cylinder(r=gasket_d/2, h=width-thickness*2-ex_r*2+.1, center=true);
+            cylinder(r=gasket_d/2, h=width-groove_r*2-ex_r*2+.1, center=true);
     translate([0, width/2,0])
         rotate([0,90,0])
-            cylinder(r=gasket_d/2, h=length-thickness*2-ex_r*2+.1, center=true);
+            cylinder(r=gasket_d/2, h=length-groove_r*2-ex_r*2+.1, center=true);
 }
 
 module corner_groove() {
-    translate([length/2-thickness-ex_r, width/2-thickness-ex_r,0])
+    translate([length/2-groove_r-ex_r, width/2-groove_r-ex_r,0])
         rotate_extrude(angle=90)
-    translate([thickness+ex_r,0])
+    translate([groove_r+ex_r,0])
             circle(r=gasket_d/2);
 }
 
@@ -107,15 +108,15 @@ module screw(r) {
 
 module screws(r=1.65) {
     all() {
-        translate([length/2+thickness*.46, 0, -.1])
+        translate([length/2+thickness*.4, 0, -.1])
         rotate(30)
             screw(r);
-        translate([length/2+thickness*.46, width*.35, -.1])
+        translate([length/2+thickness*.4, width*.35, -.1])
             rotate(30)
             screw(r);
-        translate([length*.4,width/2+thickness*.46, -.1])
+        translate([length*.4,width/2+thickness*.4, -.1])
             screw(r);
-        translate([length*.15, width/2+thickness*.46, -.1])
+        translate([length*.15, width/2+thickness*.4, -.1])
             screw(r);
     }
 }
