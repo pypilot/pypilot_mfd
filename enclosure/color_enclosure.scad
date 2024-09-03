@@ -171,13 +171,13 @@ module bottom() {
     translate([0,0,2])    
     screws(1.4,false);
   }
-//  translate([0,0,5])
-  //  ccube(board[0], board[1], 3);
+  translate([0,0,12])
+  #  ccube(board[0], board[1], 3);
 }
 
-top();
+translate([120,0,0])top();
 
-//bottom();
+bottom();
 
 //module screw()
   //  cylinder(r=1.8, h=10);
