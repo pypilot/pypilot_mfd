@@ -1,7 +1,7 @@
-    $fn=20;
+    $fn=120;
 
 use_threads = true     ;
-use_holes = false;
+use_hole =true;
 //-3
 length = 125;
 width = 95;
@@ -26,6 +26,29 @@ lcd_off = 3;
 ex_r = 4;
 
 board_off=5;
+module inner_hole()
+{
+    translate([0,0,-6])
+            cylinder(r1=9.5, r2=13, h=5.1);
+    translate([0,0,-1])
+            cylinder(r1=13, r2=9.5, h=5);
+}
+
+module hole(outside=false)
+{
+        translate([5,4.5,0])
+    if(outside) {
+        difference() {
+            scale(1.4)
+            inner_hole();
+            scale([1,1,1.5])
+            inner_hole();
+        }
+    } else {
+        inner_hole();
+    }
+}
+
 module box() {
     difference() {
         translate([-length/2+ex_r,-width/2+ex_r,0])
@@ -39,19 +62,22 @@ module box() {
         cube([board_length, board_width, height-bthickness-2]);
     
         // usb port
-        if(use_holes) {
-        translate([5,-5-board_off,0])
-            cylinder(r=6.5, h=40, center=true);
-        
-        // rs422 port
-        translate([5,13-board_off,0])
-            cylinder(r=6.5, h=40, center=true);
-        }
+        if(use_hole)
+            hole();
+
         translate([0,0,height+bthickness-1])
             scale([1, 1, .7])
                 groove();
 
-        //translate([-pane[0]/2,-pane[1]/2,height+bthickness-pane[2]+.1])
+translate([0,0,height/2])
+        all() {
+        translate([length/2-bthickness*3, width*.17, 0])
+    cube([height, height, height-groove_r], center=true);        
+        translate([length*.28, width/2-bthickness*3, 0])
+    cube([height, height, height-groove_r], center=true);        
+        translate([0, width/2-bthickness*3, 0])
+    cube([height*1.5, height, height-groove_r-2], center=true);        
+        }    //translate([-pane[0]/2,-pane[1]/2,height+bthickness-pane[2]+.1])
       //     cube(pane);
         translate([0,0,0])
         screws();
@@ -59,6 +85,7 @@ module box() {
         // keypad ribbon
         translate([connoff,pane[1]/2-10,4])
           cube([conn[0], conn[1], height]);
+
         // wifi antenna area
         translate([10,pane[1]/2-9,5])
           cube([45, 5, height-pane[2]-3   ]);
@@ -66,7 +93,7 @@ module box() {
         translate([-board_length/2-thickness-3, 0, height/2])
         rotate([0, -90, 0])
         rotate(-90)
-            linear_extrude(height = 2)
+                linear_extrude(height = 2)
                 text("pypilot", size = 10, halign = "center", valign = "center", $fn = 16);  
     }
 }
@@ -176,6 +203,10 @@ module enclosure() {
         cube([length, width, height],center=true);
     }
    
+        if(use_hole) {
+            hole(true);
+        }
+    
     if(use_threads)
     translate([5,0,-thread_len])
         difference() {

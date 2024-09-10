@@ -107,56 +107,10 @@ F 4 "C2987264" H 5800 7000 50  0001 C CNN "LCSC"
 	1    5800 7000
 	1    0    0    -1  
 $EndComp
-Text GLabel 1100 6700 0    50   Input ~ 0
-CS_SD
 Text GLabel 8450 3700 2    50   Input ~ 0
 CS_SD
-Text GLabel 1100 6800 0    50   Input ~ 0
-MOSI
-Wire Wire Line
-	700  6900 1100 6900
-$Comp
-L power:+3V3 #PWR0115
-U 1 1 668457AC
-P 700 6900
-F 0 "#PWR0115" H 700 6750 50  0001 C CNN
-F 1 "+3V3" H 715 7073 50  0000 C CNN
-F 2 "" H 700 6900 50  0001 C CNN
-F 3 "" H 700 6900 50  0001 C CNN
-	1    700  6900
-	1    0    0    -1  
-$EndComp
-Text GLabel 1100 7000 0    50   Input ~ 0
-SCK
-Wire Wire Line
-	800  7100 1100 7100
-$Comp
-L power:GND #PWR0114
-U 1 1 66837426
-P 800 7100
-F 0 "#PWR0114" H 800 6850 50  0001 C CNN
-F 1 "GND" H 805 6927 50  0001 C CNN
-F 2 "" H 800 7100 50  0001 C CNN
-F 3 "" H 800 7100 50  0001 C CNN
-	1    800  7100
-	1    0    0    -1  
-$EndComp
-Text GLabel 1100 7200 0    50   Input ~ 0
-MISO
 Text GLabel 7550 3150 2    50   Input ~ 0
 MISO
-$Comp
-L Connector:Micro_SD_Card J7
-U 1 1 6682F9FA
-P 2000 6900
-F 0 "J7" H 1950 7617 50  0000 C CNN
-F 1 "Micro_SD_Card" H 1950 7526 50  0000 C CNN
-F 2 "pypilot_mfd_footprints:microSD_HC_Wuerth_693072010801" H 3150 7200 50  0001 C CNN
-F 3 "http://katalog.we-online.de/em/datasheet/693072010801.pdf" H 2000 6900 50  0001 C CNN
-F 4 "C91145" H 2000 6900 50  0001 C CNN "LCSC"
-	1    2000 6900
-	1    0    0    -1  
-$EndComp
 Connection ~ 10050 6200
 Wire Wire Line
 	9450 6200 10050 6200
@@ -282,17 +236,6 @@ F 2 "pypilot_mfd_footprints:PinHeader_1x02_P2.54mm_Vertical" H 7200 750 50  0001
 F 3 "~" H 7200 750 50  0001 C CNN
 F 4 "C492401" H 7200 750 50  0001 C CNN "LCSC"
 	1    7200 750 
-	1    0    0    -1  
-$EndComp
-$Comp
-L power:GND #PWR0144
-U 1 1 6672EFAC
-P 8700 4050
-F 0 "#PWR0144" H 8700 3800 50  0001 C CNN
-F 1 "GND" H 8705 3877 50  0001 C CNN
-F 2 "" H 8700 4050 50  0001 C CNN
-F 3 "" H 8700 4050 50  0001 C CNN
-	1    8700 4050
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
@@ -1852,17 +1795,6 @@ Wire Wire Line
 	1800 2800 4050 2800
 Wire Wire Line
 	3000 2700 4050 2700
-$Comp
-L Device:Jumper JP3
-U 1 1 66E2750B
-P 8100 4050
-F 0 "JP3" H 8150 4250 50  0000 C CNN
-F 1 "Screen Mirrored" H 8750 4100 50  0000 C CNN
-F 2 "Jumper:SolderJumper-2_P1.3mm_Open_TrianglePad1.0x1.5mm" H 8100 4050 50  0001 C CNN
-F 3 "~" H 8100 4050 50  0001 C CNN
-	1    8100 4050
-	1    0    0    -1  
-$EndComp
 Wire Wire Line
 	9300 1050 9200 1050
 $Comp
@@ -2582,8 +2514,6 @@ F 3 "" H 5350 5150 50  0001 C CNN
 	1    5350 5150
 	-1   0    0    -1  
 $EndComp
-Wire Wire Line
-	8400 4050 8700 4050
 Wire Wire Line
 	5050 5050 5050 5150
 Connection ~ 5050 5050
