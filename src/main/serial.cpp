@@ -12,6 +12,7 @@
 #include "display.h"
 #include "serial.h"
 #include "nmea.h"
+#include "extio.h"
 
 struct SerialLinebuffer {
     SerialLinebuffer(HardwareSerial &s, data_source_e so)
@@ -45,6 +46,7 @@ struct SerialLinebuffer {
             if (enabled)
                 nmea_parse_line(line.c_str(), source);
 
+            line += "\r\n";
             if(settings.forward_nmea_serial_to_serial)
                 nmea_write_serial(line.c_str(), &serial);
             if(settings.forward_nmea_serial_to_wifi)
@@ -63,31 +65,46 @@ SerialLinebuffer Serial2Buffer(Serial2, RS422_DATA);
 
 void serial_setup()
 {
-    Serial0.end();
-    Serial0.begin(settings.usb_baud_rate);
-    Serial0.setTimeout(0);
+    bool any;
 
+    // usb host serial here
+    
+    Serial0.end();
+    if(settings.input_usb || settings.output_usb) {
+        Serial0.begin(settings.usb_baud_rate);
+        Serial0.setTimeout(0);
+        any = true;
+        extio_set(EXTIO_ENA_NMEA0);
+    } else
+        extio_clr(EXTIO_ENA_NMEA0);
 
     // TODO: enable power for 422 if either serial is enabled
-
     /*
     Serial1.end();
     if(settings.rs422_1_baud_rate) {
         Serial1.begin(settings.rs422_1_baud_rate,
                       SERIAL_8N1, 15, 2);  //Hardware Serial of ESP32
         Serial1.setTimeout(0);
-    }
+        extio_set(EXTIO_ENA_NMEA1);
+    } else
+        extio_clr(EXTIO_ENA_NMEA1);
     */
 
     Serial2.end();
     if(settings.rs422_2_baud_rate) {
+        extio_set(EXTIO_ENA_NMEA2);
         Serial2.begin(settings.rs422_2_baud_rate,
                       SERIAL_8N1, 16, 17);  //Hardware Serial of ESP32
         Serial2.setTimeout(0);
-    }
+        any = true;
+    } else
+        extio_clr(EXTIO_ENA_NMEA2);
+
+    extio_set(EXTIO_ENA_NMEA, any);
 }
 
 void serial_poll() {
+    // read usb host serial
     Serial0Buffer.read(settings.input_usb);
     //Serial1Buffer.read(settings.rs422_1_baud_rate);
     Serial2Buffer.read(settings.rs422_2_baud_rate);

@@ -1,4 +1,4 @@
-$fn=60;
+$fn=120;
 border = 8  ;
 border_ex = 8;
 
@@ -13,9 +13,9 @@ conn = [19, 4.5];
 connoff = 0;
 keypadoff = 42;
 
-thickness = 1.8;
+thickness = 2.4;
 
-height = 12;
+height = 12.6;
 theight = 8;
 
 gasket_d=3.5;
@@ -81,9 +81,11 @@ module oring()
 
 module screw(r, head) {
     if(head)
+     cylinder(r=3.3, h=4, $fn=6);
+    translate([0,0,-2])
+    if(!head)
      cylinder(r2=r, r1=4, h=3);
      cylinder(r=r, h=28);
-    //cylinder(r=3.5, h=4, $fn=6);
 }
 
 module all() {
@@ -97,18 +99,18 @@ module all() {
     }
 }
 
-module screws(r) {
+module screws(r,head) {
     all() {
-        translate([enclosure[0]*.14, enclosure[1]/2+border*.6, -.1])
-            screw(r);
-        translate([enclosure[0]*.39, enclosure[1]/2+border*.6, -.1])
-            screw(r);
-        translate([enclosure[0]/2+border*.6, 0,-.1])
-            screw(r);
-        translate([enclosure[0]/2+border*.6, enclosure[1]*.42,-.1])
-            screw(r);
-        translate([enclosure[0]/2+border*.6, enclosure[1]*.21, -.1])
-            screw(r);
+        translate([enclosure[0]*.14, enclosure[1]/2+border*.5, -.1])
+            screw(r,head);
+        translate([enclosure[0]*.39, enclosure[1]/2+border*.5, -.1])
+            screw(r,head);
+        translate([enclosure[0]/2+border*.5, 0,-.1])
+            screw(r,head);
+        translate([enclosure[0]/2+border*.5, enclosure[1]*.42,-.1])
+            screw(r,head);
+        translate([enclosure[0]/2+border*.5, enclosure[1]*.21, -.1])
+            screw(r,head);
     }
 }
 
@@ -157,7 +159,7 @@ module bottom() {
             oring();
 
     translate([screen_off,0,thickness-.3])
-        ccube(screen[0], screen[1], 6.2);
+        ccube(screen[0], screen[1], 6.4);
     translate([screen_off+7,0,-thickness])
         ccube(screen_area[0], screen_area[1], 5);
     
@@ -171,11 +173,12 @@ module bottom() {
     translate([0,0,2])    
     screws(1.4,false);
   }
-  translate([0,0,12])
-  #  ccube(board[0], board[1], 3);
+ // translate([0,0,12])
+   // ccube(board[0], board[1], 3);
 }
 
-translate([120,0,0])top();
+//translate([120,0,0])
+//top();
 
 bottom();
 

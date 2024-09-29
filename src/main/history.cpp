@@ -77,7 +77,12 @@ int history_display_range;
 
 static int32_t cold_time()
 {
+#ifdef __linux__
+    return time(0)- 1724684707;
+#else    
+// time in seconds since cold boot (accounting for realtime in deepsleep)
     return time(0); // time in seconds since cold boot (accounting for realtime in deepsleep)
+#endif
 }
 
 std::string history_get_label(history_range_e range)
@@ -247,6 +252,11 @@ void history_put(display_item_e item, float value)
 
 std::list<history_element> *history_find(display_item_e item, int r, int &total_seconds, float &high, float &low)
 {
+    if(r < 0 || r >= (sizeof history_range_time) / (sizeof *history_range_time)) {
+        printf("history_find r out of range %d\n", r);
+        return 0;
+    }
+
     for(int i=0; i<(sizeof history_items)/(sizeof *history_items); i++)
         if(history_items[i] == item) {
             total_seconds = history_range_time[r];
@@ -358,37 +368,31 @@ static uint8_t crc8(const uint8_t *data, size_t len) {
 static uint32_t eeprom_write_time;
 static void eeprom_begin_read(int offset)
 {
-    int tries = 0;
-    for(;;) {
-        uint32_t t = millis();
-        int d = EEPROM_WRITE_DELAY - (t - eeprom_write_time);
-        if(d > 0)
-            delay(d);
+#ifndef __linux__
+    uint32_t t = millis();
+    int d = EEPROM_WRITE_DELAY - (t - eeprom_write_time);
+    if(d > 0)
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+#endif
+    Wire.beginTransmission(DEVICE_ADDRESS);
+    Wire.write((offset>>8)&0xff);
+    Wire.write(offset & 0xff);
+    Wire.endTransmission();
 
-        Wire.beginTransmission(DEVICE_ADDRESS);
-        Wire.write((offset>>8)&0xff);
-        Wire.write(offset & 0xff);
-        Wire.endTransmission();
-
-        eeprom_write_time = millis();
-
-        int len = Wire.requestFrom(DEVICE_ADDRESS, 8);
-        //printf("request from READ RET %d %d %d\n", len, tries, d);
-        if(len == 8)
-            return;
-        tries++;
-    }
+#ifndef __linux__
+    eeprom_write_time = millis();
+#endif
+    Wire.requestFrom(DEVICE_ADDRESS, 8);
 }    
 
 static int32_t read_packet_time(int offset)
 {
-    offset *= 8;
-    eeprom_begin_read(offset);
+    eeprom_begin_read(offset*8);
 
     uint8_t data[8] = { 0 }, i=0;
     while (Wire.available() && i < 8)
         data[i++] = Wire.read();
-    if(i == 0 && data[7] == crc8(data, 7))
+    if(i == 8 && data[7] == crc8(data, 7))
         return *(uint32_t*)data;
 
     return -1;
@@ -396,10 +400,9 @@ static int32_t read_packet_time(int offset)
 
 static bool read_packet(bool absolute, uint8_t range, int offset)
 {
-    //printf("history read packet %d %d %d\n", absolute, range, offset);
-    offset *= 8;
+    printf("history read packet %d %d %d\n", absolute, range, offset);
 
-    eeprom_begin_read(offset);
+    eeprom_begin_read(offset*8);
     uint8_t data[8] = { 0 }, i=0;
     while (Wire.available() && i < 8)
         data[i++] = Wire.read();
@@ -408,12 +411,12 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
         return false;
     }
 
-    //printf("GOT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+    printf("GOT PACKET (%d) %d %x %x %x %x %x %x %x %x\n", absolute, offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
 
     // time on eeprom is absolute since epoch
     int32_t time = *(uint32_t*)data;
     if(absolute)
-        time -= epoch; // relative time of historical absoute data usually will be negative since it is from before we booted
+        time -= epoch; // relative time of historical absolute data usually will be negative since it is from before we booted
 
     int32_t curtime = cold_time();
 
@@ -454,7 +457,7 @@ static bool read_packet(bool absolute, uint8_t range, int offset)
     }
 
     // add to back of history
-    //printf("history put back v%d %ld %f %d %ld %d %x\n", item, time, v, range, time, itype, data[6]);
+    // printf("history put back v%d %ld %f %d %ld %d %x\n", item, time, v, range, time, itype, data[6]);
     histories[item].put_back(time, v, range+1, itype);
     return true;
 }
@@ -464,14 +467,16 @@ static void eeprom_store_packet(int position, uint8_t data[8]) {
 
     //printf("PUT PACKET %d %x %x %x %x %x %x %x %x\n", offset, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
 
+#ifndef __linux__
     uint32_t t = millis();
     int d = EEPROM_WRITE_DELAY - (t - eeprom_write_time);
-    if(d > 0) {
+    if(d > 0)
         //printf("need delay %d\n", d);
-        delay(d);
-    }
-    
+        vTaskDelay(d / portTICK_PERIOD_MS);
+
     uint32_t t0 = millis();
+#endif
+    
     Wire.beginTransmission(DEVICE_ADDRESS);
     Wire.write((offset>>8)&0xff);
     Wire.write(offset & 0xff);
@@ -479,18 +484,18 @@ static void eeprom_store_packet(int position, uint8_t data[8]) {
         Wire.write(data[i]);
     Wire.endTransmission();
 
+#ifndef __linux__
     uint32_t t1 = millis();
     //printf("took to write %ld\n", t1-t0);
     eeprom_write_time = t1;
+#endif
 }
 
 static void eeprom_store(int position, uint8_t index, uint8_t type, uint32_t time, float value)
 {
     //printf("eeprom store %d %d %d %ld %f\n", position, index, type, time, value);
     uint8_t packet[8];
-
-    int64_t t = cold_time();
-    *(uint32_t*)(packet) = t + epoch;
+    *(uint32_t*)(packet) = time;
 
     uint16_t v = 0;
     if(isnan(value))
@@ -507,7 +512,7 @@ static void eeprom_store(int position, uint8_t index, uint8_t type, uint32_t tim
     *(uint16_t*)(packet+4) = v;
     packet[6] = ((type&0x3)<<4) | (index & 0xf);
     packet[7] = crc8(packet, 7);
-        
+
     eeprom_store_packet(position, packet);
 }
 
@@ -522,7 +527,7 @@ struct history_eeprom_range_t {
     uint8_t range;
     // history of each eeprom section (by history range) state progresses
     enum { INIT,            // nothing initialized yet
-           RELATIVE_READ,        // in relative mode, can read and write relative section
+           RELATIVE_READ,   // in relative mode, can read and write relative section
            RELATIVE_READY,  // done reading, continue writing
            ABSOLUTE_SEARCH, // scanning absolute region for start
            COPY,            // copying data from relative to absolute section
@@ -621,6 +626,9 @@ struct history_eeprom_range_t {
                 if(abs_pos_search_time < 0) { // first entree invalid
                     abs_pos_search_len = 0;
                     last_abs_time = epoch;
+                    abs_write = abs_read = 0;
+                    state = COPY;
+                    break;
                 } else {
                     abs_pos_search_len = EEPROM_PARTITION/2;
                     last_abs_time = abs_pos_search_time;
@@ -631,7 +639,8 @@ struct history_eeprom_range_t {
 
         case ABSOLUTE_SEARCH:
         {
-            int search_time = read_packet_time(abs_pos_search + abs_pos_search_len);
+            int search_time = read_packet_time(abs_start + abs_pos_search + abs_pos_search_len);
+            printf("absolute search %d %d\n", search_time, abs_pos_search_time);
             if(search_time > abs_pos_search_time) {
                 // new position is more recent, start searching this half of remaining data
                 abs_pos_search += abs_pos_search_len;
@@ -643,7 +652,6 @@ struct history_eeprom_range_t {
             if(abs_pos_search_len > 0) // will continue the search on next poll
                 break;
 
-
             printf("eeprom found most recent data offset: %d %d\n", range, abs_pos_search);
             // binary search is complete, we found most recent data
             abs_read = abs_pos_search;
@@ -653,29 +661,70 @@ struct history_eeprom_range_t {
             if(abs_write >= EEPROM_PARTITION)
                 abs_write = 0;
 
-            rel_read = eeprom_rel_write[range];
+            // copy from rel to abs starting at rel_read
+            if(eeprom_rel_write_wrapped[range])
+                rel_read = eeprom_rel_write[range]+1;
+            else
+                rel_read = 0;
             state = COPY;
         }
 
         case COPY:
-            // TODO: read data from relative and write to absolute (once the other routines are working)
+        {
+#if 1 // this can be disabled
+            eeprom_rel_write[range] = 0;
             state = ABSOLUTE_READ;
             break;
+#endif
+            // read one packet
+            int position = rel_start + rel_read;            
+            eeprom_begin_read(position*8);
+            uint8_t data[8] = { 0 }, i=0;
+            while (Wire.available() && i < 8)
+                data[i++] = Wire.read();
+            if(i != 8 || data[7] != crc8(data, 7)) {
+                printf("history bail, history fail crc copy %x %x\n", data[7], crc8(data, 7));
+                eeprom_rel_write[range] = 0;
+                state = ABSOLUTE_READ;
+                break;
+            }
 
-        case ABSOLUTE_READ:
+            // ok write this packet back
+            int32_t time = *(uint32_t*)data;
+            // convert time to absolute
+            time += epoch;
+            // recompute crc
+            data[7] = crc8(data, 7);
+
+            eeprom_store_packet(abs_start+abs_write, data);
+            abs_write++;
+            if(abs_write == EEPROM_PARTITION)
+                abs_write = 0;
+
+            rel_read++;
+            if(rel_read == EEPROM_PARTITION)
+                rel_read = 0;
+
+            if(rel_read == eeprom_rel_write[range]) {
+                eeprom_rel_write[range] = 0;
+                state = ABSOLUTE_READ;
+            }
+        } break;
+
+        case ABSOLUTE_READ:            
+            // read one packet
+            if(!read_packet(true, range, abs_start + abs_read)) {
+                state = ABSOLUTE_READY;
+                printf("eeprom finished reading absolute history %d\n", range);
+                break;
+            }
+
             abs_read--;
             if(abs_read < 0)
                 abs_read = EEPROM_PARTITION-1;
             if(abs_read == abs_write) {
                 state = ABSOLUTE_READY;
                 printf("eeprom finished reading absolute history1 %d\n", range);
-                break;
-            }
-            
-            // read one packet
-            if(!read_packet(true, range, abs_start + abs_read)) {
-                state = ABSOLUTE_READY;
-                printf("eeprom finished reading absolute history %d\n", range);
                 break;
             }
             break;
@@ -724,16 +773,23 @@ void history_set_time(uint32_t date, int hour, int minute, float second)
         return; // invalid
 
     // subtract current time to record into epoch the startup time in number of seconds since 2020
-    int64_t t = cold_time();
-    float time = ((((year-20) * 365.24 + julian_day) * 24 + hour) * 60 + minute)*60 + second;
-
-    epoch = time - t;
+    uint32_t t = cold_time();
+    uint32_t time = ((((year-20) * 365.24 + julian_day) * 24 + hour) * 60 + minute);
+    uint32_t isecond = second;
+    time = time*60 + isecond;
+    uint32_t newepoch = time - t;
+    if(epoch + 2 < newepoch || epoch - 2 > newepoch) {
+        printf("history GOT new epoch! %ld -> %ld\n", epoch, newepoch);
+        epoch = newepoch;
+    }
 }
 
 void history_reset()
 {
-    for(int i=0; i<4; i++)
+    for(int i=0; i<4; i++) {
         history_eeprom_range[i].state = history_eeprom_range_t::INIT;
+        history_eeprom_range[i].abs_write = 0;
+    }
 }
 
 void history_poll()
@@ -742,6 +798,9 @@ void history_poll()
         return;
 
     static uint8_t cur_range;
+#ifdef __linux__    
+    cur_range= 0;
+#endif
     history_eeprom_range[cur_range++].poll();
     if(cur_range == 4)
         cur_range = 0;

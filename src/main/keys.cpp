@@ -14,6 +14,7 @@
 #include "menu.h"
 #include "keys.h"
 #include "buzzer.h"
+#include "extio.h"
 
 enum keys { KEY_PAGE_UP,
             KEY_MENU,
@@ -45,7 +46,9 @@ void keys_setup()
 
 bool keys_pwr_pressed()
 {
-    return key_times[KEY_PWR];
+    bool ret = key_times[KEY_PWR];
+    key_times[KEY_PWR] = 0;
+    return ret;
 }
 
 static bool keys[KEY_COUNT];
@@ -94,16 +97,16 @@ void keys_poll()
     if(keys[KEY_PAGE_UP] && keys[KEY_PAGE_DOWN])
         wireless_toggle_mode();
     else if (pressed(KEY_PAGE_UP)) {
-        printf("KEY UP\n");
+        //printf("KEY UP\n");
         display_change_page(1);
     } else if (pressed(KEY_PAGE_DOWN)) {
-        printf("KEY DOWN\n");
+        //printf("KEY DOWN\n");
         display_change_page(-1);
     } else if (pressed(KEY_MENU, false)) {
-        printf("KEY SCALE\n");
+        //printf("KEY SCALE\n");
         display_menu_scale();
     } else if (held(KEY_MENU)) {
-        printf("KEY MENU\n");
+        //printf("KEY MENU\n");
         if(in_menu)
             settings_store();
         buzzer_buzz(in_menu ? 1000 : 600, 50, 0);
@@ -113,6 +116,7 @@ void keys_poll()
         bool on = display_toggle();
         menu_reset();
         if(!on) {
+            //printf("Settings power button is %s\n", settings.power_button.c_str());
             draw_clear(false);
             if(settings.power_button != "screenoff") {
                 while(!digitalRead(0)); // wait for button to release
@@ -121,15 +125,25 @@ void keys_poll()
                 if(settings.power_button == "powersave")
                     esp_sleep_enable_timer_wakeup(60 * 1000 * 1000);
                 printf("going to sleep\n");
-                if(hw_version != 1) {
-                    // disable rs422 power
-                    digitalWrite(14, 0);
-                    gpio_hold_en((gpio_num_t)14);
 
+                // led pin
+                //            gpio_hold_en((gpio_num_t)EXTIO_LED_num);
+                /*
+                gpio_hold_dis((gpio_num_t)26);
+                pinMode(26, OUTPUT);
+                digitalWrite(26, 1);*/
+
+                if(hw_version != 1) {
+                    // disable nmea power
+                    extio_clr(EXTIO_ENA_NMEA);
+#if EXTIO_NMEA_num >= 0
+                    gpio_hold_en((gpio_num_t)EXTIO_NMEA_num);
+#endif
                     // disable power led
-                    pinMode(26, OUTPUT);  // strap for display
-                    digitalWrite(26, 0);
-                    gpio_hold_en((gpio_num_t)26);
+                    extio_clr(EXTIO_LED);
+#if EXTIO_LED_num >= 0
+                    gpio_hold_en((gpio_num_t)EXTIO_LED_num);
+#endif
                 }
                 
                 gpio_deep_sleep_hold_en();

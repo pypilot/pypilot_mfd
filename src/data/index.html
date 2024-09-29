@@ -62,7 +62,18 @@
       <h2>Data Configuration</h2>
       <form action='data' method='post'>
         <div class='col2-grid'>
-          <span>USB data (NMEA0183)</span>
+          <span style='display: %USB_HOST_SUPPORT%'>USB data host (NMEA0183)</span>
+          <span style='display: %USB_HOST_SUPPORT%'>
+            <input type='checkbox' name='input_usb_host' id='input_usb_host' %INPUTUSBHOST%><label for='input_usb_host'>Input</label>
+            <input type='checkbox' name='output_usb_host' id='output_usb_host' %OUTPUTUSBHOST%>
+            <label for='output_usb_host'>Output</label>
+            <select id='usb_host_baud_rate' name='usb_host_baud_rate'>
+              <option value='4800'>4800</option>
+              <option value='38400'>38400</option>
+              <option value='115200'>115200</option>
+            </select>
+          </span>
+          <span>USB data device (NMEA0183)</span>
           <span>
             <input type='checkbox' name='input_usb' id='input_usb' %INPUTUSB%><label for='input_usb'>Input</label>
             <input type='checkbox' name='output_usb' id='output_usb' %OUTPUTUSB%>
@@ -92,36 +103,69 @@
           </div>
         </div>
         <span>WIFI data</span>
-        <div class='data-grid'>
-          <input type='checkbox' name='input_nmea_pypilot' id='input_nmea_pypilot' %INPUT_NMEA_PYPILOT%>
-          <label for='input_nmea_pypilot'>pypilot NMEA0183 port 20220</label>
-          <input type='checkbox' name='output_nmea_pypilot' id='output_nmea_pypilot' %OUTPUT_NMEA_PYPILOT%>
-          <label for='output_nmea_pypilot'>pypilot server: %PYPILOT_ADDR%</label>
+        <div class='box-frame'>
+          <h3 class='box-title'>pypilot NMEA0183</h3>
+          <br>
+          <div class='col3-grid'>
+            <input type='checkbox' name='input_nmea_pypilot' id='input_nmea_pypilot' %INPUT_NMEA_PYPILOT%>
+            <label for='input_nmea_pypilot'>Input</label>
+            <span>port 20220</span>
+            <input type='checkbox' name='output_nmea_pypilot' id='output_nmea_pypilot' %OUTPUT_NMEA_PYPILOT%>
+            <label for='output_nmea_pypilot'>Output</label>
+            <span>pypilot server: %PYPILOT_ADDR%</span>
+          </div>
         </div>
-        <div class='data-grid'>
-          <input type='checkbox' name='input_nmea_signalk' id='input_nmea_signalk' %INPUT_NMEA_SIGNALK%>
-          <label for='input_nmea_signalk'> signalk-server NMEA0183 port 10110</label>
-          <input type='checkbox' name='output_nmea_signalk' id='output_nmea_signalk' %OUTPUT_NMEA_SIGNALK%>
-          <label for='output_nmea_signalk'>signalk server: %SIGNALK_ADDR%</label>
+        <div class='box-frame'>
+          <h3 class='box-title'>signalk-server NMEA0183</h3>
+          <br>
+          <div class='col3-grid'>
+            <input type='checkbox' name='input_nmea_signalk' id='input_nmea_signalk' %INPUT_NMEA_SIGNALK%>
+            <label for='input_nmea_signalk'>Input</label>
+            <span>port 10110</span>
+            <input type='checkbox' name='output_nmea_signalk' id='output_nmea_signalk' %OUTPUT_NMEA_SIGNALK%>
+            <label for='output_nmea_signalk'>Output</label>
+            <span>signalk server: %SIGNALK_ADDR%</span>
+          </div>
         </div>
-        <div class='data-grid'>
-          <input type='checkbox' name='input_nmea_client' id='input_nmea_client' %INPUT_NMEA_CLIENT%></input>
-          <label for='input_nmea_client'>TCP client NMEA0183</label>
-          <input type='checkbox' name='output_nmea_client' id='output_nmea_client' %OUTPUT_NMEA_CLIENT%></input>
-          <label for='output_nmea_client'>Host <input type='text' name='nmea_tcp_client_addr' style='width: 10em;' value=%NMEACLIENTADDR% > Port <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% ></label>
+        <div class='box-frame'>
+          <h3 class='box-title'>TCP client NMEA0183</h3>
+          <br>
+          <div class='col3-grid'>
+            <input type='checkbox' name='input_nmea_client' id='input_nmea_client' %INPUT_NMEA_CLIENT%></input>
+            <label for='input_nmea_client'>Input</label>
+            <span></span>
+            <input type='checkbox' name='output_nmea_client' id='output_nmea_client' %OUTPUT_NMEA_CLIENT%></input>
+            <label for='output_nmea_client'>Output</label>
+            <span>Host
+              <input type='text' name='nmea_tcp_client_addr' style='width: 10em;' value=%NMEACLIENTADDR% >
+              Port
+              <input type='number' style='width: 4em;' name='nmea_tcp_client_port' value=%NMEACLIENTPORT% >
+            </span>
+          </div>
         </div>
-        <div class='data-grid'>
-          <input type='checkbox' name='input_nmea_server' id='input_nmea_server' %INPUT_NMEA_SERVER%></input>
-          <label for='input_nmea_server'>TCP server NMEA</label>
-          <input type='checkbox' name='output_nmea_server' id='output_nmea_server' %OUTPUT_NMEA_SERVER%></input>
-          <label for='output_nmea_server'>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server_port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>
+        <div class='box-frame'>
+          <h3 class='box-title'>TCP server NMEA</h3>
+          <br>
+          <div class='col3-grid'>
+            <input type='checkbox' name='input_nmea_server' id='input_nmea_server' %INPUT_NMEA_SERVER%></input>
+            <label for='input_nmea_server'>Input</label>
+            <span></span>
+            <input type='checkbox' name='output_nmea_server' id='output_nmea_server' %OUTPUT_NMEA_SERVER%></input>
+            <label for='output_nmea_server'>Output</label>
+            <span>host ip %IPADDRESS% Port <input type='text' name='nmea_tcp_server_port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>          
+          </div>
         </div>
-        <div class='data-grid'>
-          <input type='checkbox' name='input_signalk' id='input_signalk' %INPUT_SIGNALK%></input>
-          <label for='input_signalk'>SignalK</label>
-          <input type='checkbox' name='output_signalk' id='output_signalk' %OUTPUT_SIGNALK%></input>
-          <label for='output_signalk'>SignalK server: %SIGNALK_ADDR%</span>
-          <span></span>
+        <div class='box-frame'>
+          <h3 class='box-title'>SignalK</h3>
+          <br>
+          <div class='col3-grid'>
+            <input type='checkbox' name='input_signalk' id='input_signalk' %INPUT_SIGNALK%></input>  
+            <label for='input_signalk'>Input</label>
+            <span></span>
+            <input type='checkbox' name='output_signalk' id='output_signalk' %OUTPUT_SIGNALK%></input>
+            <label for='output_signalk'>Output</label>
+            <span>SignalK server: %SIGNALK_ADDR%</span>          
+          </div>
           <span>To output to signalk you may have to <a href='signalk.local:3000'>grant access</a></span>
         </div>
         <span>Forward data</span>
@@ -191,7 +235,7 @@
           <span><input type='checkbox' name='usedepthft' id='usedepthft' %USEDEPTHFT%>
             <label for='usedepthft'>Use depth ft (default meters)</label></span>
           <span>Latitude Longitude Format
-            <select id='lat_lon_format'>
+            <select id='lat_lon_format' name='lat_lon_format'>
               <option value='degrees'>Decimal Degrees</option>
               <option value='minutes'>Decimal Minutes</option>
               <option value='seconds'>Decimal Seconds</option>
@@ -205,7 +249,7 @@
             <label for='mirror'>Mirror display</label>
           </span>
           <span>Power button function
-            <select id='power_button'>
+            <select id='power_button' name='power_button'>
               <option value='powerdown'>powerdown (lowest power consumption)</option>
               <option value='powersave'>wake every minute to log sensor data</option>
               <option value='screenoff'>turn screen/backlight off, remain running</option>
@@ -219,6 +263,7 @@
       </form>
       <script type='text/javascript'>
         document.getElementById('lat_lon_format').value='%LATLONFORMAT%';
+        document.getElementById('power_button').value='%POWERBUTTON%';
       </script>
     </div>
 </div>

@@ -73,6 +73,28 @@ form {
     padding: 20px;
 }
 
+/* Container for the box frame */
+.box-frame {
+    position: relative;  /* Enables absolute positioning for the title */
+    border: 2px solid #000; /* Creates a solid border */
+    padding: 20px;          /* Adds space inside the border */
+    margin: 20px;           /* Adds space outside the border */
+    border-radius: 10px;    /* Optional: Rounds the corners of the border */
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); /* Optional: Adds a shadow effect */
+}
+
+/* Title style with break effect */
+.box-title {
+    position: absolute;  /* Allows positioning inside the relative parent */
+    top: -20px;          /* Moves the title above the box border */
+    left: 20px;          /* Adjust as needed to position horizontally */
+    background: #fff;    /* Matches the background of the box */
+    padding: 0 10px;     /* Adds space around the title */
+    border: 2px solid #000; /* Creates a border effect for the title */
+    border-radius: 10px; /* Optional: Rounds the corners of the title border */
+    font-size: 24px;     /* Sets the font size for the title */
+    z-index: 1;          /* Ensures the title is above the box */
+}
 
 /* CSS */
 .button {

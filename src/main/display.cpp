@@ -25,6 +25,7 @@
 #include "menu.h"
 #include "history.h"
 #include "buzzer.h"
+#include "extio.h"
 
 // autocompensate contrast based on light and temperature
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -32,14 +33,12 @@
 #define BACKLIGHT_PIN 42
 #define NTC_PIN -1 // s3 has internal temp sensor
 #define PHOTO_RESISTOR_PIN 1
-#define PWR_LED 18
 
 #else
 
 #define BACKLIGHT_PIN (hw_version == 1 ? 14 : 27)
 #define NTC_PIN 39
 #define PHOTO_RESISTOR_PIN 36
-#define PWR_LED 26
 
 #endif
 
@@ -98,7 +97,7 @@ display_data_t display_data[DISPLAY_COUNT];
 
 uint32_t data_source_time[DATA_SOURCE_COUNT];
 
-static void compute_true_wind(float wind_dir) {
+static void compute_true_wind(float wind_angle) {
     if (display_data[TRUE_WIND_ANGLE].source != COMPUTED_DATA && !isnan(display_data[TRUE_WIND_ANGLE].value))
         return;  // already have true wind from a better source
 
@@ -116,12 +115,13 @@ static void compute_true_wind(float wind_dir) {
     if (isnan(wind_speed))
         return;
 
-    float rad = deg2rad(wind_dir);  // apparent wind in radians
+    float rad = deg2rad(wind_angle);  // apparent wind in radians
     float windvx = wind_speed * sinf(rad), windvy = wind_speed * cosf(rad) - speed;
     float true_wind_speed = hypotf(windvx, windvy);
-    float true_wind_dir = rad2deg(atan2f(windvx, windvy));
+    float true_wind_angle = rad2deg(atan2f(windvx, windvy));
+
     display_data_update(TRUE_WIND_SPEED, true_wind_speed, COMPUTED_DATA);
-    display_data_update(TRUE_WIND_ANGLE, true_wind_dir, COMPUTED_DATA);
+    display_data_update(TRUE_WIND_ANGLE, true_wind_angle, COMPUTED_DATA);
 }
 
 void display_data_update(display_item_e item, float value, data_source_e source) {
@@ -138,7 +138,6 @@ void display_data_update(display_item_e item, float value, data_source_e source)
     }
 
     history_put(item, value);
-
     display_data[item].value = value;
     display_data[item].time = time;
     display_data[item].source = source;
@@ -765,11 +764,14 @@ struct gauge : public display_item {
             lw1 = draw_text_width(label1);
             lw2 = draw_text_width(label2);
 
-            int x1 = -w / 2 + lw1, y12 = -h / 2 + (fonts[i]*9/8);
+            int x1 = -w / 2 + lw1;
             int x2 = w / 2 - lw2;
+            if(x1 >= 0 || x2 <= 0)
+                continue;
+            int y12 = -h / 2 + (fonts[i]*9/8);
             int r1_2 = x1 * x1 + y12 * y12, r2_2 = x2 * x2 + y12 * y12;
             int mr = r * r * 9 / 10;
-            //printf("%s %s   %d %d %d   %d %d %d\n", label1.c_str(), label2.c_str(), x1, x2, y12, r1_2, r2_2, mr);
+            // printf("%s %s   %d %d %d   %d %d %d\n", label1.c_str(), label2.c_str(), x1, x2, y12, r1_2, r2_2, mr);
             if (r1_2 > mr && r2_2 > mr)
                 break;
         }
@@ -808,16 +810,17 @@ struct wind_direction_gauge : public gauge {
         // render true wind indicator near ring
         float twd = display_data[TRUE_WIND_ANGLE].value;
         if (!isnan(twd)) {
-            float s = sinf(twd), c = cosf(twd);
+            float rad = deg2rad(twd);
+            float s = sinf(rad), c = cosf(rad);
 
-            int x0 = s * r, y0 = c * r;
+            int x0 = s * r, y0 = -c * r;
             int x1 = x0 * 6 / 10, y1 = y0 * 6 / 10;
             int pr = r/15;
             int xp = c * pr, yp = s * pr;
             draw_color(GREEN);
-            draw_triangle(xc + x0 - xp, yc + y0 + yp,
+            draw_triangle(xc + x0 + xp, yc + y0 + yp,
                           xc + x1, yc + y1,
-                          xc + x0 + xp, yc + y0 - yp);
+                          xc + x0 - xp, yc + y0 - yp);
         }
     }
 };
@@ -835,8 +838,10 @@ struct heading_gauge : public gauge {
 
         text.x = xc;
         text.y = yc + h * .16;
+        draw_color(YELLOW);
         text.render();
 
+        draw_color(WHITE);
         int lx, ly;
         float rad = deg2rad(v);
         float s = sinf(rad), c = cosf(rad);
@@ -1102,11 +1107,12 @@ struct history_display : public display_item {
 
                 // if the time is sufficiently large,  insert a "gap"
                 int range_timeout = totalseconds / 60;
-                int dt = it->time - ltime;
+                int dt = ltime - it->time;
                 if(dt > range_timeout)
                     ; // nothing
                 else
                 if (lxp >= 0 && yp >= 0 && yp < h && lyp >= 0 && lyp < h) {
+                    //printf("line %d %d %d %d %d\n", xp, yp, lxp, lyp, dt);
                     //if (xp - lxp < 3)
                         draw_line(x + lxp, y + lyp, x + xp, y + yp);
                     //              if(abs(lxp - xp) > 100)
@@ -1194,7 +1200,11 @@ struct ais_ships_display : public display_item {
         if (ty0 + tdy >= ty + th)
             return;
 
-        int rd8 = r/8;
+        int rd8;
+        if(landscape)
+            rd8 = r/8;
+        else
+            rd8 = (h-2*r)/6;
         draw_set_font(rd8);
         int ly = ty + ty0;
         int lw = tdyl ? 0 : draw_text_width(label);
@@ -1270,7 +1280,7 @@ struct ais_ships_display : public display_item {
         float s = sinf(rad), c = cosf(rad);
         int d = r/10;
         int x1 = xc + s*d, y1 = yc + c*d;
-        int x2 = xc - s*d - c*d, y2 = yc + c*d - s*d;
+        int x2 = xc - s*d - c*d, y2 = yc + c*d + s*d;
         int x3 = xc - s*d + c*d, y3 = yc + c*d - s*d;
 
         draw_triangle(x1, y1, x2, y2, x3, y3);
@@ -1555,7 +1565,15 @@ void page::fit()
 
     // center top level grid display on page
     x = (page_width - w)/2;
-    y = (page_height - w)/2;
+    y = (page_height - h)/2;
+
+    if(x || y)
+    for(std::list<display *>::iterator it= items.begin();
+        it != items.end(); it++) {
+        (*it)->x += x;
+        (*it)->y += y;
+        (*it)->fit();        
+    }
 }
 
 // mnemonics for all possible displays
@@ -1996,8 +2014,7 @@ static std::vector<page *> pages;
 route_info_t route_info;
 std::vector<page_info> display_pages;
 
-std::string ps = "page";
-char page_chr = 'A';
+static char page_chr = 'A';
 static void add(page *p) {
     p->fit();
     pages.push_back(p);
@@ -2039,16 +2056,6 @@ static void setup_analog_pins() {
     //   adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_0);
 
     analogReadResolution(12);
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-//    ledcAttachChannel(BACKLIGHT_PIN, 200, 8, 3);
-//    ledcWriteChannel(3, 254);
-//    pinMode(BACKLIGHT_PIN, OUTPUT);
-    digitalWrite(BACKLIGHT_PIN, HIGH);
-#else
-    ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3);
-    ledcWriteChannel(3, 0);
-#endif
 }
 
 // read from photo resistor and adjust the backlight
@@ -2113,25 +2120,35 @@ void display_set_mirror_rotation(int r) {
 bool display_toggle(bool on) {
     if(on)
         display_on = true;
-    else {
+    else
         display_on = !display_on;
-    }
-    digitalWrite(PWR_LED, !display_on);
 
-    if(!on) {
-        ledcDetach(BACKLIGHT_PIN);
+    //extio_set(EXTIO_LED, !display_on);
+
+    if(display_on) {
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+//    ledcAttachChannel(BACKLIGHT_PIN, 200, 8, 3);
+//    ledcWriteChannel(3, 254);
+//    pinMode(BACKLIGHT_PIN, OUTPUT);
+    digitalWrite(BACKLIGHT_PIN, HIGH);
+#else
+    if(!ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3))
+        printf("Ledc attach1 failed\n");
+    ledcWriteChannel(3, 0);
+
+#endif
+    } else {
+#ifdef CONFIG_IDF_TARGET_ESP32
+        if(!ledcDetach(BACKLIGHT_PIN))
+            printf("Ledc detach1 failed\n");
+            
+#endif
         pinMode(BACKLIGHT_PIN, OUTPUT);  // strap for display
         digitalWrite(BACKLIGHT_PIN, 0);
         gpio_hold_en((gpio_num_t)BACKLIGHT_PIN);
     }
     
     return display_on;
-}
-
-void display_pwr_led(bool on)
-{
-    pinMode(PWR_LED, OUTPUT);
-    digitalWrite(PWR_LED, on);
 }
 
 static int display_data_timeout[DISPLAY_COUNT];
@@ -2152,8 +2169,6 @@ void display_setup() {
     display_data_timeout[ROUTE_INFO] = 10000;
     display_data_timeout[PYPILOT] = 10000;
     
-    pinMode(2, INPUT_PULLUP);  // strap for display
-
     printf("display_setup %d\n", rotation);
 
     start_time = time(0);
@@ -2189,9 +2204,6 @@ void display_setup() {
         break;
     }
 #endif
-    pinMode(PWR_LED, OUTPUT);
-    digitalWrite(PWR_LED, LOW);
-
     draw_setup(rotation);
 
     for (int i = 0; i < pages.size(); i++)
@@ -2232,6 +2244,7 @@ void display_setup() {
                 display_pages[j].enabled = true;
 
     setup_analog_pins();
+    display_toggle(true);
 }
 
 static unsigned int cur_page()
@@ -2264,7 +2277,7 @@ void display_change_page(int dir) {
         settings.cur_page += dir;
         looped++;
         if (display_pages[cur_page()].enabled) {
-            printf("changed to page %c\n", 'A' + cur_page());
+            printf("display changed to page %c\n", 'A' + cur_page());
             return;
         }
     }
@@ -2368,9 +2381,11 @@ void display_poll() {
 
         if(t0 - safetemp_time > 30000) { // after 30 seconds sleep
             // hopefully safer in deep sleep
+            /*
             ledcDetach(14);
             pinMode(14, OUTPUT);  // strap for display
             digitalWrite(14, 0);
+            */
             esp_deep_sleep_start();
         }
         return;

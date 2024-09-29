@@ -56,7 +56,7 @@ float convert_decimal_ll(float decll)
 
 bool nmea_parse_line(const char *line, data_source_e source)
 {
-    //printf("parse line %d %s\n", source, line);
+    //printf("nmea parse line %d %s\n", source, line);
     // check checksum
     int len=strlen(line);
     if(len < 10 || len > 180)
@@ -215,11 +215,14 @@ bool nmea_parse_line(const char *line, data_source_e source)
         char status, lat_sign, lon_sign;
         float speed, track;
         uint32_t date;
-        int ret = sscanf(c1, ",%02d%02d%f,%c,%f,%c,%f,%c,%f,%f,%lu", &hour, &minute, &second, &status, &latitude, &lat_sign, &longitude, &lon_sign, &speed, &track, &date);
-        //printf("RMC got %d %d:%d:%f  %c %.2f %c %.2f %c %.2f %.2f\n", ret, hour, minute, second, status, latitude, lat_sign, longitude, lon_sign, speed, track);
-        if(ret >= 4)
+        int ret1 = sscanf(c1, ",%02d%02d%f,%c", &hour, &minute, &second, &status);
+
+        if(ret1 == 4)
             display_data_update(TIME, (hour*60+minute)*60+second, source);
-        if(ret >= 8) {
+        const char *c3 = comma(c1, 2);
+        int ret2 = sscanf(c3, ",%f,%c,%f,%c",
+                          &latitude, &lat_sign, &longitude, &lon_sign);
+        if(ret2 == 4) {
             if(lat_sign == 'S')
                 latitude = -latitude;
             else if(lat_sign != 'N')
@@ -232,14 +235,19 @@ bool nmea_parse_line(const char *line, data_source_e source)
                 return false;
             display_data_update(LONGITUDE, convert_decimal_ll(longitude), source);
         }
-        if(ret >= 9)
+
+        const char *c7 = comma(c3, 4);
+        if(sscanf(c7, ",%f", &speed) == 1)
             display_data_update(GPS_SPEED, speed, source);
-        if(ret >= 10)
+
+        const char *c8 = comma(c7, 1);
+        if(sscanf(c8, ",%f", &track) == 1)
             display_data_update(GPS_HEADING, track, source);
-        if(ret >= 11) {
+
+        const char *c9 = comma(c8, 1);
+        if(sscanf(c9, ",%lu", &date) == 1)
             // we have a time fix
             history_set_time(date, hour, minute, second);
-        }
     } else
 
     if(prefix(line, "VHW")) {
@@ -424,6 +432,13 @@ static void connect_client(ClientSock &client, std::string addr, int port)
 
 static void connect_server()
 {
+    static int server_port;
+    if(settings.nmea_server_port != server_port)
+        close_server();
+
+    if(server_sock)
+        return;
+
     printf("nmea connect server\n");
     int addr_family = AF_INET;
     int ip_protocol = 0;
@@ -458,6 +473,7 @@ static void connect_server()
         close_server();
         return;
     }
+    server_port = settings.nmea_server_port;
 
     fcntl(server_sock, F_SETFL, fcntl(server_sock, F_GETFL, 0) | O_NONBLOCK);
 
@@ -482,8 +498,13 @@ static bool poll_client(ClientSock &c, bool input)
             } break;
         } else if(ret > 0) {
             buf[ret] = '\0';
-            if(input)
+            if(input) {
+                if(c.data.length() > 4096) {
+                    printf("client socket overflow!!!!!!!!\n");
+                    c.data = "";
+                }
                 c.data += std::string(buf);
+            }
         } else
             break;
         for(;;) {
@@ -554,6 +575,9 @@ static void accept_server()
 
 static void poll_server()
 {
+    if(!server_sock)
+        return;
+
     accept_server();
     for(int i=0; i<(sizeof clients) / (sizeof *clients); i++)
         poll_client(clients[i], settings.input_nmea_server);
@@ -633,6 +657,8 @@ static void write_nmea_server(const char *buf)
 
 void nmea_write_serial(const char *buf, HardwareSerial *source)
 {
+    // handle writing to usb host serial
+
     if(settings.output_usb && &Serial0 != source)
         Serial0.printf(buf);
 //    if(settings.rs422_1_baud_rate && &Serial1 != source)
