@@ -3,8 +3,8 @@
 use_threads = true     ;
 use_hole =true;
 //-3
-length = 125;
-width = 95;
+length = 124;
+width = 94;
 height = 19;
 
 board_length = 117;
@@ -12,8 +12,8 @@ board_width = 86.25-4;
 
 pane = [128,100, 3];
 
-thickness = 9.5;
-groove_r = 7;
+thickness = 10;
+groove_r = 6;
 bthickness = 1.8;
 
 conn = [19, 4.5];
@@ -135,15 +135,15 @@ module screw(r) {
 
 module screws(r=1.65) {
     all() {
-        translate([length/2+thickness*.4, 0, -.1])
+        translate([length/2+thickness*.45, 0, -.1])
         rotate(30)
             screw(r);
-        translate([length/2+thickness*.4, width*.35, -.1])
+        translate([length/2+thickness*.45, width*.35, -.1])
             rotate(30)
             screw(r);
-        translate([length*.4,width/2+thickness*.4, -.1])
+        translate([length*.4,width/2+thickness*.45, -.1])
             screw(r);
-        translate([length*.15, width/2+thickness*.4, -.1])
+        translate([length*.15, width/2+thickness*.45, -.1])
             screw(r);
     }
 }
