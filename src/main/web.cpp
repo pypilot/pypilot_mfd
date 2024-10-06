@@ -141,6 +141,13 @@ std::string processor(const std::string& var)
     if(var == "CLIENT_SSID")       return settings.client_ssid;
     if(var == "CLIENT_PSK")        return settings.client_psk;
     if(var == "CHANNEL")    return int_to_str(settings.channel);
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    if(var == "USB_HOST_SUPPORT") return "initial";
+#else
+    if(var == "USB_HOST_SUPPORT") return "none";
+#endif
+    if(var == "INPUTUSBHOST")   return Checked(settings.input_usb_host);
+    if(var == "OUTPUTUSBHOST")  return Checked(settings.output_usb_host);
     if(var == "INPUTUSB")   return Checked(settings.input_usb);
     if(var == "OUTPUTUSB")  return Checked(settings.output_usb);
     if(var == "USB_BAUD_RATE") return int_to_str(settings.usb_baud_rate);
@@ -374,9 +381,10 @@ void web_setup()
                 else printf("post unknown wifi data setting %s\n", value.c_str());
             }
             else if(name == "ap_ssid")     settings.ap_ssid = value;
-            else if(name == "ap_ssid")     settings.ap_ssid = value;
+            else if(name == "ap_psk")     settings.ap_psk = value;
+            else if(name == "client_ssid") settings.client_ssid = value;
             else if(name == "client_psk") settings.client_psk = value;
-            else if(name == "client_psk") settings.client_psk = value;
+            else if(name == "channel") settings.channel = str_to_int(value);
             else printf("web post wifi unknown parameter %s %s\n", name.c_str(), value.c_str());
         }
         request->redirect("/");
@@ -396,6 +404,7 @@ void web_setup()
 
     server.on("/data", HTTP_POST, [](AsyncWebServerRequest *request) {
         //printf("post data %d\n", request->params());
+        settings.input_usb_host = settings.output_usb_host = false;
         settings.input_usb = settings.output_usb = false;
         settings.input_nmea_pypilot = false;
         settings.output_nmea_pypilot = false;
@@ -487,7 +496,7 @@ void web_setup()
         for (int i = 0; i < request->params(); i++) {
             AsyncWebParameter* p = request->getParam(i);
             std::string name = p->name().c_str(), value = p->value().c_str();
-            //printf("POST[%s]: %s\n", name.c_str(), value.c_str());
+            printf("POST[%s]: %s\n", name.c_str(), value.c_str());
             if(name == "use360")
                 settings.use_360 = true;
             else if(name == "usefahrenheit")
@@ -555,7 +564,7 @@ void web_setup()
 
     server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request)
         {
-            printf("on update \n");
+            //printf("on update \n");
         if (Update.hasError())
         {
             AsyncWebServerResponse *response = request->beginResponse(200, F("text/html"), String(F("Update error: ")) + Update.errorString());
@@ -569,7 +578,7 @@ void web_setup()
         {
             printf("on success \n");
             request->redirect("/update_success.html");
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
 
             ESP.restart();
         }
@@ -580,6 +589,10 @@ void web_setup()
             // them through the Update object
             //printf("UPDATE REQUES %d %d %d\n", index, len, final);
 
+            // this is needed to avoid watchdog resets
+            vTaskDelay(1 / portTICK_PERIOD_MS);
+
+            static uint32_t startflash = millis();
             if (!index)
             {
                 printf("OTA Update: %s\n", filename.c_str());
@@ -597,6 +610,7 @@ void web_setup()
             if(final) {
                 if(!Update.end(true))
                     printf("%s\n", Update.errorString());
+                printf("flash took %ld\n", millis() - startflash);
             }
         });
     

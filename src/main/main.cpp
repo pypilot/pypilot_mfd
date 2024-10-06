@@ -38,13 +38,16 @@
 #include "keys.h"
 #include "alarm.h"
 #include "history.h"
+#include "extio.h"
 
 
 extern "C" void app_main(void)
 {
     initArduino();
  
-    display_pwr_led(true);
+    // Arduino-like setup()
+    extio_setup();
+    extio_set(EXTIO_LED, true);
 
     uint32_t t0 = millis();
 
@@ -79,8 +82,7 @@ extern "C" void app_main(void)
     
     settings_load();
     printf("settings_load_done, %ld\n", millis());
-
-    // Arduino-like setup()
+    
     serial_setup();
 
     wireless_setup();
@@ -100,7 +102,7 @@ extern "C" void app_main(void)
     if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER &&
        settings.power_button == "powersave") {
         printf("woke into power save loop\n");
-        while(keys_pwr_pressed()) {
+        while(!keys_pwr_pressed()) {
             serial_poll();
             wireless_poll(); // receive sensor data
             history_poll();
@@ -114,6 +116,7 @@ extern "C" void app_main(void)
                 esp_deep_sleep_start();
             }
         }
+        //while(!digitalRead(0)); // wait for button to release
     }
     
     mdns_setup();
@@ -136,12 +139,13 @@ extern "C" void app_main(void)
 
     printf("Minimum free heap size: %" PRIu32 " bytes\n", esp_get_minimum_free_heap_size());
 
-    display_pwr_led(false);
+    extio_set(EXTIO_LED, false);
+
     int dt=1;
     for(;;) {
-
-        t0 = millis();
+        uint32_t t1 = millis();
         wireless_poll();
+        extio_poll();
         keys_poll();
         serial_poll();
         nmea_poll();
@@ -154,9 +158,11 @@ extern "C" void app_main(void)
 
         display_poll();
         history_poll();
-
         // sleep remainder of second
-        dt = millis() - t0;
+
+//        vTaskDelay(1);
+        dt = millis() - t1;
+//        printf("dt %d\n", dt);
 
         const int period = 50;
         if (dt < period) {

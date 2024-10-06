@@ -55,7 +55,7 @@ static bool settings_load_suffix(std::string suffix="")
             data += file.readString().c_str();
         file.close();
 
-        printf("READ SETTINGS %s\n", data.c_str());
+        //printf("READ SETTINGS %s\n", data.c_str());
 
         if(s.Parse(data.c_str()).HasParseError()) {
             printf("settings file '%s' invalid/corrupted, will ignore data\n", filename.c_str());
@@ -352,7 +352,7 @@ void settings_load()
         return;
     }
 #endif    
-    listDir(SPIFFS, "/", 0);
+    //listDir(SPIFFS, "/", 0);
 
     if (settings_load_suffix())
         settings_store_suffix(".bak");
@@ -360,22 +360,17 @@ void settings_load()
         settings_load_suffix(".bak");
 
     nvs_handle_t version_handle;
-    ESP_ERROR_CHECK(nvs_open("version", NVS_READONLY, &version_handle));
-
-    ESP_ERROR_CHECK(nvs_get_u8(version_handle, "hw_version", &hw_version));
-    nvs_close(version_handle);
+    if(nvs_open("version", NVS_READONLY, &version_handle) == ESP_OK) {
+        nvs_get_u8(version_handle, "hw_version", &hw_version);
+        nvs_close(version_handle);
+    }
 
     printf("Hardware Version: %d\n", hw_version);
 
-    if(hw_version != 1) { // power 
+    if(hw_version != 1) { // power
         gpio_hold_dis((gpio_num_t)14);
         pinMode(14, OUTPUT);  // 422 power
         digitalWrite(14, 1);  // enable 422 for now?  disable if settings disable it
-
-        // led pin
-        gpio_hold_dis((gpio_num_t)26);
-        pinMode(26, OUTPUT);
-        digitalWrite(26, 1);
     }
 }
 

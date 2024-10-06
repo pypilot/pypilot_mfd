@@ -26,6 +26,7 @@
 
 #include "settings.h"
 #include "draw.h"
+#include "extio.h"
 
 #ifdef USE_U8G2
 
@@ -42,7 +43,8 @@ void draw_setup(int rotation)
     u8g2.setFontPosTop();
 
     if(settings.mirror == 2)
-        settings.mirror = !digitalRead(2);
+        settings.mirror = 0;
+    //settings.mirror = !digitalRead(2);
 
     if(settings.mirror)
         rotation ^= 2;
@@ -379,11 +381,9 @@ void draw_setup(int r)
 
     printf("got the framebuffers %p %p %p\n", framebuffers[0], framebuffers[1], framebuffers[2]);
     
-#if 1
+#if 0
     printf("SETTING GPIO HIGH\n");
-    gpio_reset_pin(GPIO_NUM_39);
-    /* Set the GPIO as a push/pull output */
-    gpio_set_direction(GPIO_NUM_39, GPIO_MODE_OUTPUT);
+    extio_set(EXTIO_DISP);
 #endif
 
 #else
@@ -1290,7 +1290,8 @@ void draw_clear(bool display_on)
         last_color_scheme = settings.color_scheme;
     }        
     
-    gpio_set_level(GPIO_NUM_39, display_on);
+    extio_set(EXTIO_DISP, display_on);
+    extio_set(EXTIO_BL,   display_on); // enable backlight driver
 
     if(settings.color_scheme == "light")
         c = 0xff;

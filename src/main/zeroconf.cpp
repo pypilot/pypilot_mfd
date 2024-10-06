@@ -122,8 +122,8 @@ void mdns_setup()
 
     TaskHandle_t xHandle = NULL;
     xTaskCreate(query_mdns_task,       /* Function that implements the task. */
-                    "mdns",          /* Text name for the task. */
-                    1024*10,      /* Stack size in words, not bytes. */
+                    "mdns_thread",          /* Text name for the task. */
+                    4096,      /* Stack size in words, not bytes. */
                     ( void * ) 0,    /* Parameter passed into the task. */
                     tskIDLE_PRIORITY,/* Priority at which the task is created. */
                     &xHandle );     

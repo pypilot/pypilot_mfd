@@ -213,6 +213,11 @@ void pypilotClient::poll()
             }
             return;
         }
+
+        if(ret >= sizeof buf) {
+            printf("AHAH!!!  ret too big %d\n", ret);
+            return;
+        }
         
         buf[ret] = 0;
         sock_buffer += buf;

@@ -207,7 +207,7 @@ void accel_setup() {
         Wire.write(0x47);
     Wire.endTransmission();
 #if 0
-    delay(10);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
     Wire.beginTransmission(device_address);
     Wire.write(LIS2DW12_CTRL + 6);
     Wire.write(0x10);  // set +/- 4g FS, LP filter ODR/2

@@ -312,10 +312,8 @@ static void setup_wifi() {
 
     } else {
         WiFi.mode(WIFI_STA);
-
-        WiFi.onEvent(WiFiStationGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
-
-        if (settings.wifi_mode == WIFI_MODE_STA || !settings.client_ssid.empty()) {
+        if (settings.wifi_mode == WIFI_MODE_STA && !settings.client_ssid.empty()) {
+            WiFi.onEvent(WiFiStationGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
             printf("connecting to SSID: %s  psk: %s\n", settings.client_ssid.c_str(), settings.client_psk.c_str());
 
             // setting a custom "country" locks the wifi in a particular channel
@@ -385,10 +383,12 @@ struct esp_now_data_t {
     int len;
     uint8_t data[MAX_DATA_LEN];
 } esp_now_rb[256];
-uint8_t rb_start, rb_end;
-SemaphoreHandle_t esp_now_sem;
+
+volatile uint8_t rb_start, rb_end;
+volatile SemaphoreHandle_t esp_now_sem;
 
 static void DataRecvWind(struct esp_now_data_t &data) {
+    uint32_t t0 = millis();
     if (data.len != sizeof(wind_packet_t)) {
         printf("received invalid wind packet %d\n", data.len);
         return;
@@ -442,6 +442,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
             dir += 360;
     }
 
+    uint32_t t1 = millis();
     bool primary;
     wind_transmitter_t &wt = wind_transmitters.update(data.mac, primary, dir);
     wt.dir = resolv(dir + wt.offset);
@@ -449,6 +450,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
 
     if (!primary) // this is not the primary sensor so we are done
         return;
+    uint32_t t2 = millis();
 
     lowpass_direction(wt.dir);
 
@@ -462,6 +464,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
 
     message_count++;
 //    printf("lpwind_dir %f\n", lpwind_dir);
+    uint32_t t3 = millis();
 
     if (settings.output_signalk) {
         if (!isnan(lpwind_dir))
@@ -474,6 +477,9 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     display_data_update(WIND_SPEED, wind_knots, ESP_DATA);
     if (!isnan(lpwind_dir))
         display_data_update(WIND_ANGLE, lpwind_dir, ESP_DATA);
+    uint32_t t4 = millis();
+
+//    printf("recv wind %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
 
 
@@ -591,25 +597,26 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
 // This function is run from the wifi thread, so post to a queue
 void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
     uint8_t *mac_addr = recv_info->src_addr;
-#if 0
+#if 1
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    printf("Last Packet Recv from: %s %d\n", macStrt, data_len);
+    // printf("Last Packet Recv from: %s %d\n", macStrt, data_len);
     //print(" Last Packet Recv Data: "); print(*data);
 
 #endif
-    if (xSemaphoreTake(esp_now_sem, (TickType_t)10) == pdTRUE) {
+    if (data_len > MAX_DATA_LEN)
+        return;
+
+    if (xSemaphoreTake(esp_now_sem, (TickType_t)1) == pdTRUE) {
         esp_now_data_t &pos = esp_now_rb[rb_start];
         memcpy(pos.mac, mac_addr, 6);
         pos.len = data_len;
-        if (data_len <= MAX_DATA_LEN) {
-            memcpy(pos.data, data, data_len);
-            rb_start++;
-        }
+        memcpy(pos.data, data, data_len);
         xSemaphoreGive(esp_now_sem);
-    } else
-        printf("unable to get esp now semaphore");
+        rb_start+=1;
+    }// else
+//        printf("unable to get esp now semaphore");
 }
 
 // Init ESP Now with fallback
@@ -646,11 +653,13 @@ static void InitESPNow() {
 
 static void receive_esp_now() {
     //printf("receive_esp_now %d %d\n", rb_start, rb_end);
+    uint32_t t0 = millis();
     while (rb_start != rb_end) {
         if (xSemaphoreTake(esp_now_sem, (TickType_t)10) != pdTRUE)
             return;
-        esp_now_data_t first = esp_now_rb[rb_end++];  // copy struct
+        esp_now_data_t first = esp_now_rb[rb_end];  // copy struct
         xSemaphoreGive(esp_now_sem);
+        rb_end+=1;
 
         if (first.len > MAX_DATA_LEN) {
             printf("espnow wrong packet size %d", first.len);
@@ -665,6 +674,12 @@ static void receive_esp_now() {
         case LIGHTNING_UV_ID: DataRecvLightningUV(first); break;
         default:
             printf("espnow packet ID mismatch %x\n", id);
+        }
+
+        if(millis() - t0 > 20) { // taking too long
+            printf("espnow receive failed to keep up\n");
+            rb_end = rb_start;
+            break;
         }
     }
 }
@@ -700,7 +715,11 @@ void wireless_scan_networks() {
 void wireless_poll() {
     uint32_t t0 = millis();
     static uint32_t tl;
-    if (t0 - tl > 60000) {  // report memory statistics every 60 seconds
+    if (t0 - tl > 60000) {  // report statistics every 60 seconds
+//        char buf[32*40];
+//        vTaskGetRunTimeStats(buf);
+//        printf("%s", buf);
+        
         printf("pypilot_mfd %ld %ld %ld %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize(), message_count);
         tl = t0;
         message_count = 0;
@@ -749,10 +768,10 @@ void wireless_scan_devices() {
         if (addStatus == ESP_OK) {
             for (int i = 0; i < 15; i++) {
                 sendChannel();
-                delay(50);
+                vTaskDelay(50 / portTICK_PERIOD_MS);
             }
         }
-        delay(50);
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 
     esp_now_deinit();

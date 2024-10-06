@@ -24,8 +24,9 @@ struct settings_t {
 
     int channel;
 
+    bool input_usb_host, output_usb_host;
     bool input_usb, output_usb;
-    int usb_baud_rate;
+    int usb_host_baud_rate, usb_baud_rate;
     int rs422_1_baud_rate;
     int rs422_2_baud_rate;
 
