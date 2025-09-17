@@ -15,7 +15,6 @@
 
 static int io_expander_addr = 0;
 
-
 uint8_t cur = 0;
 void extio_set(uint8_t val, bool on)
 {
@@ -41,10 +40,6 @@ void extio_set(uint8_t val, bool on)
 //            digitalWrite(EXTIO_NMEA_num, on);
         } else if(val | EXTIO_DISP) {
             // remove this!?!
-            gpio_reset_pin(GPIO_NUM_39);
-            /* Set the GPIO as a push/pull output */
-            gpio_set_direction(GPIO_NUM_39, GPIO_MODE_OUTPUT);
-            gpio_set_level(GPIO_NUM_39, on);
         }            
     }
 }
@@ -98,5 +93,4 @@ void extio_setup()
         Wire.endTransmission();
     } else
         printf("no io expander found\n");
-
 }

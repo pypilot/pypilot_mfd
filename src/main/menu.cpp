@@ -556,6 +556,7 @@ void menu_setup()
     std::vector<std::string> schemes{"default", "light", "sky", "mars"};
     display->add_menu(new menu_choice("Color Scheme", schemes, settings.color_scheme));
 #endif
+    display->add_item(new menu_item_int(display, "Buzzer Volume", settings.buzzer_volume, 0, 10, 1));
     //display->add_item(new menu_item_bool("Mirror", settings.mirror));
     display->add_item(new menu_item_bool("Show Status", settings.show_status));
 

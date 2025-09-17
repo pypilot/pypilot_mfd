@@ -19,426 +19,36 @@
 #define PROGMEM
 
 #endif
+
 #include <sys/time.h>
 #include <string>
 #include <list>
-
 
 #include "settings.h"
 #include "draw.h"
 #include "extio.h"
 
+#define USE_U8G2
 #ifdef USE_U8G2
-
-#include <U8g2lib.h>
-//U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/15, /* data=*/13, /* cs=*/5, /* dc=*/12, /* reset=*/14);
-//U8G2_ST75256_JLX256160_F_4W_SW_SPI u8g2(U8G2_R1, /* clock=*/18, /* data=*/23, /* cs=*/5, /* dc=*/12, /* reset=*/14);
-U8G2_ST75256_JLX256160_F_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
-//U8G2_ST75256_JLX256160_2_4W_HW_SPI u8g2(U8G2_R1, /* cs=*/5, /* dc=*/12, /* reset=*/13);
-
-void draw_setup(int rotation)
-{
-    u8g2.begin();
-    u8g2.enableUTF8Print();
-    u8g2.setFontPosTop();
-
-    if(settings.mirror == 2)
-        settings.mirror = 0;
-    //settings.mirror = !digitalRead(2);
-
-    if(settings.mirror)
-        rotation ^= 2;
-
-    switch(rotation) {
-        case 0: u8g2.setDisplayRotation(U8G2_R0); break;
-        case 1: u8g2.setDisplayRotation(U8G2_R1); break;
-        case 2: u8g2.setDisplayRotation(U8G2_R2); break;
-        case 3: u8g2.setDisplayRotation(U8G2_R3); break;
-    };        
-
-    if(settings.mirror)
-        u8g2.setFlipMode(true);
-}
-
-void draw_thick_line(int x0, int y0, int x1, int y1, int w)
-{
-    if(w < 2)
-        draw_line(x0, y0, x1, y1);
-
-    int ex = x1-x0, ey = y1-y0;
-    int d = sqrt(ex*ex + ey*ey);
-
-     if(d == 0)
-        return;
-
-    int ex0 = (ex*w/d+(ex > 0 ? 1 : -1))/2;
-    int ey0 = (ey*w/d+(ey > 0 ? 1 : -1))/2;
-    int ex1 = ex*w/d/2;
-    int ey1 = ey*w/d/2;
-
-    int ax = x0+ey0, ay = y0-ex0;
-    int bx = x0-ey1, by = y0+ex1;
-    int cx = x1+ey0, cy = y1-ex0;
-    int dx = x1-ey1, dy = y1+ex1;
- 
-    u8g2.drawTriangle(ax, ay, bx, by, cx, cy);
-    u8g2.drawTriangle(bx, by, dx, dy, cx, cy);
-}
-
-void draw_circle(int x, int y, int r, int thick)
-{
-    r -= thick;
-    if(r <= 0) {
-        thick += r-1;
-        r = 1;
-    }
-    for (int i = -(thick+1)/2; i <= thick/2; i++)
-        for (int j = -(thick+1)/1; j <= thick/2; j++)
-            u8g2.drawCircle(x + i, y + j, r);
-}
-
-void draw_line(int x1, int y1, int x2, int y2, bool)
-{
-    u8g2.drawLine(x1, y1, x2, y2);
-}
-
-void draw_box(int x, int y, int w, int h, bool invert)
-{
-    if(invert)
-        u8g2.setDrawColor(2);
-    u8g2.drawBox(x, y, w, h);
-    if(invert)
-        u8g2.setDrawColor(settings.invert ? 0 : 1);
-}
-
-void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3)
-{
-    u8g2.drawTriangle(x1, y1, x2, y2, x3, y3);
-}
-
-const uint8_t *getFont(int &ht) {
-    if(ht < 7) return 0;
-    if(ht < 11) return ht = 7, u8g2_font_5x7_tf;
-    if (ht < 13) return ht = 11, u8g2_font_helvB08_tf;
-    if (ht < 15) return ht = 13, u8g2_font_helvB10_tf;
-    if (ht < 18) return ht = 15, u8g2_font_helvB12_tf;
-    if (ht < 24) return ht = 18, u8g2_font_helvB14_tf;
-    if (ht < 28) return ht = 24, u8g2_font_helvB18_tf;
-    if (ht < 30) return ht = 28, u8g2_font_helvB24_tf;
-    if (ht < 35) return ht = 30, u8g2_font_inb24_mf;
-    if (ht < 40) return ht = 35, u8g2_font_inb27_mf;
-    if (ht < 44) return ht = 40, u8g2_font_inb30_mf;
-    if (ht < 48) return ht = 44, u8g2_font_inb33_mf;
-    if (ht < 52) return ht = 48, u8g2_font_inb38_mf;
-    if (ht < 56) return ht = 52, u8g2_font_inb42_mf;
-    return ht = 56, u8g2_font_inb46_mf;
-}
-
-bool draw_set_font(int &ht)
-{
-    const uint8_t *font = getFont(ht);
-    if(!font)
-        return false;
-    u8g2.setFont(font);
-    return true;
-}
-
-int draw_text_width(const std::string &str)
-{
-    return u8g2.getStrWidth(str.c_str());
-}
-
-void draw_text(int x, int y, const std::string &str)
-{
-    u8g2.drawUTF8(x, y, str.c_str());
-}
-
-void draw_color(color_e color)
-{
-    // ignored since monochrome
-}
-
-void draw_clear(bool display_on)
-{
-    u8g2.setContrast(160 + settings.contrast);
-
-    if(!display_on) {
-        u8g2.clearBuffer();
-        draw_send_buffer();
-        return;
-    }
-
-    if(settings.invert) {
-        u8g2.setDrawColor(1);
-        int w = u8g2.getDisplayWidth();
-        int h = u8g2.getDisplayHeight();
-        u8g2.drawBox(0, 0, w, h);
-        u8g2.setDrawColor(0);
-    } else {
-        u8g2.clearBuffer();
-        u8g2.setDrawColor(1);
-    }
-}
-
-void draw_send_buffer()
-{
-    u8g2.sendBuffer();
-}
-
-#endif
-
-#ifdef USE_RGB_LCD     // color lcd
+#include "u8g2drv.h"
+#else
 
 #include "fonts.h"
 
-static uint8_t color;
 
-#define GRAYS 8 // 3bpp insternal
-
+#define GRAYS 8 // 8 shades for each color
 // for now 256 entrees, could make it less
 static uint8_t palette[COLOR_COUNT][GRAYS];
-
-#if 1
-// produce 8 bit color from 3 bit per channel mapped onto rgb332
-uint8_t rgb3(uint8_t r, uint8_t g, uint8_t b)
-{
-    b >>= 1;
-    return (r << 5) | (g << 2) | b;
-}
-#else
-// produce 8 bit color from 3 bit per channel mapped onto rgb2321 with last bit shared for red and blue
-uint8_t rgb3(uint8_t r, uint8_t g, uint8_t b)
-{
-    uint8_t l = (r&&b) ? (b&1) : 0;
-    r >>= 1;
-    b >>= 1;
-    return (r << 6) | (g << 3) | (b << 1) | l;
-}
-#endif
-
-// b from 0-8;  convert enum to rgb232+1
-uint8_t compute_color(color_e c, uint8_t b)
-{
-    uint8_t v=0;
-        // default
-    switch(c) {
-    case WHITE:   v = rgb3(b, b, b); break;
-    case RED:     v = rgb3(b, 0, 0); break;
-    case GREEN:   v = rgb3(0, b, 0); break;
-    case BLUE:    v = rgb3(0, 0, b); break;
-    case CYAN:    v = rgb3(0, b, b); break;
-    case MAGENTA: v = rgb3(b, 0, b); break;
-    case YELLOW:  v = rgb3(b, b, 0); break;
-    case GREY:    v = rgb3(b/2, b/2, b/2); break;
-    case ORANGE:  v = rgb3(b, b/2, 0); break;
-    case BLACK:   v = rgb3(0, 0, 0); break;
-    default: break;
-    }
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    if(settings.color_scheme == "light")
-        v = ~v;
-    else if(settings.color_scheme == "sky")
-        v ^= rgb3(0, 3, 7);
-    if(settings.color_scheme == "mars")
-        v ^= rgb3(7, 1, 0);
-#endif    
-    return v;
-}
+static uint8_t color;
 
 uint8_t *framebuffer;
-static uint8_t *framebuffers[3];
-static int vsynccount;
 static int rotation;
 
-#define DRAW_LCD_PIXEL_CLOCK_HZ     (18 * 1000 * 1000)
-#define DRAW_PIN_NUM_HSYNC          -1//47
-#define DRAW_PIN_NUM_VSYNC          -1//48
-#define DRAW_PIN_NUM_DE             45
-#define DRAW_PIN_NUM_PCLK           21
-#define DRAW_PIN_NUM_DATA0          13 // B0
-#define DRAW_PIN_NUM_DATA1          14 // B1
-#define DRAW_PIN_NUM_DATA2          10 // G0
-#define DRAW_PIN_NUM_DATA3          11 // G1
-#define DRAW_PIN_NUM_DATA4          12 // G2
-#define DRAW_PIN_NUM_DATA5          3 // R0
-#define DRAW_PIN_NUM_DATA6          46 // R1
-#define DRAW_PIN_NUM_DATA7          9 // R2
-#define DRAW_PIN_NUM_DISP_EN        -1
-
-// The pixel number in horizontal and vertical
-#define DRAW_LCD_H_RES              800
-#define DRAW_LCD_V_RES              480
-
-#define DRAW_LCD_NUM_FB             3
-
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-
-#include <stdio.h>
-#include <string.h>
-#include "sdkconfig.h"
-#include "rtc_wdt.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
-#include "esp_timer.h"
-#include "esp_lcd_panel_ops.h"
-#include "esp_lcd_panel_rgb.h"
-#include "driver/gpio.h"
-#include "esp_err.h"
-#include "esp_log.h"
-
-// we use two semaphores to sync the VSYNC event and the LVGL task, to avoid potential tearing effect
-
-static bool IRAM_ATTR example_on_vsync_event(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *event_data, void *user_data)  
-{
-    vsynccount++;
-    return pdTRUE;
-}
-static esp_lcd_panel_handle_t panel_handle = NULL;
-#endif
-
-static std::string last_color_scheme = "none";
-void draw_setup(int r)
-{
-    rotation = r;
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    printf("draw: Install RGB LCD panel driver\n");
-    esp_lcd_rgb_panel_config_t panel_config = {
-        .clk_src = LCD_CLK_SRC_DEFAULT,
-        .timings = {
-            .pclk_hz = DRAW_LCD_PIXEL_CLOCK_HZ,
-            .h_res = DRAW_LCD_H_RES,
-            .v_res = DRAW_LCD_V_RES,
-            // The following parameters should refer to LCD spec
-            .hsync_pulse_width = 8,
-            .hsync_back_porch = 4,
-            .hsync_front_porch = 8,
-            .vsync_pulse_width = 4,
-            .vsync_back_porch = 16,
-            .vsync_front_porch = 16,
-            .flags =
-            {
-                .hsync_idle_low = false,
-                .vsync_idle_low = false,
-                .de_idle_high = false,
-                .pclk_active_neg = true,
-                //.pclk_idle_high = false,
-            },
-            //.flags.pclk_active_neg = true,
-            //.flags.de_idle_high = true,
-            //.flags.pclk_idle_high = true,
-        },
-        .data_width = 8, // RGB332 in parallel mode
-        .bits_per_pixel = 8,
-        .num_fbs = DRAW_LCD_NUM_FB,
-        .bounce_buffer_size_px = 0,//16*DRAW_LCD_H_RES,
-        .sram_trans_align = 0,
-        .psram_trans_align = 64,
-
-        .hsync_gpio_num = DRAW_PIN_NUM_HSYNC,
-        .vsync_gpio_num = DRAW_PIN_NUM_VSYNC,
-        .de_gpio_num = DRAW_PIN_NUM_DE,
-        .pclk_gpio_num = DRAW_PIN_NUM_PCLK,
-        .disp_gpio_num = DRAW_PIN_NUM_DISP_EN,
-        .data_gpio_nums = {
-            DRAW_PIN_NUM_DATA0,
-            DRAW_PIN_NUM_DATA1,
-            DRAW_PIN_NUM_DATA2,
-            DRAW_PIN_NUM_DATA3,
-            DRAW_PIN_NUM_DATA4,
-            DRAW_PIN_NUM_DATA5,
-            DRAW_PIN_NUM_DATA6,
-            DRAW_PIN_NUM_DATA7,
-        },
-        .flags = {
-            .disp_active_low = (uint32_t)NULL,
-            .refresh_on_demand = false,
-            .fb_in_psram = true,
-            .double_fb = false,
-            .no_fb = false,
-            .bb_invalidate_cache = (uint32_t)NULL,
-        }
-    };
-    ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(&panel_config, &panel_handle));
-
-    printf("draw: Register event callbacks\n");
-    esp_lcd_rgb_panel_event_callbacks_t cbs = {
-        .on_vsync = example_on_vsync_event,
-        .on_bounce_empty = 0,
-        .on_bounce_frame_finish = 0,
-    };
-    ESP_ERROR_CHECK(esp_lcd_rgb_panel_register_event_callbacks(panel_handle, &cbs, NULL));
-
-    printf("draw: Initialize RGB LCD panel\n");
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
-
-    ESP_ERROR_CHECK(esp_lcd_rgb_panel_get_frame_buffer(panel_handle, 3, (void**)&framebuffers[0], (void**)&framebuffers[1], (void**)&framebuffers[2]));
-    framebuffer = framebuffers[0];
-
-    printf("got the framebuffers %p %p %p\n", framebuffers[0], framebuffers[1], framebuffers[2]);
-    
-#if 0
-    printf("SETTING GPIO HIGH\n");
-    extio_set(EXTIO_DISP);
-#endif
-
+#ifdef USE_JLX256160
+#include "jlx256160.h"
 #else
-    // emulation on linux
-    framebuffers[0] = (uint8_t*)malloc(DRAW_LCD_H_RES*DRAW_LCD_V_RES);
-    framebuffers[1] = (uint8_t*)malloc(DRAW_LCD_H_RES*DRAW_LCD_V_RES);
-    framebuffers[2] = (uint8_t*)malloc(DRAW_LCD_H_RES*DRAW_LCD_V_RES);
-    framebuffer = framebuffers[0];
+#include "rgb_lcd.h"
 #endif
-    memset(framebuffers[0], 0, DRAW_LCD_V_RES*DRAW_LCD_H_RES);
-    memset(framebuffers[1], 0, DRAW_LCD_V_RES*DRAW_LCD_H_RES);
-    memset(framebuffers[2], 0, DRAW_LCD_V_RES*DRAW_LCD_H_RES);
-}
-
-static void putpixel(int x, int y, uint8_t c)
-{    
-    if(x < 0 || y < 0 || x >= DRAW_LCD_H_RES || y >= DRAW_LCD_V_RES)
-        return;
-    if(c >= GRAYS) {
-        printf("putpixel gradient out of range %d\n", c);
-        return;
-    }
-    if(c == 0) // nothing to do
-        return;
-
-    uint8_t value = palette[color][c];
-    if(c == GRAYS-1)
-        framebuffer[DRAW_LCD_H_RES*y+x] = value;
-    else
-#if 0
-        uint8_t value = palette[color][7];
-
-        uint8_t fv = framebuffer[DRAW_LCD_H_RES*y+x];
-
-        uint8_t rf = (fv>>5);
-        uint8_t gf = ((fv>>2)&0x7);
-        uint8_t bf = ((fv&0x3)<<1);
-        uint8_t rv = (value>>5);
-        uint8_t gv = ((value>>2)&0x7);
-        uint8_t bv = ((value&0x3)<<1);
-
-        uint8_t r = rv*c/7 + rf*(7-c)/7;
-        uint8_t g = gv*c/7 + gf*(7-c)/7;
-        uint8_t b = bv*c/7 + bf*(7-c)/7;
-
-        if(r > 7) r = 7;
-        if(g > 7) g = 7;
-        if(b > 7) b = 7;
-
-        framebuffer[DRAW_LCD_H_RES*y+x] = (r<<5) | (g<<2) | (b>>1);
-#else
-        framebuffer[DRAW_LCD_H_RES*y+x] |= value;
-#endif
-
-}
 
 #define putpixeli(x, y, c) putpixel(x, y, ((GRAYS-1)-(c)))
 
@@ -500,7 +110,7 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int wd)
 {
     convert_coords(x0, y0);
     convert_coords(x1, y1);
-#if 0
+#if 0 // render using putpixel
     int dx = abs(x1-x0), sx = x0 < x1 ? 1 : -1;
     int dy = abs(y1-y0), sy = y0 < y1 ? 1 : -1;
     int err = dx-dy, e2, x2, y2;                           /* error value e_xy */
@@ -522,7 +132,7 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int wd)
             err += dx; y0 += sy;
         }
     }
-#elif 0 // this is twice faster than above :(
+#elif 0 // this is twice faster than above using triangles..
     int ex = x1-x0, ey = y1-y0;
     int d = sqrt(ex*ex + ey*ey);
     if(d == 0)
@@ -537,7 +147,7 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int wd)
     int dx = x1-ey, dy = y1+ex;
     draw_triangle(ax, ay, bx, by, cx, cy);
     draw_triangle(bx, by, dx, dy, cx, cy);
-#else // like 8 times faster but needs antialiasing
+#else // about 8 times faster but has no antialiasing (yet)
     if(y0>y1) {
         int t = y0;
         y0 = y1;
@@ -558,9 +168,9 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int wd)
     }
 
     float x = x0-sw/2;
-    uint8_t value = palette[color][7];
+    uint8_t value = palette[color][GRAYS-1];
     for(int y=y0; y<= y1; y++) {
-        memset(framebuffer + DRAW_LCD_H_RES*y+(int)x, value, sw);
+        draw_scanline(x, y, value, sw);
         x += dx;
     }
 #endif
@@ -720,12 +330,17 @@ void draw_circle(int xm, int ym, int r, int th)
 //    return;
     
     if (th < 1.5) return draw_circle_thin(xm, ym, r);
-    if(r < 20) {
+    if(r < 20
+#if defined(USE_JLX256160)
+       || 1  // TODO: fix below/profile for this driver the faster circle or not needed??  just need make memset to draw_scanline
+#endif
+        ) {
         draw_circle_orig(xm, ym, r, th);        
         return;
     }
 
     std::pair pair = std::make_pair(r, th);
+    // render circle from cache
     if(circle_cache.find(pair) != circle_cache.end()) {
         convert_coords(xm, ym);
         circle_cache_t &c = circle_cache.at(pair);
@@ -828,7 +443,7 @@ void draw_circle(int xm, int ym, int r, int th)
         return;
     }
 
-    // render to buffer 1/2 circle
+    // render to buffer 1/2 circle into cache
     uint8_t *buf = sp_malloc(2*(r+1)*(r+1));
     memset(buf, 0, 2*(r+1)*(r+1));
     /* draw anti-aliased ellipse inside rectangle with thick line... could be optimized considerably */
@@ -896,7 +511,7 @@ void draw_circle(int xm, int ym, int r, int th)
    }
 #endif
 
-   // now encode the buffer
+   // now encode the buffer with runlength compression
    uint8_t *rbuf = sp_malloc(2*r*(r+1));
    int cnt = 1, cur = buf[0], sz=0;
    for(int i=1; i<2*(r+1)*(r+1); i++) {
@@ -917,7 +532,6 @@ void draw_circle(int xm, int ym, int r, int th)
    circle_cache.emplace(pair, circle_cache_t(sz, rbuf));
    free(rbuf);
 
-#if 1
    // free obsolete circles from cache
    std::list <std::map <std::pair <int, int>, circle_cache_t >::iterator> obsolete;
    for(std::map <std::pair <int, int>, circle_cache_t >::iterator it = circle_cache.begin(); it!=circle_cache.end(); it++) {
@@ -929,7 +543,8 @@ void draw_circle(int xm, int ym, int r, int th)
        free((*it)->second.enc);
        circle_cache.erase(*it);
    }
-#endif
+
+   // now draw it using the cache we just made
    draw_circle(xm, ym, r, oth);
 }
 
@@ -962,19 +577,19 @@ static void draw_flat_tri(int x1, int y1, int x2, int x3, int y2)
     float curx3 = x1;
 
     int y = y1;
-    uint8_t value = palette[color][7];
+    uint8_t value = palette[color][GRAYS-1];
     
     for (;;) {
         // Left edge antialiasing
         int icurx2 = curx2;
         int icurx3 = curx3;
 
-#if 0
+#if 0 // works in all cases, slower with antialiasing
         for (int x = icurx2+1;x <= icurx3; x++)
             putpixel(x, y, (GRAYS-1));
 #else
-        // fill scanline
-        memset(framebuffer + DRAW_LCD_H_RES*y+icurx2+1, value, icurx3-icurx2);
+        // fill scanline, no antialiasing??
+        draw_scanline(icurx2+1, y, value, icurx3-icurx2);
 #endif
         if(y == y2)
             break;
@@ -1063,15 +678,14 @@ void draw_box(int x0, int y0, int w, int h, bool invert)
     }
 
     if(invert) {
+        // TODO, make invert work for 2bpp
         for(int y = y0; y<y0+h; y++)
-            for(int x = x0; x<x0+w; x++)
-                framebuffer[DRAW_LCD_H_RES*y+x] = ~framebuffer[DRAW_LCD_H_RES*y+x];
+            invert_scanline(x0, y, w);
+
     } else {
         uint8_t value = palette[color][GRAYS-1];
-        //value = rgb3(4|2|1,4|2,4|2|1);
         for(int y = y0; y<y0+h; y++)
-            for(int x = x0; x<x0+w; x++)
-                framebuffer[DRAW_LCD_H_RES*y+x] = value;
+            draw_scanline(x0, y, value, w);
     }
 }
 
@@ -1202,35 +816,36 @@ static int render_glyph(char c, int x, int y)
 
         uint8_t value = palette[color][g];
 #if 0 // unoptimized (better blending)
-            for(int j=0; j<cnt; j++) {
-                putpixel(x+xc, y, g);
-                if(++xc >= ch.w) {
+        // TODO make faster rendering work?
+        for(int j=0; j<cnt; j++) {
+            putpixel(x+xc, y, g);
+            if(++xc >= ch.w) {
+                xc = 0;
+                y++;
+            }
+        }
+#else
+        if(g && y >= 0) {
+            for(int j=0; j<cnt;) {
+                int len = MIN(cnt-j, w-xc);
+                if(y < DRAW_LCD_V_RES)
+                    draw_scanline(x+xc, y, value, len);
+                xc += len;
+                j += len;
+                if(xc == w) {
                     xc = 0;
                     y++;
                 }
             }
-#else
-            if(g && y >= 0) {
-                for(int j=0; j<cnt;) {
-                    int len = MIN(cnt-j, w-xc);
-                    if(y < DRAW_LCD_V_RES)
-                        memset(framebuffer + DRAW_LCD_H_RES*y+x+xc, value, len);
-                    xc += len;
-                    j += len;
-                    if(xc == w) {
-                        xc = 0;
-                        y++;
-                    }
-                }
-            } else {
-                y += cnt/w;
-                xc += cnt%w;
-                if(xc >= w) {
-                    xc-=w;
-                    y++;
-                }
+        } else {
+            y += cnt/w;
+            xc += cnt%w;
+            if(xc >= w) {
+                xc-=w;
+                y++;
             }
-#endif
+        }
+#endif        
     }
     return ch.w;
 }
@@ -1273,55 +888,4 @@ void draw_color(color_e c)
 {
     color = c;
 }
-
-static uint32_t t0start;
-void draw_clear(bool display_on)
-{
-    uint8_t c = 0;
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    // rebuild palette if needed
-    if(settings.color_scheme != last_color_scheme)
-    {
-#endif
-        for(int i=0; i<COLOR_COUNT; i++)
-            for(int j=0; j<GRAYS; j++)
-                palette[i][j] = compute_color((color_e)i, j);
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-        last_color_scheme = settings.color_scheme;
-    }        
-    
-    extio_set(EXTIO_DISP, display_on);
-    extio_set(EXTIO_BL,   display_on); // enable backlight driver
-
-    if(settings.color_scheme == "light")
-        c = 0xff;
-    else if(settings.color_scheme == "dusk")
-        c = 0x40;
-#endif    
-
-    memset(framebuffer, c, DRAW_LCD_H_RES*DRAW_LCD_V_RES);
-}
-
-void draw_send_buffer()
-{
-#ifndef __linux__
-    uint32_t t1 = esp_timer_get_time();
-    esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, DRAW_LCD_H_RES, DRAW_LCD_V_RES, framebuffer);
-        
-    uint32_t t2 = esp_timer_get_time();
-#endif
-    if(framebuffer == framebuffers[0])
-        framebuffer = framebuffers[1];
-    else if(framebuffer == framebuffers[1])
-        framebuffer = framebuffers[2];
-    else
-        framebuffer = framebuffers[0];
-        
-#ifndef __linux__
-    //printf("frame %d %lu %lu\n", vsynccount, t1-t0start, t2-t1);
-    vsynccount=0;
-    t0start = esp_timer_get_time();
-#endif
-}
-
 #endif

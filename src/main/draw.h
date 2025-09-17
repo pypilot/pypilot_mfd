@@ -6,12 +6,26 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-// uncomment to declare which graphics library
+
 #ifdef CONFIG_IDF_TARGET_ESP32
-#define USE_U8G2
+#if 1
+# define USE_U8G2
+# else
 //#define USE_TFT_ESPI // only small wind display supported (bottom of file)
+# define USE_JLX256160 // for now, eventually get from boot partition, and do at runtime
+# endif
+
+// eventually make these constants variables so the same firmware can support different hardware and displays
+
+#define DRAW_LCD_H_RES              240
+#define DRAW_LCD_V_RES              160
+
 #else
-#define USE_RGB_LCD     // color lcd
+
+// The pixel number in horizontal and vertical
+#define DRAW_LCD_H_RES              800
+#define DRAW_LCD_V_RES              480
+
 #endif
 
 enum color_e {WHITE, RED, GREEN, BLUE, CYAN, MAGENTA, YELLOW, GREY, ORANGE, BLACK, COLOR_COUNT};

@@ -42,7 +42,12 @@
 
 
 extern "C" void app_main(void)
-{
+{    
+#ifndef CONFIG_IDF_TARGET_ESP32S3
+                // gpio4 is strap by default
+                gpio_set_pull_mode(GPIO_NUM_4, GPIO_FLOATING);
+#endif
+
     initArduino();
  
     // Arduino-like setup()
@@ -109,7 +114,7 @@ extern "C" void app_main(void)
             alarm_poll();
             vTaskDelay(100 / portTICK_PERIOD_MS);
             
-            if(millis() > 10000) { // pwr not pressed, go back to sleep
+            if(millis() > 3000) { // pwr not pressed, go back to sleep
                 printf("going back to sleep\n");
                 esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, LOW);
                 esp_sleep_enable_timer_wakeup(60 * 1000 * 1000);

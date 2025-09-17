@@ -21,10 +21,11 @@ enum keys { KEY_PAGE_UP,
             KEY_PAGE_DOWN,
             KEY_PWR,
             KEY_COUNT };
+
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 int key_pin[KEY_COUNT] = { 5, 6, 7, 0 };
 #else
-int key_pin[KEY_COUNT] = { 35, 32, 33, 0 };
+int key_pin[KEY_COUNT] = { 33, 32, 35, 0 };
 #endif
 
 static uint32_t key_times[KEY_COUNT];

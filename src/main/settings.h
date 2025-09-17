@@ -53,6 +53,8 @@ struct settings_t {
     bool invert;
     std::string color_scheme;
     int contrast, backlight;
+    int buzzer_volume;
+
     bool show_status;
     int rotation; // 0-3 are set, 4 is auto
     int mirror; // 2 is auto

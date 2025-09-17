@@ -662,7 +662,7 @@ struct gauge : public display_item {
 
     void render_ticks(bool text = false) {
         int th;
-#ifdef USE_RGB_LCD
+#ifdef DRAW_LCD_V_RES > 400 // todo: make this nicer
         th = 21;
 #else
         if (w > 90)
@@ -750,7 +750,7 @@ struct gauge : public display_item {
         std::string label1 = space1 > 0 ? label.substr(0, space1) : label;
         std::string label2 = space2 > 0 ? label.substr(space2) : "";
 
-#ifdef USE_RGB_LCD
+#ifdef DRAW_LCD_V_RES > 400 // todo: make this nicer
         const uint8_t fonts[] = { 36, 30, 24, 21, 0 };
 #else
         const uint8_t fonts[] = { 18, 15, 13, 11, 7, 0 };
@@ -1051,10 +1051,10 @@ struct history_display : public display_item {
     void render() {
         // draw label
         draw_color(GREEN);
-#ifdef USE_RGB_LCD
-        int ht = h/12;
-#else
+#ifdef USE_U8G2
         int ht = 8;
+#else
+        int ht = h/12;
 #endif
         draw_set_font(ht);
 
@@ -2173,37 +2173,23 @@ void display_setup() {
 
     start_time = time(0);
     
-#ifdef USE_U8G2
     switch (rotation) {
     case 0:
     case 2:
-        page_width = 256;
-        page_height = settings.show_status ? 148 : 160;
+        page_width = DRAW_LCD_H_RES;
+        page_height = DRAW_LCD_V_RES;
         landscape = true;
         break;
     case 1:
     case 3:
-        page_width = 160;
-        page_height = settings.show_status ? 244 : 256;
+        page_width = DRAW_LCD_V_RES;
+        page_height = DRAW_LCD_H_RES;
         landscape = false;
         break;
     }
-#else
-    switch (rotation) {
-    case 0:
-    case 2:
-        page_width = 800;
-        page_height = settings.show_status ? 450 : 480;
-        landscape = true;
-        break;
-    case 1:
-    case 3:
-        page_width = 480;
-        page_height = settings.show_status ? 800 : 770;
-        landscape = false;
-        break;
-    }
-#endif
+
+    if(settings.show_status)
+        page_height -= (DRAW_LCD_H_RES + 60) / 18;
     draw_setup(rotation);
 
     for (int i = 0; i < pages.size(); i++)
@@ -2303,7 +2289,7 @@ void display_menu_scale() {
 }
 
 static void render_status() {
-#ifdef USE_RGB_LCD
+#ifdef DRAW_LCD_V_RES > 400 // todo: make this nicer
     int ht = 21;
 #else
     int ht = 11;
@@ -2350,14 +2336,12 @@ void data_timeout() {
         }
 }
 
-#if defined(USE_U8G2) || defined(USE_RGB_LCD)
-
 void display_poll() {
     if (!display_on)
         return;
 
     uint32_t t0 = millis();
-#ifdef USE_U8G2    
+#if defined(USE_U8G2) || defined(USE_JLX256160)
     static uint32_t last_render;
     if (t0 - last_render < 200)
         return;
@@ -2425,8 +2409,8 @@ void display_poll() {
     uint32_t t4 = millis();
 //    printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
-#endif
 
+// remove?
 #ifdef USE_TFT_ESPI
 //#include <TFT_eSPI.h>  // Hardware-specific library
 //#include <SPI.h>
