@@ -8,16 +8,19 @@
 
 
 #ifdef CONFIG_IDF_TARGET_ESP32
-#if 1
+#if 0
 # define USE_U8G2
 # else
 //#define USE_TFT_ESPI // only small wind display supported (bottom of file)
 # define USE_JLX256160 // for now, eventually get from boot partition, and do at runtime
 # endif
+#endif
+
 
 // eventually make these constants variables so the same firmware can support different hardware and displays
+#if defined(USE_U8G2) || defined(USE_JLX256160)
 
-#define DRAW_LCD_H_RES              240
+#define DRAW_LCD_H_RES              256
 #define DRAW_LCD_V_RES              160
 
 #else

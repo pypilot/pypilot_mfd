@@ -6,6 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <math.h>
 #ifndef __linux__
 #include <Arduino.h>
 
@@ -15,7 +16,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <math.h>
 #define PROGMEM
 
 #endif
@@ -28,7 +28,6 @@
 #include "draw.h"
 #include "extio.h"
 
-#define USE_U8G2
 #ifdef USE_U8G2
 #include "u8g2drv.h"
 #else
@@ -132,9 +131,9 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int wd)
             err += dx; y0 += sy;
         }
     }
-#elif 0 // this is twice faster than above using triangles..
+#elif 1 // this is twice faster than above using triangles..
     int ex = x1-x0, ey = y1-y0;
-    int d = sqrt(ex*ex + ey*ey);
+    int d = sqrtf((float)(ex*ex + ey*ey));
     if(d == 0)
         return;
 

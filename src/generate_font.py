@@ -97,7 +97,8 @@ characters = 'abcdefghijklmnopqrstuvwxyz1234567890`~!@#$%^&*()-=_+,./<>?[]{}|;\'
 big_characters = '1234567890.~- '
 #big_characters = characters
 
-sizes = [21, 24, 30, 36, 42, 52, 66, 82, 108, 134, 162, 200, 260, 340]
+sizes = [7, 8, 10, 12, 14, 18]
+#sizes += [21, 24, 30, 36, 42, 52, 66, 82, 108, 134, 162, 200, 260, 340]
 
 ords = list(map(ord, characters))
 

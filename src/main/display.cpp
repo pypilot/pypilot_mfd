@@ -2130,12 +2130,11 @@ bool display_toggle(bool on) {
 //    ledcAttachChannel(BACKLIGHT_PIN, 200, 8, 3);
 //    ledcWriteChannel(3, 254);
 //    pinMode(BACKLIGHT_PIN, OUTPUT);
-    digitalWrite(BACKLIGHT_PIN, HIGH);
+        digitalWrite(BACKLIGHT_PIN, HIGH);
 #else
-    if(!ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3))
-        printf("Ledc attach1 failed\n");
-    ledcWriteChannel(3, 0);
-
+        if(!ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3))
+            printf("Ledc attach1 failed\n");
+        ledcWriteChannel(3, 0);
 #endif
     } else {
 #ifdef CONFIG_IDF_TARGET_ESP32
@@ -2355,6 +2354,24 @@ void display_poll() {
     draw_clear(true);
     draw_color(WHITE);
 
+#if 1
+    draw_color(GREEN);
+//    draw_box(40, 40, 30, 30);
+        int ht = 14;
+        draw_set_font(ht);
+//        draw_text(0, 0, "OVER TEMPERATURE");
+        draw_circle(100, 30, 10, 4);
+        draw_triangle(10, 10, 30, 20, 15, 50);
+        draw_thick_line(10, 10, 250, 100, 3);
+
+//        draw_thick_line(100, 05, 250, 155, 2);
+
+        
+        draw_send_buffer();
+        printf("draw\n");
+        return;
+#endif
+    
     static uint32_t safetemp_time;
     if(over_temperature) { // above 75C is an issue...
         int ht = 14;

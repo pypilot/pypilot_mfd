@@ -17,23 +17,8 @@ static int buzzer_pattern;
 #define BUZZERA 4
 #define BUZZERB 25
 
-
 void buzzer_buzz(int freq, int duration, int pattern)
 {
-#if 0
-    if(buzzer_timeout) {
-        if(hw_version <= 2) {
-            ledcDetach(BUZZERA);
-            ledcDetach(BUZZERB);
-        }
-    }
-
-    // buzzer (backlight uses channel 9)
-    // buzzer is io pin BUZZERB
-    if(hw_version <= 2) {
-        ledcAttachChannel(BUZZERB, freq, 10, 0); // channel 0, freq, 10bit
-    }
-#else
     if(hw_version <= 2) {
         if(buzzer_timeout) {
             ESP_ERROR_CHECK(ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
@@ -74,7 +59,6 @@ void buzzer_buzz(int freq, int duration, int pattern)
         };
         ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel_b));
     }
-#endif
 
     buzzer_timeout = millis() + duration;
     buzzer_pattern = pattern;
@@ -86,22 +70,17 @@ void buzzer_poll()
 
     if(!buzzer_timeout || !d)
         return;
+
     if(buzzer_timeout < millis()) {
         buzzer_timeout = 0;
         if(hw_version <= 2) {
-#if 0
-            ledcDetach(BUZZERA);
-            ledcDetach(BUZZERB);
-#else
             ESP_ERROR_CHECK(ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
             ESP_ERROR_CHECK(ledc_stop(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0));
-#endif
-            
         }
         return;
     }
 
-    d = 10+3*d*sqrtf(d);
+    d = 10+3*d*sqrtf(d); // map volume to pwm duty
 
     switch(buzzer_pattern) {
     case 0:                          break;  // always on
@@ -111,17 +90,14 @@ void buzzer_poll()
     }
 
     if(hw_version <= 2) {
-#if 0        
-#else
         ESP_ERROR_CHECK(ledc_set_duty_with_hpoint(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, d, 0));
         // Update duty to apply the new value
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
 
-        if(d > 50) {
+        if(d > 50) { // use both channels if loud
             ESP_ERROR_CHECK(ledc_set_duty_with_hpoint(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, d, d));
         // Update duty to apply the new value
             ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
         }
-#endif
     }
 }
