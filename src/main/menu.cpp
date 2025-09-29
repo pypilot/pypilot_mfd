@@ -550,7 +550,7 @@ void menu_setup()
     menu *display = new menu("Display");
     display->add_item(new menu_item_int(display, "Backlight", settings.backlight, 0, 20, 1));
     display->add_item(new menu_item_int(display, "Contrast", settings.contrast, 0, 50, 1));
-#ifdef USE_U8G2
+#ifdef CONFIG_IDF_TARGET_ESP32
     display->add_item(new menu_item_bool("Invert", settings.invert));
 #else
     std::vector<std::string> schemes{"default", "light", "sky", "mars"};

@@ -63,8 +63,8 @@ void display() {
     draw_color(RED);
     static int ri=100;
     ri++;
-    draw_circle(DRAW_LCD_H_RES/3, DRAW_LCD_V_RES/2, DRAW_LCD_H_RES/4, 6 );
-    draw_thick_line(10,10,100, 30, 10);
+    draw_circle(DRAW_LCD_H_RES/3, DRAW_LCD_V_RES/2, ri, 6 );
+    draw_thick_line(10, 10,100, 30, 10);
     if(ri>80)
         ri = 40;
     static float r;

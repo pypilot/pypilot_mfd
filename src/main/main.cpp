@@ -168,7 +168,6 @@ extern "C" void app_main(void)
 //        vTaskDelay(1);
         dt = millis() - t1;
 //        printf("dt %d\n", dt);
-
         const int period = 50;
         if (dt < period) {
             //printf("delay %d\n", dt);

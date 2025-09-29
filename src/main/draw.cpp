@@ -280,7 +280,7 @@ void draw_circle_orig(int xm, int ym, int r, int th)
 
 uint8_t *sp_malloc(int size)
 {
-#ifdef __linux__
+#if defined(__linux__) || defined(CONFIG_IDF_TARGET_ESP32)
     return (uint8_t*)malloc(size);
 #else
     return (uint8_t*)heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
@@ -671,16 +671,14 @@ void draw_box(int x0, int y0, int w, int h, bool invert)
         break;
     }
 
-    if(x0 < 0 || y0 < 0 || (x0+w) >= DRAW_LCD_H_RES || (y0+h) >= DRAW_LCD_V_RES) {
-        printf("draw_ box out of range %d %d %d %d\n", x0, y0, w, h);
+    if(x0 < 0 || y0 < 0 || (x0+w) > DRAW_LCD_H_RES || (y0+h) > DRAW_LCD_V_RES) {
+        printf("draw box out of range %d %d %d %d\n", x0, y0, w, h);
         return;
     }
 
     if(invert) {
-        // TODO, make invert work for 2bpp
         for(int y = y0; y<y0+h; y++)
             invert_scanline(x0, y, w);
-
     } else {
         uint8_t value = palette[color][GRAYS-1];
         for(int y = y0; y<y0+h; y++)
@@ -742,19 +740,23 @@ static int render_glyph(char c, int x, int y)
         // no conversion
         break;
     }
-    if(x < 0 || x + w >= DRAW_LCD_H_RES) // off screen no partial render
+    if(x < 0 || x + w > DRAW_LCD_H_RES) { // off screen no partial render
+      printf("off screen %d %d %d %d\n", x, y, w, c);
         return ch.w;
+    }
 
     std::pair pair = std::make_pair(cur_font, c);
     if(r_glyphs.find(pair) == r_glyphs.end()) {
         // data is in original rotation, re-encode with correct rotation
         uint8_t *buf = sp_malloc(w*h+1);
-
+	
         int i=0;
         int bx = 0, by = 0;
         while(i<ch.size) {
             int v = ch.data[i++];
             int g = v&(GRAYS-1), cnt;
+	    if(h < 11) // flatten to monochrome for small font
+	      g = g>2 ? GRAYS-1 : 0;
             if(v & 0x80) // extended
                 cnt = (ch.data[i++]+1)*16 + ((v&0x78)>>3);
             else

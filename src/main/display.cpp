@@ -191,7 +191,7 @@ struct text_display : public display_item {
 #ifdef CONFIG_IDF_TARGET_ESP32S3
             label_font = 30;
 #else
-            label_font = 11;
+            label_font = 13;
 #endif
             draw_set_font(label_font);
             label_w = draw_text_width(str);
@@ -200,7 +200,7 @@ struct text_display : public display_item {
 #ifdef CONFIG_IDF_TARGET_ESP32S3
                 label_font = 21;
 #else
-                label_font = 7;
+                label_font = 9;
 #endif
                 draw_set_font(label_font);
                 label_w = draw_text_width(str);
@@ -642,7 +642,7 @@ struct gauge : public display_item {
     }
 
     void render_ring() {
-        int thick = r / 30;
+        int thick = r / 30 + 1;
         draw_circle(xc, yc, r, thick);
     }
 
@@ -2354,21 +2354,32 @@ void display_poll() {
     draw_clear(true);
     draw_color(WHITE);
 
-#if 1
+#if 0
     draw_color(GREEN);
 //    draw_box(40, 40, 30, 30);
         int ht = 14;
         draw_set_font(ht);
-//        draw_text(0, 0, "OVER TEMPERATURE");
-        draw_circle(100, 30, 10, 4);
-        draw_triangle(10, 10, 30, 20, 15, 50);
-        draw_thick_line(10, 10, 250, 100, 3);
+	draw_text(0, 0, "OVER TEMPERATURE");
 
-//        draw_thick_line(100, 05, 250, 155, 2);
 
-        
+    draw_color(RED);
+    static int ri=100;
+    ri++;
+    draw_circle(DRAW_LCD_H_RES/3, DRAW_LCD_V_RES/2, ri, 6 );
+    draw_thick_line(10, 10,100, 30, 10);
+    if(ri>80)
+        ri = 40;
+    static float r;
+    r+=.1;
+    float s=sin(r), c = cos(r);
+    draw_color(MAGENTA);
+    int x0 = DRAW_LCD_H_RES/4;
+    int tw = DRAW_LCD_H_RES/80;
+    draw_triangle(x0+c*tw, x0+s*tw-c*tw, x0-c*tw, x0-s*tw-c*tw, x0-s*x0/2, x0+c*x0/2);
+
         draw_send_buffer();
-        printf("draw\n");
+
+	//      printf("draw\n");
         return;
 #endif
     

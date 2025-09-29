@@ -103,7 +103,7 @@ void draw_setup(int r)
     cmd( 0x32 );    /* analog circuit set */
     data( 0x00 );    /* code example: OSC Frequency adjustment */
     data( 0x01 );    /* Frequency on booster capacitors 1 = 6KHz? */
-    data( 0x00 );    /* Bias: 1: 1/13, 2: 1/12, 3: 1/11, 4:1/10, 5:1/9 */
+    data( 0x01 );    /* Bias: 1: 1/13, 2: 1/12, 3: 1/11, 4:1/10, 5:1/9 */
 
 //    cmd(0x51);
 //    data(0xfa);
@@ -118,22 +118,24 @@ void draw_setup(int r)
 #endif
     
 #if 1
+    uint8_t lg = 0xc, dg = 0x10;
+    
     //cmd( 0x31 );    /* select 01 commands */
     cmd( 0x20 );    /* gray levels */
     data( 0x0 );
     data( 0x0 );
     data( 0x0 );
-    data( 0x07 );
-    data( 0x07 );
-    data( 0x07 );
+    data( lg );
+    data( lg );
+    data( lg );
     data( 0x0 );
     data( 0x0 );
-    data( 0xc );
+    data( dg );
     data( 0x0 );
     data( 0x0 );
-    data( 0xc );
-    data( 0xc );
-    data( 0xc );
+    data( dg );
+    data( dg );
+    data( dg );
     data( 0x0 );
     data( 0x0 );
 #endif 
@@ -256,6 +258,7 @@ static inline void draw_scanline(int x, int y, int value, int count)
         x += cd;
         count -= cd;
     }
+
     int end_count = count&3;
     if(end_count) {
         const uint8_t end_masks[] = {0x00, 0x03, 0x0F, 0x3F};
@@ -265,9 +268,10 @@ static inline void draw_scanline(int x, int y, int value, int count)
 
 static inline void invert_scanline(int x, int y, int count)
 {
-    return;
     if(count < 3)  // logic below assumes minimum of 3 pixel, dont invert narrower than that for now
         return;
+
+    const uint8_t masks[4] = {0x00, 0x55, 0xAA, 0xFF};
 
     int start_count = 4-(x&3);
     if(start_count<4) {
@@ -286,6 +290,7 @@ static inline void invert_scanline(int x, int y, int count)
         x += cd;
         count -= cd;
     }
+
     int end_count = count&3;
     if(end_count) {
         const uint8_t end_masks[] = {0x00, 0x03, 0x0F, 0x3F};
@@ -318,19 +323,6 @@ void draw_send_buffer()
                 uint8_t v = getpixel(x, y+b);
                 t |= (v<<(2*b));
             }
-
-#if 0
-            if (x< 10) {
-                if(y < 16)
-                    t = 0xff;
-                else if(y>20&&y<32)
-                    t = 0xAA;
-                else if(y>40&&y<64)
-                    t = 0x55;
-            }
-            else
-                t = 0;
-#endif
             *(p++) = t;
         }
 #else
@@ -348,12 +340,10 @@ void draw_send_buffer()
 
     digitalWrite(CS, LOW);
     SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
-
     
     cmd( 0x30 );                /* select 00 commands */
 
-    static int contrast = 200;
-//    printf("con %d\n", contrast++);
+    int contrast = 170 + settings.contrast;
     cmd(0x30 );
     cmd(0x81 );
     data((contrast & 0x1f)<<1);
@@ -362,7 +352,7 @@ void draw_send_buffer()
     digitalWrite(CS, HIGH);
 
     digitalWrite(CS, LOW);
-    SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
+    SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
     cmd(0x75);
     data(0x1);
 #ifdef GRAYSCALE
