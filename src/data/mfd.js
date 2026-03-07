@@ -1,4 +1,4 @@
-/*  Copyright (C) 2024 Sean D'Epagnier
+/*  Copyright (C) 2026 Sean D'Epagnier
 #
 # This Program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public
@@ -90,16 +90,51 @@ function render(direction, knots)
 
 var wind_sensors = {};
 // Function that receives the message from the ESP32 with the readings
+function toBool(v) {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    if (typeof v === "string") {
+        const s = v.toLowerCase();
+        return s === "1" || s === "true" || s === "yes" || s === "on";
+    }
+    return false;
+}
+
+function setElementValue(name, value) {
+    let el = document.getElementById(name);
+    if(!el)
+        return;
+    
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === "input") {
+        const type = (el.type || "").toLowerCase();
+
+        if (type === "checkbox") {
+            el.checked = toBool(value);
+        } else {
+            el.value = value ?? "";
+        }
+    } else if (tag === "textarea" || tag === "select") {
+        el.value = value ?? "";
+    } else {
+        el.textContent = value ?? "";
+    }
+}
+
 function onMessage(event) {
     //console.log(event.data);
     var data = event.data;
-    if(data == 'reload')
-        location.reload(); // refresh page
-    else {
-        var msg = JSON.parse(data);
-        if('wind' in msg)
-            onWindMessage(msg['wind']);
-    }
+
+    var msg = JSON.parse(data);
+    if('wind' in msg)
+        onWindMessage(msg['wind']);
+    
+    for (const [key, value] of Object.entries(obj))
+        setElementValue(key, value);
+
+    if('wifi_mode' in msg)
+        on_wifi_mode();
 }
 
 function onWindMessage(msg) {
@@ -153,9 +188,62 @@ function onWindMessage(msg) {
 }
 
 function on_wifi_mode() {
-    var mode = document.getElementById('wifi_mode').value;
+    var mode = gei('wifi_mode');
     document.getElementById('wifi_ap').style.display = (mode == 'ap') ? 'grid' : 'none';
     document.getElementById('wifi_client').style.display = (mode == 'client') ? 'grid' : 'none';
 }
 
-on_wifi_mode();
+function gei(id) {
+    return document.getElementById(id);
+}
+
+function fields(ids) {
+    return Object.fromEntries(
+        ids.map(id => [id, gei(id).value])
+    );
+}
+
+function post(keys) {
+    msg = fields(keys);
+    websocket.send(JSON.stringify(msg));
+}
+
+function on_wifi_settings() {
+    post(['wifi_mode', 'ap_ssid', 'ap_psk', 'client_ssid', 'client_psk', 'wifi_channel']);
+}
+
+function on_display_settings() {
+    post(['use_360', 'use_fahrenheit', 'use_inHg', 'use_depthft',
+          'lat_lon_format', 'invert', 'contrast', 'backlight', 'mirror', 'power_button']);
+}
+
+function on_display_pages() {
+    let div = gei("display_pages");
+
+    let ids = [];
+    div.querySelectorAll("[id]").forEach(el => {
+        ids.push(el.id);
+    });
+    post(ids);
+}
+
+function on_display_data() {
+    post(['input_usb', 'output_usb', 'usb_baud_rate', 'rs422_1_baud_rate', 'rs422_2_baud_rate',
+          'input_nmea_pypilot', 'output_nmea_pypilot', 'input_nmea_signalk', 'output_nmea_signalk',
+          'input_nmea_client', 'output_nmea_client', 'input_nmea_server', 'output_nmea_server',
+          'input_signalk', 'output_signalk',
+          'forward_nmea_serial_to_serial', 'forward_nmea_serial_to_wifi',
+          'compensate_wind_with_accelerometer', 'compute_true_wind_from_gps',
+          'compute_true_wind_from_water_speed', 'nmea_tcp_client_addr',
+          'nmea_tcp_client_port', 'nmea_tcp_server_port']);
+}
+
+function cmd(name) {
+    msg = {name : 1};
+    websocket.send(JSON.stringify(msg));
+}
+
+function on_alarm_settings() {
+    post(["anchor_alarm", "anchor_alarm_distance", "course_alarm", "course_alarm_course", "course_alarm_error", "gps_speed_alarm", "gps_min_speed_alarm_knots", "gps_max_speed_alarm_knots", "wind_speed_alarm", "wind_min_speed_alarm_knots", "wind_max_speed_alarm_knots", "water_speed_alarm", "water_min_speed_alarm_knots", "water_max_speed_alarm_knots", "weather_alarm_pressure", "weather_alarm_min_pressure", "weather_alarm_pressure_rate", "weather_alarm_pressure_rate_value", "weather_alarm_lightning", "weather_alarm_lightning_distance", "depth_alarm", "depth_alarm_min", "depth_alarm_rate", "depth_alarm_rate_value", "ais_alarm", "ais_alarm_cpa", "ais_alarm_tcpa", "pypilot_alarm_noconnection", "pypilot_alarm_fault", "pypilot_alarm_no_imu", "pypilot_alarm_no_motor_controller", "pypilot_alarm_lost_mode"]);
+}
+

@@ -59,7 +59,6 @@ uint32_t alarm_last(alarm_e alarm, std::string &reason)
 }
 
 float alarm_anchor_dist;
-float lightning_distance;
     
 void alarm_anchor_reset() {
     std::string source;

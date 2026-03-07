@@ -8,3 +8,5 @@
 
 void serial_setup();
 void serial_poll();
+void serial_write_nmea(const char *buf);
+

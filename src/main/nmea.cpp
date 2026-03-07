@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Sean D'Epagnier <seandepagnier@gmail.com>
+/* Copyright (C) 2026 Sean D'Epagnier <seandepagnier@proton.me>
  *
  * This Program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
@@ -6,17 +6,22 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-#include <WiFi.h>
+#include <esp_wifi_types_generic.h>
 
+#include <math.h>
+
+#include <esp_timer.h>
 #include <lwip/sockets.h>
 #include <errno.h>
 
+#include "settings.h"
 #include "display.h"
 #include "nmea.h"
 #include "zeroconf.h"
 #include "ais.h"
-#include "settings.h"
 #include "history.h"
+#include "serial.h"
+#include "wireless.h"
 
 static uint8_t checksum(const char *buf, int len=-1)
 {
@@ -30,6 +35,14 @@ static uint8_t checksum(const char *buf, int len=-1)
     return cksum;
 }
 
+float convert_decimal_ll(float decll)
+{
+    float degrees;
+    float minutes = modff(decll/100, &degrees)*100;
+    return degrees + minutes / 60;
+}
+
+#ifdef CONFIG_IDF_TARGET_ESP32S3
 static bool prefix(const char *line, const char *prefix)
 {
     return line[3] == prefix[0] && line[4] == prefix[1] && line[5] == prefix[2];
@@ -45,13 +58,6 @@ static const char *comma(const char *start, int count)
             return 0;
     }
     return start;
-}
-
-float convert_decimal_ll(float decll)
-{
-    float degrees;
-    float minutes = modff(decll/100, &degrees)*100;
-    return degrees + minutes / 60;
 }
 
 bool nmea_parse_line(const char *line, data_source_e source)
@@ -347,6 +353,7 @@ bool nmea_parse_line(const char *line, data_source_e source)
 
     return true;
 }
+#endif
 
 struct ClientSock
 {
@@ -391,11 +398,11 @@ static void connect_client(ClientSock &client, std::string addr, int port)
     if(client.addr != addr || client.port != port)
         client.close();
 
-    uint32_t t0 = millis();
+    uint64_t t0 = esp_timer_get_time();
     if(client.sock)
         return;
 
-    if(t0 - client.time < 10000)
+    if(t0 - client.time < 10e6)
         return;
 
     if(addr.empty() || port == 0)
@@ -482,6 +489,7 @@ static void connect_server()
 
 static bool poll_client(ClientSock &c, bool input)
 {
+#ifdef CONFIG_IDF_TARGET_ESP32S3
     // read any data from client
     while(c.sock) {
         char buf[128];
@@ -520,6 +528,7 @@ static bool poll_client(ClientSock &c, bool input)
             c.data = c.data.substr(ind+1);
         }
     }
+#endif
     return true;
 }
 
@@ -570,7 +579,7 @@ static void accept_server()
     printf("nmea socket accepted %d %d ip address: %s\n", i, sock, addr_str);
 
     clients[i].sock = sock;
-    clients[i].time = millis();
+    clients[i].time = esp_timer_get_time();
 }
 
 static void poll_server()
@@ -587,7 +596,7 @@ void nmea_poll()
 {
     if(!force_wifi_ap_mode &&
        settings.wifi_mode != WIFI_MODE_AP &&
-       WiFi.status() != WL_CONNECTED) {
+       !wifi_connected) {
         //printf("not conn %d\n", server_sock);
         close_server();
         nmea_client.close();
@@ -596,8 +605,8 @@ void nmea_poll()
         return;
     }
 
-    uint32_t t0 = millis();
-    static uint32_t last_poll_time;
+    uint64_t t0 = esp_timer_get_time();
+    static uint64_t last_poll_time;
 
     if(t0-last_poll_time < 1000)
         return;
@@ -639,7 +648,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
 
         if(errno == EAGAIN) {
             // timeout
-            if(millis() - c.time < 10000) 
+            if(esp_timer_get_time() - c.time < 10e6) 
                 return;
         }
     } if(ret > 0) // for now dont worry about "short" writes
@@ -653,18 +662,6 @@ static void write_nmea_server(const char *buf)
 {
     for(int i=0; i<(sizeof clients) / (sizeof *clients); i++)
         write_nmea_client(clients[i], buf);
-}
-
-void nmea_write_serial(const char *buf, HardwareSerial *source)
-{
-    // handle writing to usb host serial
-
-    if(settings.output_usb && &Serial0 != source)
-        Serial0.printf(buf);
-//    if(settings.rs422_1_baud_rate && &Serial1 != source)
-//        Serial1.printf(buf);
-    if(settings.rs422_2_baud_rate && &Serial2 != source)
-        Serial2.printf(buf);
 }
 
 void nmea_write_wifi(const char *buf)
@@ -684,6 +681,6 @@ void nmea_send(const char *buf)
     char buf2[64];
 
     snprintf(buf2, sizeof buf2, "$QY%s*%02x\r\n", buf, 0x08^checksum(buf));
-    nmea_write_serial(buf2);
+    serial_write_nmea(buf2);
     nmea_write_wifi(buf2);
 }

@@ -16,9 +16,10 @@ for filename in sys.argv[1:]:
     f.close();
 
     fname = os.path.basename(filename)
+    fname = fname.removesuffix(".gz")
     varname = fname.replace('.', '_')
 
-    print('const char ' + varname + '[] PROGMEM = {');
+    print('const char ' + varname + '[] = {');
     for byte in data:
         sys.stdout.write('0x%x, ' % byte);
     print('};')
@@ -39,4 +40,3 @@ for varname, data in file_list.items():
     print('{"' + data['path'] + '", ' + data['size'] + ', ' + varname + '},')
 
 print('};')
-

@@ -37,8 +37,6 @@ enum display_item_e { WIND_SPEED,
                       PYPILOT,
                       DISPLAY_COUNT };
 
-enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, COMPUTED_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
-
 void display_setup();
 bool display_toggle(bool on=false);
 void display_set_mirror_rotation(int);
@@ -48,7 +46,7 @@ void display_menu_scale();
 void display_poll();
 void display_data_update(display_item_e item, float value, data_source_e);
 bool display_data_get(display_item_e item, float &value);
-bool display_data_get(display_item_e item, float &value, std::string &source, uint32_t &time);
+bool display_data_get(display_item_e item, float &value, std::string &source, uint64_t &time);
 void display_auto();
 void display_items(std::list<display_item_e> &items);
 

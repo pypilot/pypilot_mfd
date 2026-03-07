@@ -295,7 +295,7 @@ std::string history_get_data(display_item_e item, history_range_e range)
         return "{}";
 
     if(isnan(high))
-        high = 0;
+       high = 0;
     if(isnan(low))
         low = 0;
 

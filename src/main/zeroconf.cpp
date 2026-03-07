@@ -118,12 +118,15 @@ void query_mdns_task(void *)
 void mdns_setup()
 {
     ESP_ERROR_CHECK( mdns_init() );
+#ifdef CONFIG_IDF_TARGET_ESP32S3
     ESP_ERROR_CHECK( mdns_hostname_set("pypilot_mfd") );
-
+#else
+    ESP_ERROR_CHECK( mdns_hostname_set("wind_receiver") );
+#endif
     TaskHandle_t xHandle = NULL;
     xTaskCreate(query_mdns_task,       /* Function that implements the task. */
                     "mdns_thread",          /* Text name for the task. */
-                    4096,      /* Stack size in words, not bytes. */
+                    2048,      /* Stack size in words, not bytes. */
                     ( void * ) 0,    /* Parameter passed into the task. */
                     tskIDLE_PRIORITY,/* Priority at which the task is created. */
                     &xHandle );     

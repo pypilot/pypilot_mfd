@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>Update pypilot mfd</title>
+    <link rel='stylesheet' type='text/css' href='update.css'>
+    <link rel='stylesheet' type='text/css' href='styles.css'>
+  </head>
+  <body>
+    <div class="container">
+      <div class='box'>
+        <div class='col1-grid'>
+          <h1>pypilot mfd Firmware Update</h1>
+          <div>
+            <label for="otafile">Firmware file:</label>
+            <input type="file" id="otafile" accept=".bin" name="otafile" onchange="startUpload()" />
+          </div>
+          <div class="progress">
+            <div id="progresstext" class="progresst"></div>
+            <div id="fileprogress" class="bar"></div>
+          </div>
+          <br>
+        </div>
+      </div>
+    </div>
+    <script type='text/javascript' src='update.js'></script>
+  </body>
+</html>

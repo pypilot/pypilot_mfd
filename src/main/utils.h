@@ -17,8 +17,7 @@ uint64_t mac_str_to_int(std::string mac);
 std::string mac_int_to_str(uint64_t i);
 
 #ifndef __linux__
-#include <SPIFFS.h>
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
+//void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
 #endif
 std::string millis_to_str(uint32_t dt);
 //void printf_P(const __FlashStringHelper* flashString, ...);

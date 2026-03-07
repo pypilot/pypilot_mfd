@@ -9,6 +9,8 @@
 #include <string>
 #include <math.h>
 
+#include <esp_timer.h>
+
 #include "utils.h"
 
 float deg2rad(float degrees) {
@@ -107,6 +109,7 @@ std::string mac_int_to_str(uint64_t r)
     return macStrt;
 }
 
+#if 0
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     printf("Listing directory: %s\r\n", dirname);
 
@@ -144,11 +147,12 @@ void readFile(fs::FS &fs, const char * path){
     }
 
     printf("- read from file:\n");
-    while(file.available()){
+    while(file.available()) {
         Serial.write(file.read());
     }
     file.close();
 }
+#endif
 
 std::string millis_to_str(uint32_t dt)
 {

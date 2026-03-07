@@ -12,7 +12,7 @@
 //        test signalk
 
 #include <math.h>
-#include <WiFi.h>
+#include <esp_log.h>
 
 #include "Arduino.h"
 
@@ -26,6 +26,8 @@
 #include "history.h"
 #include "buzzer.h"
 #include "extio.h"
+
+#define TAG "display"
 
 // autocompensate contrast based on light and temperature
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -125,10 +127,10 @@ static void compute_true_wind(float wind_angle) {
 }
 
 void display_data_update(display_item_e item, float value, data_source_e source) {
-    //printf("display_data_update %s %f %s\n", display_get_item_label(item).c_str(), value, source_name[source]);
+    //ESP_LOGI(TAG, ("display_data_update %s %f %s\n", display_get_item_label(item).c_str(), value, source_name[source]);
     uint32_t time = millis();
     if (isnan(value))
-        printf("invalid display data update %d %d\n", item, source);
+        ESP_LOGW(TAG, ("invalid display data update %d %d", item, source);
     //printf("data_update %d %s %f\n", item, display_get_item_label(item).c_str(), value);
 
     if (source > display_data[item].source) {
@@ -1365,7 +1367,7 @@ void grid_display::fit() {
     if (cols == 0)
         w = 0;
     if (!w || !h) {
-        printf("warning:  empty grid display");
+        ESP_LOGW(TAG, ("warning:  empty grid display");
         return;
     }
 
@@ -2126,22 +2128,14 @@ bool display_toggle(bool on) {
     //extio_set(EXTIO_LED, !display_on);
 
     if(display_on) {
-#ifdef CONFIG_IDF_TARGET_ESP32S3
 //    ledcAttachChannel(BACKLIGHT_PIN, 200, 8, 3);
 //    ledcWriteChannel(3, 254);
 //    pinMode(BACKLIGHT_PIN, OUTPUT);
         digitalWrite(BACKLIGHT_PIN, HIGH);
-#else
-        if(!ledcAttachChannel(BACKLIGHT_PIN, 500, 10, 3))
-            printf("Ledc attach1 failed\n");
-        ledcWriteChannel(3, 0);
-#endif
     } else {
-#ifdef CONFIG_IDF_TARGET_ESP32
         if(!ledcDetach(BACKLIGHT_PIN))
             printf("Ledc detach1 failed\n");
             
-#endif
         pinMode(BACKLIGHT_PIN, OUTPUT);  // strap for display
         digitalWrite(BACKLIGHT_PIN, 0);
         gpio_hold_en((gpio_num_t)BACKLIGHT_PIN);
@@ -2168,7 +2162,7 @@ void display_setup() {
     display_data_timeout[ROUTE_INFO] = 10000;
     display_data_timeout[PYPILOT] = 10000;
     
-    printf("display_setup %d\n", rotation);
+    ESP_LOGI("display_setup %d\n", rotation);
 
     start_time = time(0);
     
@@ -2262,7 +2256,7 @@ void display_change_page(int dir) {
         settings.cur_page += dir;
         looped++;
         if (display_pages[cur_page()].enabled) {
-            printf("display changed to page %c\n", 'A' + cur_page());
+            ESP_LOGI(TAG, "display changed to page %c\n", 'A' + cur_page());
             return;
         }
     }
@@ -2270,7 +2264,7 @@ void display_change_page(int dir) {
     // all pages disabled??
     display_pages[0].enabled = true;
     settings.cur_page = 0;
-    printf("warning, all pages disabled, enabling first page");
+    ESP_LOGI(TAG, "warning, all pages disabled, enabling first page");
 }
 
 void display_menu_scale() {
@@ -2437,86 +2431,3 @@ void display_poll() {
     uint32_t t4 = millis();
 //    printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }
-
-// remove?
-#ifdef USE_TFT_ESPI
-//#include <TFT_eSPI.h>  // Hardware-specific library
-//#include <SPI.h>
-
-TFT_eSPI tft = TFT_eSPI();
-
-#define WHITE 0xffff
-#define BLACK 0
-
-void display_setup() {
-    tft.init();
-
-    tft.setRotation(0);
-    tft.fillScreen(TFT_BLACK);
-
-    tft.setTextSize(1);
-}
-
-void display_poll() {
-
-    static bool last_force_wifi_ap_mode;
-
-    if (force_wifi_ap_mode != last_force_wifi_ap_mode) {
-        tft.fillScreen(TFT_BLACK);
-        last_force_wifi_ap_mode = force_wifi_ap_mode;
-    }
-
-    if (force_wifi_ap_mode) {
-        tft.setTextColor(TFT_RED, TFT_BLACK);
-        tft.drawString("WIFI AP", 0, 0, 4);
-
-        tft.drawString("windAP", 0, 20, 4);
-        tft.drawString("http://wind.local", 0, 60, 2);
-        return;
-    }
-
-    tft.setTextColor(TFT_GREEN, TFT_BLACK);
-    char buf[16];
-    int coords[3][2] = { 0 };
-    tft.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], BLACK);
-
-    tft.fillRect(xp, yp, 41, 25, BLACK);  // clear heading text area
-
-    tft.drawEllipse(67, 67, 67, 67, WHITE);
-
-    if (lpwind_dir >= 0) {
-        const uint8_t xc = 67, yc = 67, r = 64;
-        float wind_rad = deg2rad(lpwind_dir);
-        int x = r * sinf(wind_rad);
-        int y = -r * cosf(wind_rad);
-        int s = 4;
-        int xp = s * cosf(wind_rad);
-        int yp = s * sinf(wind_rad);
-
-        coords[0][0] = xc - xp;
-        coords[0][1] = yc - yp;
-        coords[1][0] = xc + x;
-        coords[1][1] = yc + y;
-        coords[2][0] = xc + xp;
-        coords[2][1] = yc + yp;
-
-        xp = -31.0 * sinf(wind_rad), yp = 20.0 * cosf(wind_rad);
-        static float nxp = 0, nyp = 0;
-        nxp = (xp + 15 * nxp) / 16;
-        nyp = (yp + 15 * nyp) / 16;
-        xp = xc + nxp - 31, yp = yc + nyp - 20;
-
-        snprintf(buf, sizeof buf, "%03d", (int)lpwind_dir);
-
-        tft.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], WHITE);
-
-        tft.drawString(buf, xp, yp, 4);
-    }
-
-    float iknots;
-    float iknotf = 10 * modff(wind_knots, &iknots);
-
-    snprintf(buf, sizeof buf, "%02d.%d", (int)iknots, (int)iknotf);
-    tft.drawString(buf, 0, 150, 6);
-}
-#endif

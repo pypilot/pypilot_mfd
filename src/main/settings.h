@@ -7,13 +7,12 @@
  */
 
 #include <string>
-#include <map>
+#include <unordered_set>
 
 #define VERSION 0.12
+enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, COMPUTED_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
 
 struct settings_t {
-    std::string magic;
-
     int wifi_mode;
     
     std::string ap_ssid;
@@ -22,7 +21,7 @@ struct settings_t {
     std::string client_ssid;
     std::string client_psk;
 
-    int channel;
+    uint8_t wifi_channel;
 
     bool input_usb_host, output_usb_host;
     bool input_usb, output_usb;
@@ -114,6 +113,11 @@ struct settings_t {
 
 enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
 
+std::unordered_set<std::string> settings_keys();
+std::string settings_get_value(const std::string &key);
+bool settings_set_value(const std::string &key, const std::string &value);
+
+void settings_reset();
 void settings_load();
 void settings_store();
 std::string get_wifi_mode_str();

@@ -1,8 +1,8 @@
 $fn=60;
 
-length=51.5;
+length=51.6;
 width=25.7;
-height=5.5;
+height=6.5;
 
 ft=2;
 fh = 1.5;
@@ -20,8 +20,7 @@ module usb_c_hole() {
 }
 
 difference() {
-   
-        translate([thickness, thickness, thickness])
+    translate([thickness, thickness, thickness])
         minkowski() {
                cube([length+ft*2, width+ft*2, height+fh]);
                 sphere(thickness);
@@ -38,12 +37,17 @@ difference() {
 
     
     translate([0, width/2+thickness+ft, thickness+height/2+1])
-    usb_c_hole();
+        usb_c_hole();
         
-        translate([20,.3,height/2])
-rotate([90,0,0])
-linear_extrude(2)
-text("pypilot",  size=5);
-
+    translate([20,.3,height/2])
+        rotate([90,0,0])
+            linear_extrude(2)
+                text("pypilot", size=5);
 }
 
+translate([length+2, 0, 0]) {
+    translate([0, 5, 0])
+    cylinder(r=1.6, h=4);
+    translate([0, width+2*thickness+2*ft-5, 0])
+    cylinder(r=1.6, h=4);
+}

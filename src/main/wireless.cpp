@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Sean D'Epagnier <seandepagnier@gmail.com>
+/* Copyright (C) 2026 Sean D'Epagnier <seandepagnier@gmail.com>
  *
  * This Program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
@@ -6,231 +6,24 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <string.h>
+#include <math.h>
+
+#include <map>
+
 #include <esp_now.h>
 #include <esp_wifi.h>
-
-#include <WiFi.h>
-#include <lwip/sockets.h>
-
-#include "rapidjson/document.h"
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
+#include <esp_timer.h>
+#include <esp_log.h>
 
 #include "settings.h"
 #include "wireless.h"
-#include "utils.h"
 #include "display.h"
-#include "nmea.h"
-#include "signalk.h"
 #include "zeroconf.h"
-#include "alarm.h"
+#include "sensors.h"
+#include "utils.h"
 
-static std::string position_str(sensor_position p)
-{
-    switch(p) {
-    case PRIMARY:   return "Primary";
-    case SECONDARY: return "Secondary";
-    case PORT:      return "Port";
-    case STARBOARD: return "Starboard";
-    default:   break;
-    }
-    return "Ignored";
-}
-
-sensor_position wireless_str_position(const std::string &p)
-{
-    if(p == "Primary")   return PRIMARY;
-    if(p == "Secondary") return SECONDARY;
-    if(p == "Port")      return PORT;
-    if(p == "Starboard") return STARBOARD;
-    return IGNORED;
-}
-
-template<class T>
-struct transmitters {
-    std::map<uint64_t, T> macs;
-    uint64_t cur_primary;
-    uint32_t cur_primary_time;
-
-    transmitters() : cur_primary(0), cur_primary_time(0) {}
-
-    T &update(uint8_t mac[6], bool &primary, float dir = 0) {
-        uint64_t mac_int = mac_as_int(mac);
-        uint32_t t = millis();
-        T& wt = macs[mac_int];
-        if (macs.size() == 1)
-            wt.position = PRIMARY;  // if there are no known transmitters assign it as primary, more likely to ignore another boat nearby
-        if (!isnan(dir)) {
-            if ((wt.position == PRIMARY) || (wt.position == SECONDARY && !cur_primary) || (wt.position == PORT && (dir > 200 && dir < 340)) || (wt.position == STARBOARD && (dir > 20 && dir < 160)))
-                cur_primary = mac_int;
-        }
-
-        primary = cur_primary == mac_int;
-        if (primary)
-            cur_primary_time = t;
-        wt.t = t;
-        if (t - cur_primary_time > 1000)
-            cur_primary = 0;
-        return wt;
-    }
-
-    void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info=false) {
-        writer.StartObject();
-        for(auto i = macs.begin(); i != macs.end(); i++) {
-            std::string x = mac_int_to_str(i->first);
-            writer.Key(x.c_str());
-            T &wt = i->second;
-            writer.StartObject();
-            writer.Key("position");
-            writer.String(position_str(wt.position).c_str());
-            wt.json(writer, info);
-            if(info) {
-                writer.Key("dt");
-                uint32_t t = millis();
-                writer.Int((int)(t - wt.t));
-            }
-            writer.EndObject();
-        }
-        writer.EndObject();
-    }
-
-    void setting(uint64_t maci, const rapidjson::Value &s) {
-        if(macs.find(maci) == macs.end())
-            return;
-
-        T &t = macs[maci];
-        if(s.HasMember("position"))
-            t.position = wireless_str_position(s["position"].GetString());
-        t.setting(s);
-    }
-
-    void read_settings(const rapidjson::Value &t) {
-        for (rapidjson::Value::ConstMemberIterator itr = t.MemberBegin(); itr != t.MemberEnd(); ++itr) {
-            std::string mac = itr->name.GetString();
-            const rapidjson::Value &u = itr->value;
-            T tr;
-            uint64_t maci = mac_str_to_int(mac);
-            macs[maci] = tr;
-            setting(maci, u);
-        }
-    }
-};
-
-static transmitters<wind_transmitter_t> wind_transmitters;
-static transmitters<air_transmitter_t> air_transmitters;
-static transmitters<water_transmitter_t> water_transmitters;
-static transmitters<lightning_uv_transmitter_t> lightning_uv_transmitters;
-
-void wind_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
-{
-    writer.Key("offset");
-    writer.Double(offset);
-    if(!info)
-        return;
-    writer.Key("dir");
-    writer.Double(dir);
-    writer.Key("knots");
-    writer.Double(knots);
-}
-
-void wind_transmitter_t::setting(const rapidjson::Value &s)
-{
-    if(s.HasMember("offset") && s["offset"].IsNumber())
-        offset=fminf(fmaxf(s["offset"].GetDouble(), -180), 180);
-}
-
-void air_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
-{
-    if(!info)
-        return;
-
-    writer.Key("pressure");
-    writer.SetMaxDecimalPlaces(5);
-    writer.Double(pressure);
-    writer.Key("temperature");
-    writer.SetMaxDecimalPlaces(2);
-    writer.Double(temperature);
-    writer.Key("rel_humidity");
-    writer.Double(rel_humidity);
-    writer.Key("air_quality");
-    writer.Double(air_quality);
-    writer.Key("battery_voltage");
-    writer.Double(battery_voltage);
-}
-
-void water_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
-{
-    if(!info)
-        return;
-    writer.Key("speed");
-    writer.Double(speed);
-    writer.Key("depth");
-    writer.Double(depth);
-    writer.Key("temperature");
-    writer.Double(temperature);
-}
-
-void lightning_uv_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
-{
-    if(!info)
-        return;
-    writer.Key("distance");
-    writer.Double(distance);
-    writer.Key("uva");
-    writer.Double(uva);
-    writer.Key("uvb");
-    writer.Double(uvb);
-    writer.Key("uvc");
-    writer.Double(uvc);
-    writer.Key("visible");
-    writer.Double(visible);
-}
-
-void wireless_write_transmitters(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
-{
-    writer.StartObject();
-
-    writer.Key("wind");
-    wind_transmitters.json(writer, info);
-
-    writer.Key("air");
-    air_transmitters.json(writer, info);
-
-    writer.Key("water");
-    water_transmitters.json(writer, info);
-
-    writer.Key("lightning_uv");
-    lightning_uv_transmitters.json(writer, info);
-
-    writer.EndObject();
-}
-
-void wireless_read_transmitters(const rapidjson::Value &t)
-{
-    for (rapidjson::Value::ConstMemberIterator itr = t.MemberBegin(); itr != t.MemberEnd(); ++itr) {
-        std::string name = itr->name.GetString();
-        if(name == "wind")
-            wind_transmitters.read_settings(itr->value);
-        else if(name == "air")
-            air_transmitters.read_settings(itr->value);
-        else if(name == "water")
-            water_transmitters.read_settings(itr->value);
-        else if(name == "lightning_uv")
-            lightning_uv_transmitters.read_settings(itr->value);
-    }
-}
-
-void wireless_setting(const rapidjson::Document &d)
-{
-    for (rapidjson::Value::ConstMemberIterator itr = d.MemberBegin(); itr != d.MemberEnd(); ++itr) {
-        std::string name = itr->name.GetString();
-        uint64_t maci = mac_str_to_int(name);
-        wind_transmitters.setting(maci, itr->value);
-        air_transmitters.setting(maci, itr->value);
-        water_transmitters.setting(maci, itr->value);
-        lightning_uv_transmitters.setting(maci, itr->value);
-    }
-}
+#define TAG "wireless"
 
 // Global copy of chip
 esp_now_peer_info_t chip;
@@ -285,56 +78,168 @@ struct packet_channel_t {
     uint16_t crc16;
 } __attribute__((packed));
 
-void WiFiStationGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
-    std::string ip = WiFi.localIP().toString().c_str();
-    printf("WIFI got IP: %s\n", ip.c_str());
-    settings.channel = WiFi.channel();
+static void connect_handler(void* arg, esp_event_base_t event_base,
+                            int32_t event_id, void* event_data)
+{
+    printf("Wifi Connected\n");
 }
 
-static void setup_wifi() {
-    //printf("wifi mode %d\n", force_wifi_ap_mode);
-    if (force_wifi_ap_mode || settings.wifi_mode == WIFI_MODE_AP) {
-        //Set device in AP mode to begin with
-        WiFi.mode(WIFI_AP);
-        // configure device AP mode
-        if(settings.ap_ssid.empty() || settings.ap_ssid.length()>20)
-            settings.ap_ssid = "pypilot_mfd";
-        bool result = WiFi.softAP(settings.ap_ssid.c_str(), 0, settings.channel);
-        if (!result)
-            printf("AP Config failed.\n");
-        else
-            printf("AP Config Success. Broadcasting with AP: %s\n", settings.ap_ssid.c_str());
+bool wifi_connected;
 
-        printf("Soft-AP IP address = %s\n", WiFi.softAPIP().toString().c_str());
+esp_event_handler_instance_t instance;
+static void wifi_event_handler(void *arg,
+                               esp_event_base_t event_base,
+                               int32_t event_id,
+                               void *event_data)
+{
+    if (event_base == WIFI_EVENT) {
+        switch (event_id) {
+        case WIFI_EVENT_STA_START:
+            ESP_LOGI(TAG, "STA start, connecting...");
+            esp_wifi_connect();
+            break;
 
-        // This is the mac address of the Slave in AP Mode
-        printf("AP MAC: %s\n", WiFi.softAPmacAddress().c_str());
+        case WIFI_EVENT_STA_CONNECTED:
+            ESP_LOGI(TAG, "STA connected to AP");
+            wifi_connected = true;
+            break;
 
-    } else {
-        WiFi.mode(WIFI_STA);
-        if (settings.wifi_mode == WIFI_MODE_STA && !settings.client_ssid.empty()) {
-            WiFi.onEvent(WiFiStationGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
-            printf("connecting to SSID: %s  psk: %s\n", settings.client_ssid.c_str(), settings.client_psk.c_str());
+        case WIFI_EVENT_STA_DISCONNECTED:
+            ESP_LOGI(TAG, "STA disconnected, reconnecting...");
+            wifi_connected = false;
+            esp_wifi_connect();
+            break;
 
-            // setting a custom "country" locks the wifi in a particular channel
-            wifi_country_t myWiFi;
-            //Country code (cc) set to 'X','X','X' is the standard, apparently.
-            myWiFi.cc[0] = 'X';
-            myWiFi.cc[1] = 'X';
-            myWiFi.cc[2] = 'X';
-            myWiFi.schan = settings.channel;
-            myWiFi.nchan = 1;
-            myWiFi.policy = WIFI_COUNTRY_POLICY_MANUAL;
-
-            esp_wifi_set_country(&myWiFi);
-            printf("wifi begin %s\n", settings.client_ssid.c_str());
-            WiFi.begin(settings.client_ssid.c_str(), settings.client_psk.c_str());
-        } else
-            WiFi.disconnect();
-
-        signalk_discovered = 0;
-        pypilot_discovered = 0;
+        default:
+            break;
+        }
+    } else if (event_base == IP_EVENT) {
+        switch (event_id) {
+        case IP_EVENT_STA_GOT_IP: {
+            ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+            ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+            break;
+        }
+        default:
+            break;
+        }
     }
+}
+
+static bool wifi_initialized = false;
+
+static void wifi_global_init(void)
+{
+    if (wifi_initialized)
+        return;
+
+    ESP_ERROR_CHECK(esp_netif_init());
+
+    esp_err_t err = esp_event_loop_create_default();
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+        ESP_ERROR_CHECK(err);
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+
+    ESP_ERROR_CHECK(esp_event_handler_register(
+        WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL));
+
+    ESP_ERROR_CHECK(esp_event_handler_register(
+        IP_EVENT, IP_EVENT_STA_GOT_IP, connect_handler, NULL));
+
+    esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_ap();
+
+    wifi_initialized = true;
+}
+
+static void setup_wifi(void)
+{
+    wifi_global_init();
+
+#ifndef CONFIG_IDF_TARGET_ESP32S3
+    force_wifi_ap_mode = 1;
+#endif
+
+    ESP_ERROR_CHECK(esp_wifi_stop());
+
+    if (force_wifi_ap_mode || settings.wifi_mode == WIFI_MODE_AP) {
+        wifi_config_t ap_cfg = {
+            .ap = {
+#ifndef CONFIG_IDF_TARGET_ESP32S3
+                .ssid = "wind_receiver",
+#else
+                .ssid = settings.ap_ssid.c_str(),
+#endif
+                .password = "", // settings.ap_psk.c_str()  TODO: fix this after testing
+                .ssid_len = 0,
+                .channel = 1, // settings.wifi_channel  TODO: fix this after testing
+                .authmode = WIFI_AUTH_WPA2_PSK,
+                .ssid_hidden = 0,
+                .max_connection = 4,
+                .beacon_interval = 100,
+                .csa_count = 3,
+                .dtim_period = 1,
+                .pairwise_cipher = WIFI_CIPHER_TYPE_CCMP,
+                .ftm_responder = 0,
+                .pmf_cfg = {.capable = false, .required = false},
+                .sae_pwe_h2e = WPA3_SAE_PWE_UNSPECIFIED,
+                .transition_disable = 0,
+                .sae_ext = 0,
+                .bss_max_idle_cfg = {.period = 0, .protected_keep_alive = false},
+                .gtk_rekey_interval = 0
+            }
+        };
+
+        if (strlen((char *)ap_cfg.ap.password) == 0)
+            ap_cfg.ap.authmode = WIFI_AUTH_OPEN;
+
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
+        ESP_ERROR_CHECK(esp_wifi_start());
+    } else if (settings.wifi_mode == WIFI_MODE_STA && !settings.client_ssid.empty()) {
+        wifi_config_t sta_cfg = {};
+        strncpy((char *)sta_cfg.sta.ssid,
+                settings.client_ssid.c_str(),
+                sizeof(sta_cfg.sta.ssid) - 1);
+        strncpy((char *)sta_cfg.sta.password,
+                settings.client_psk.c_str(),
+                sizeof(sta_cfg.sta.password) - 1);
+
+        sta_cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+        sta_cfg.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+        sta_cfg.sta.threshold.authmode = WIFI_AUTH_OPEN;
+        sta_cfg.sta.channel = 0;
+
+        if (settings.wifi_channel > 0) {
+            sta_cfg.sta.channel = settings.wifi_channel;
+            sta_cfg.sta.scan_method = WIFI_FAST_SCAN;
+
+            wifi_country_t myWiFi = {
+                .cc = {'X', 'X', 'X'},
+                .schan = settings.wifi_channel,
+                .nchan = 1,
+                .max_tx_power = 0,
+                .policy = WIFI_COUNTRY_POLICY_MANUAL
+            };
+            ESP_ERROR_CHECK(esp_wifi_set_country(&myWiFi));
+        }
+
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_cfg));
+        ESP_ERROR_CHECK(esp_wifi_start());
+        ESP_ERROR_CHECK(esp_wifi_connect());
+    } else {
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_start());
+        esp_wifi_disconnect();
+    }
+
+    signalk_discovered = 0;
+    pypilot_discovered = 0;
 }
 
 static uint16_t crc16(const uint8_t *data_p, int length) {
@@ -349,34 +254,7 @@ static uint16_t crc16(const uint8_t *data_p, int length) {
     return crc;
 }
 
-float lpwind_dir = NAN, wind_knots = 0;
-
-void lowpass_direction(float dir) {
-    if (isnan(dir)) {
-        lpwind_dir = dir;
-        return;
-    }
-
-    float ldir = dir;
-    if (ldir > 360)
-        ldir -= 360;
-    // lowpass wind direction
-    if (lpwind_dir - ldir > 180)
-        ldir += 360;
-    else if (ldir - lpwind_dir > 180)
-        ldir -= 360;
-    //  printf("%x %f %f\n", packet->id, ldir, lpwind_dir);
-
-    const float lp = .2;
-    if (isnan(lpwind_dir))
-        lpwind_dir = dir;
-    else if (fabs(lpwind_dir - ldir) < 180)  // another test which should never fail
-        lpwind_dir = lp * ldir + (1 - lp) * lpwind_dir;
-
-    lpwind_dir = resolv(lpwind_dir);
-}
-
-static int message_count;
+int wireless_message_count;
 
 struct esp_now_data_t {
     uint8_t mac[6];
@@ -388,7 +266,6 @@ volatile uint8_t rb_start, rb_end;
 volatile SemaphoreHandle_t esp_now_sem;
 
 static void DataRecvWind(struct esp_now_data_t &data) {
-    uint32_t t0 = millis();
     if (data.len != sizeof(wind_packet_t)) {
         printf("received invalid wind packet %d\n", data.len);
         return;
@@ -402,7 +279,7 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     }
 
     float dir;
-    if (packet->angle == 0xffff)
+    if (packet->angle == 0xffff || packet->angle > 16384)
         dir = NAN;  // invalid
     else
         dir = 360 - packet->angle * 360.0f / 16384.0f;
@@ -414,72 +291,35 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     } else
         wind_knots = 0;
 
+    float accel_x = packet->accelx * 4.0f / 16384 * 9.8f * 1.944f;
+    float accel_y = packet->accely * 4.0f / 16384 * 9.8f * 1.944f;
     if (settings.compensate_wind_with_accelerometer && dir >= 0) {
-        unsigned long t = millis();
+        uint64_t t = esp_timer_get_time();
         static int lastt;
-        float dt = (t - lastt) / 1000.0;
+        float dt = (t - lastt) / 1e6;
         lastt = t;
 
-        // TODO: combine inertial sensors from autopilot somehow
-        float accel_x = packet->accelx * 4.0f / 16384 * 9.8f * 1.944f;
-        float accel_y = packet->accely * 4.0f / 16384 * 9.8f * 1.944f;
-
+        // TODO: combine inertial sensors from autopilot somehow?
         static float vx, vy;
         vx += accel_x * dt;
         vy += accel_y * dt;
 
         vx *= .9;  // decay
 
-        float wvx = wind_knots * cos(radians(dir));
-        float wvy = wind_knots * sin(radians(dir));
+        float wvx = wind_knots * cos(deg2rad(dir));
+        float wvy = wind_knots * sin(deg2rad(dir));
 
         wvx -= vx;
         wvy -= vy;
 
         wind_knots = hypotf(wvx, wvy);
-        dir = degrees(atan2f(wvx, wvy));
+        dir = rad2deg(atan2f(wvx, wvy));
         if (dir < 0)
             dir += 360;
     }
 
-    uint32_t t1 = millis();
-    bool primary;
-    wind_transmitter_t &wt = wind_transmitters.update(data.mac, primary, dir);
-    wt.dir = resolv(dir + wt.offset);
-    wt.knots = wind_knots;
-
-    if (!primary) // this is not the primary sensor so we are done
-        return;
-    uint32_t t2 = millis();
-
-    lowpass_direction(wt.dir);
-
-    char buf[128];
-    if (!isnan(lpwind_dir))
-        snprintf(buf, sizeof buf, PSTR("MWV,%d.%02d,R,%d.%02d,N,A"), (int)lpwind_dir, (uint16_t)(lpwind_dir * 100.0f) % 100U, (int)wind_knots, (int)(wind_knots * 100) % 100);
-    else  // invalid wind direction (no magnet?)
-        snprintf(buf, sizeof buf, PSTR("MWV,,R,%d.%02d,N,A"), (int)wind_knots, (int)(wind_knots * 100) % 100);
-
-    nmea_send(buf);
-
-    message_count++;
-//    printf("lpwind_dir %f\n", lpwind_dir);
-    uint32_t t3 = millis();
-
-    if (settings.output_signalk) {
-        if (!isnan(lpwind_dir))
-            signalk_send("environment.wind.angleApparent", M_PI / 180.0f * lpwind_dir);
-        signalk_send("environment.wind.speedApparent", wind_knots * .514444f);
-    }
-
-    //printf("WIND DATA %f %f\n", wind_knots, lpwind_dir);
-
-    display_data_update(WIND_SPEED, wind_knots, ESP_DATA);
-    if (!isnan(lpwind_dir))
-        display_data_update(WIND_ANGLE, lpwind_dir, ESP_DATA);
-    uint32_t t4 = millis();
-
-//    printf("recv wind %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
+    //    uint32_t t1 = millis();
+    sensors_wind_update(data.mac, dir, wind_knots, accel_x, accel_y);
 }
 
 
@@ -494,36 +334,7 @@ static void DataRecvAir(struct esp_now_data_t &data) {
         return;
     }
 
-    bool primary;
-    air_transmitter_t &wt = air_transmitters.update(data.mac, primary);
-    wt.pressure = 1.0f + packet->pressure * .00001f;
-    wt.rel_humidity = packet->rel_humidity * .01f;
-    wt.temperature = packet->temperature * .01f;
-    wt.air_quality = packet->air_quality * .01f;
-    wt.battery_voltage = packet->battery_voltage * .01f;
-
-    if (!primary)
-        return;
-
-    char buf[128];
-    snprintf(buf, sizeof buf, "MDA,,,%.5f,B,,,,,%.2f,,,,,,,,,,,", wt.pressure, wt.rel_humidity);
-    nmea_send(buf);
-
-    snprintf(buf, sizeof buf, "MTA,%.2f,C", wt.temperature);
-    nmea_send(buf);
-
-    if (settings.output_signalk) {
-        signalk_send("environment.outside.pressure", wt.pressure * 100000);
-        signalk_send("environment.outside.relativeHumidity", wt.rel_humidity / 100);
-        signalk_send("environment.outside.temperature", wt.temperature);
-        signalk_send("electrical.batteries.house.voltage", wt.battery_voltage);
-    }
-
-    display_data_update(BAROMETRIC_PRESSURE, wt.pressure, ESP_DATA);
-    display_data_update(RELATIVE_HUMIDITY, wt.rel_humidity, ESP_DATA);
-    display_data_update(AIR_TEMPERATURE, wt.temperature, ESP_DATA);
-    display_data_update(AIR_QUALITY, wt.air_quality, ESP_DATA);
-    display_data_update(BATTERY_VOLTAGE, wt.battery_voltage, ESP_DATA);
+    sensors_air_update(data.mac, 1.0f + packet->pressure * .00001f, packet->rel_humidity * .01f, packet->temperature * .01f, packet->air_quality * .01f, packet->battery_voltage * .01f);
 }
 
 static void DataRecvWater(struct esp_now_data_t &data) {
@@ -537,34 +348,7 @@ static void DataRecvWater(struct esp_now_data_t &data) {
         return;
     }
 
-    bool primary;
-    water_transmitter_t &wt = water_transmitters.update(data.mac, primary);
-    wt.speed = packet->speed * .01f;
-    wt.depth = packet->depth * .01f;
-    wt.temperature = packet->temperature * .01f;
-
-    if (!primary)
-        return;
-
-    char buf[128];
-    snprintf(buf, sizeof buf, "VHW,,,,,%.2f,N,,", wt.speed);
-    nmea_send(buf);
-
-    snprintf(buf, sizeof buf, "DBT,,,%.5f,M,,", wt.depth);
-    nmea_send(buf);
-
-    snprintf(buf, sizeof buf, "MTW,%.2f,C", wt.temperature);
-    nmea_send(buf);
-
-    if (settings.output_signalk) {
-        signalk_send("navigation.speedThroughWater", wt.speed);
-        signalk_send("environment.depth.belowSurface", wt.depth);
-        signalk_send("environment.water.temperature", wt.temperature);
-    }
-
-    display_data_update(WATER_SPEED, wt.speed, ESP_DATA);
-    display_data_update(WATER_TEMPERATURE, wt.temperature, ESP_DATA);
-    display_data_update(DEPTH, wt.depth, ESP_DATA);
+    sensors_water_update(data.mac, packet->speed * .01f, packet->depth * .01f, packet->temperature * .01f);
 }
 
 static void DataRecvLightningUV(struct esp_now_data_t &data) {
@@ -578,26 +362,20 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
         return;
     }
 
-    bool primary;
-    lightning_uv_transmitter_t &wt = lightning_uv_transmitters.update(data.mac, primary);
-    wt.distance = packet->distance * .01f;
-
-    lightning_distance = wt.distance;
-
-    if (!primary)
-        return;
+    lightning_distance = packet->distance * .01f;
+    sensors_lightning_update(data.mac, lightning_distance);
 
     // no nmea or signalk to send
 
     //display_data_update(LIGHTNING_DISTANCE, wt.distance, ESP_DATA);
-    printf("LIGHTNING!!! %f", wt.distance);
+    printf("LIGHTNING!!! %f", lightning_distance);
 }
 
 // callback when data is recv from Master
 // This function is run from the wifi thread, so post to a queue
 void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
     uint8_t *mac_addr = recv_info->src_addr;
-#if 1
+#if 0
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
@@ -625,7 +403,7 @@ static void InitESPNow() {
     memset(&chip, 0, sizeof(chip));
     for (int ii = 0; ii < 6; ++ii)
         chip.peer_addr[ii] = (uint8_t)0xff;
-    chip.channel = settings.channel;
+    chip.channel = settings.wifi_channel;
     if (chip.channel > 12)
         chip.channel = 1;
 
@@ -636,7 +414,8 @@ static void InitESPNow() {
         printf("ESPNow Init Success\n");
     } else {
         printf("ESPNow Init Failed\n");
-        ESP.restart();  // restart cpu on failure
+        //ESP.restart();  // restart cpu on failure
+        return;
     }
 
     // Once ESPNow is successfully Init, we will register for recv CB to
@@ -653,7 +432,7 @@ static void InitESPNow() {
 
 static void receive_esp_now() {
     //printf("receive_esp_now %d %d\n", rb_start, rb_end);
-    uint32_t t0 = millis();
+    uint64_t t0 = esp_timer_get_time();
     while (rb_start != rb_end) {
         if (xSemaphoreTake(esp_now_sem, (TickType_t)10) != pdTRUE)
             return;
@@ -666,6 +445,8 @@ static void receive_esp_now() {
             continue;
         }
 
+        wireless_message_count++;
+
         uint16_t id = *(uint16_t *)first.data;
         switch (id) {
         case WIND_ID: DataRecvWind(first); break;
@@ -676,7 +457,7 @@ static void receive_esp_now() {
             printf("espnow packet ID mismatch %x\n", id);
         }
 
-        if(millis() - t0 > 20) { // taking too long
+        if(esp_timer_get_time() - t0 > 20e6) { // taking too long
             printf("espnow receive failed to keep up\n");
             rb_end = rb_start;
             break;
@@ -687,7 +468,7 @@ static void receive_esp_now() {
 void sendChannel() {
     packet_channel_t packet;
     packet.id = CHANNEL_ID;
-    packet.channel = settings.channel;
+    packet.channel = settings.wifi_channel;
     // compute checksum
     packet.crc16 = crc16((uint8_t *)&packet, sizeof(packet) - 2);
 
@@ -701,36 +482,28 @@ void sendChannel() {
 
 static std::map<std::string, int> wifi_networks;
 std::string wifi_networks_html;
-static uint32_t scanning = 0;
+//static uint64_t scanning = 0;
 void wireless_scan_networks() {
+    printf("scanning not implemented\n");
+    /*
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     int32_t n = WiFi.scanNetworks(true);
     n++; // avoid warning unused
-    scanning = millis();
+    scanning = esp_timer_get_time();
     if (!scanning) scanning++;
     // display on screen scanning for wifi networks progress
+    */
 }
 
 void wireless_poll() {
-    uint32_t t0 = millis();
-    static uint32_t tl;
-    if (t0 - tl > 60000) {  // report statistics every 60 seconds
-//        char buf[32*40];
-//        vTaskGetRunTimeStats(buf);
-//        printf("%s", buf);
-        
-        printf("pypilot_mfd %ld %ld %ld %d\n", t0 / 1000, ESP.getFreeHeap(), ESP.getHeapSize(), message_count);
-        tl = t0;
-        message_count = 0;
-    }
-
     receive_esp_now();
 
+#if 0
     if(!scanning)
         return;
-    uint32_t t = millis();
-    if (t - scanning < 5000)
+    uint64_t t = esp_timer_get_time();
+    if (t - scanning < 5e6)
         return;
     scanning = 0;
     int n = WiFi.scanComplete();
@@ -751,9 +524,11 @@ void wireless_poll() {
     }
     WiFi.scanDelete();
     setup_wifi();
+#endif
 }
 
-void wireless_scan_devices() {
+void wireless_program_channel() {
+#if 0
     for (int c = 0; c <= 12; c++) {
         esp_now_deinit();
         WiFi.mode(WIFI_OFF);
@@ -779,12 +554,13 @@ void wireless_scan_devices() {
 
     setup_wifi();
     InitESPNow();
+#endif
 }
 
 void wireless_toggle_mode() {
-    uint32_t t0 = millis();
+    uint64_t t0 = esp_timer_get_time();
     static int last_wifi_toggle_time;
-    if (t0 - last_wifi_toggle_time > 2000) {
+    if (t0 - last_wifi_toggle_time > 2e6) {
         force_wifi_ap_mode = !force_wifi_ap_mode;
         last_wifi_toggle_time = t0;
         setup_wifi();
@@ -799,14 +575,4 @@ void wireless_setup() {
 
     setup_wifi();
     InitESPNow();
-}
-
-std::string wireless_json_sensors()
-{
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    writer.SetMaxDecimalPlaces(2);
-
-    wireless_write_transmitters(writer, true);
-    return buffer.GetString();
 }

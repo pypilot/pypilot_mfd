@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <string>
+
+#include <nvs_flash.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -48,6 +50,7 @@ extern "C" void app_main(void)
                 gpio_set_pull_mode(GPIO_NUM_4, GPIO_FLOATING);
 #endif
 
+    ESP_ERROR_CHECK(nvs_flash_init());
     initArduino();
  
     // Arduino-like setup()
@@ -163,6 +166,7 @@ extern "C" void app_main(void)
 
         display_poll();
         history_poll();
+
         // sleep remainder of second
 
 //        vTaskDelay(1);

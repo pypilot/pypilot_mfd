@@ -10,7 +10,6 @@
 
 #include <Update.h>
 #include <ESPAsyncWebServer.h>
-#include <SPIFFS.h>
 
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
@@ -41,6 +40,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
         rapidjson::Document input;
         input.Parse((char*)data);
 
+        void wireless_setting(const rapidjson::Document &d);
         wireless_setting(input);
     }
 }
@@ -249,7 +249,6 @@ String processor_alarms_helper(const String &c)
     return processor_alarms(c.c_str()).c_str();
 }
 
-
 static ArRequestHandlerFunction getRequest(const char *path, AwsTemplateProcessor processor=nullptr)
 {
     return [path, processor](AsyncWebServerRequest *request) {
@@ -364,8 +363,6 @@ void web_setup()
         settings_store();
     });
 
-//    server.on("/alarms.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-//        request->send(SPIFFS, "/alarms.html", String(), 0, processor_alarms_helper);
     server.on("/alarms.html", HTTP_GET, getRequest("alarms.html", processor_alarms_helper));
 
     server.on("/network", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -651,6 +648,7 @@ void web_poll()
     static uint32_t last_client_update;
     if(t - last_client_update < 2000)
         return;
+
     last_client_update = t;
 
     if(ws.count())

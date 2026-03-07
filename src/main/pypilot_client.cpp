@@ -15,8 +15,8 @@
 
 #include "zeroconf.h"
 #include "pypilot_client.h"
-#include "display.h"
 #include "settings.h"
+#include "display.h"
 #include "utils.h"
 
 #include <map>

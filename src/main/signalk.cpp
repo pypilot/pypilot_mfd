@@ -6,6 +6,8 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <map>
+
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
@@ -19,10 +21,10 @@
 #include "esp_transport_ws.h"
 
 #include "signalk.h"
+#include "settings.h"
 #include "display.h"
 #include "zeroconf.h"
 #include "utils.h"
-#include "settings.h"
 #include "history.h"
 
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
@@ -330,11 +332,12 @@ static void request_access()
 std::string websocket_buffer;
 static void websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
-    esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
     switch (event_id) {
     case WEBSOCKET_EVENT_CONNECTED:
         printf("WEBSOCKET_EVENT_CONNECTED\n");
+#ifdef CONFIG_IDF_TARGET_ESP32S3
         signalk_subscribe();
+#endif
         break;
     case WEBSOCKET_EVENT_DISCONNECTED:
         printf("WEBSOCKET_EVENT_DISCONNECTED\n");
@@ -344,6 +347,8 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
     {
         if(!settings.input_signalk)
             break;
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+        esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
         /*
         println("WEBSOCKET_EVENT_DATA");
         printf("Received opcode=%d", data->op_code);
@@ -369,6 +374,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
             websocket_buffer = "";
         else if((websocket_buffer.length() == 0) == (d[0] == '{'))
             websocket_buffer += d;
+#endif
     } break;
     case WEBSOCKET_EVENT_ERROR:
         printf("WEBSOCKET_EVENT_ERROR");
