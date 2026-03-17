@@ -8,3 +8,5 @@
 
 void web_setup();
 void web_poll();
+void web_update_wifi_networks();
+void web_scan_complete(void *p, int count);

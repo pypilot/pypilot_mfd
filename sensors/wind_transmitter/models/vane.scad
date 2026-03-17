@@ -1,6 +1,6 @@
-$fn=60;
+$fn=120;
 
- use <naca4.scad>
+use <naca4.scad>
 
 magnet_size = 25.4/2+.5;
 magnet_h = 25.4/8+.2;
@@ -18,7 +18,7 @@ module body() {
     	     sphere(r=bearing_d/2+2);
              cylinder(h=bearing_h+pcb_h+5.6, r1=bearing_d/2+2, r2=bearing_d/2+3);
           translate([0, 0, bearing_h+4])
-          minkowski() {
+       #  minkowski() {
               sphere(1.2);
             cylinder(h=pcb_h+1.2, r1=bearing_d/2+2.4, r2=bearing_d/2+2.4);
           }

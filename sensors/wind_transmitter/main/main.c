@@ -15,10 +15,6 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_sleep.h"
-#include <esp_now.h>
-#include <esp_wifi.h>
-#include "nvs_flash.h"
-#include "nvs.h"
 #include "esp_timer.h"
 
 #include "driver/spi_master.h"
@@ -26,31 +22,28 @@
 #include "soc/gpio_struct.h"
 #include "soc/gpio_reg.h"
 
+#include "../../common/web.h"
+#include "../../common/settings.h"
+#include "../../common/wireless.h"
+#include "../../common/lis2dw.h"
+#include "../../common/dhcp.h"
+
 const gpio_num_t interruptPin = GPIO_NUM_34;
 
 // data in packet
-//#define I2C_MASTER  // nonblocking i2c, can read accel while booting wifi should save 1ms per loop (slightly less power??)
 //#define LOW_POWER   // power down wireless while not working (save a lot of power?)
-#define DEBUG
+//#define DEBUG
 
-// Global copy of chip
-esp_now_peer_info_t chip;
-
-#define ID 0xf179
-#define LIS2DW_ADDRESS0 0x18
-#define LIS2DW_ADDRESS1 0x19
-
-struct packet_t {
+#define ID 0xB179
+typedef struct __attribute__((packed)) {
     uint16_t id;             // packet identifier
     uint16_t angle;          // angle in 14 bits (or 0xffff for invalid)
     uint16_t period;         // time of rotation of cups in units of 100uS
-    int16_t accelx, accely;  // acceleration in 4g range
-    uint16_t crc16;   // not strictly required but extra check to ensure correct application
-} __attribute__((packed));
+    int16_t accelx, accely, accelz;  // acceleration in 4g range
+} packet_t;
 
 volatile packet_t packet;
 
-#include "../../common/common.h"
 spi_device_handle_t spi;
 uint16_t spi_transfer16(uint16_t d)
 {
@@ -94,7 +87,6 @@ void IRAM_ATTR isr_anemometer_count(void *)
     }
 }
 
-#define LIS2DW12_CTRL 0x1F   // CTRL1 is CTRL+1
 bool parityCheck(uint16_t data)
 {
     data ^= data >> 8;
@@ -135,17 +127,12 @@ static void mt6816_init()
     SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE3));
 #endif
 
-#if 1
     gpio_config_t cs_cfg = {
         .pin_bit_mask = (1ULL<<MT6816_CS),
         .mode = GPIO_MODE_OUTPUT,
     };
     gpio_config(&cs_cfg);
     gpio_set_level(MT6816_CS, 1);
-#else    
-    pinMode(MT6816_CS, OUTPUT);
-    digitalWrite(MT6816_CS, HIGH);
-#endif
 }
 
 void mt6816_read()
@@ -164,18 +151,17 @@ void mt6816_read()
 #endif
         parity_failures++;
         if(parity_failures > 5)
-            abort();
+            packet.angle = 0x8000;
         return;
     }
 
     if (angle & 0x2)
         packet.angle = 0xffff;
     else
-        packet.angle = angle >> 2;
+        packet.angle = angle >> 1; // store angle using 15 bits, high bit indicates error
 }
 
 void speed_init() {
-#if 1
     gpio_config_t cs_cfg = {
         .pin_bit_mask = (1ULL<<interruptPin),
         .mode = GPIO_MODE_INPUT,
@@ -188,10 +174,6 @@ void speed_init() {
     gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3 | ESP_INTR_FLAG_IRAM);
     gpio_isr_handler_add(interruptPin, isr_anemometer_count, (void*)interruptPin);
     //gpio_isr_register(isr_anemometer_count, 0, ESP_INTR_FLAG_LEVEL3, 0);
-#else
-    pinMode(interruptPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(interruptPin), isr_anemometer_count, RISING);
-#endif
 }
 
 void convert_speed()
@@ -224,103 +206,13 @@ void convert_speed()
 }
 
 
-// Global handles needed for transactions
-#ifdef I2C_MASTER
-uint8_t i2c_data[6] = { 0 };
-
-i2c_master_dev_handle_t lis2dw12_0, lis2dw12_1;
-i2c_master_dev_handle_t lis2dw12_addr = NULL;
-// Callback that runs when a non-blocking transfer finishes
-bool IRAM_ATTR i2c_finish_callback(i2c_master_dev_handle_t dev_hd, 
-                                          const i2c_master_event_data_t *event_data, 
-                                          void *arg) {
-    if(event_data->event == I2C_EVENT_DONE) {
-        packet.accelx = (i2c_data[3] << 8) | i2c_data[2];
-        packet.accely = (i2c_data[5] << 8) | i2c_data[4];
-    }
-    return false; 
-}
-#else
-static uint8_t lis2dw12_addr;
-#endif
-
-static void lis2dw12_init()
-{
-    i2c_setup();
-#ifdef I2C_MASTER
-    i2c_add_device(&lis2dw12_0, LIS2DW_ADDRESS0);
-    i2c_add_device(&lis2dw12_1, LIS2DW_ADDRESS1);
-#else
-    uint8_t lis2dw12_0 = LIS2DW_ADDRESS0;
-    uint8_t lis2dw12_1 = LIS2DW_ADDRESS1;
-#endif
-    uint8_t whoami[1] = {0};
-    i2c_read(lis2dw12_0, 0x0F, whoami, 1);
-    if(whoami[0] == 0x44)
-        lis2dw12_addr = lis2dw12_0;
-    else {
-        i2c_read(lis2dw12_1, 0x0F, whoami, 1);
-        if(whoami[0] == 0x44)
-            lis2dw12_addr = lis2dw12_1;
-        else {
-            lis2dw12_addr = 0;
-            return;
-        }
-    }
-
-    i2c_write_byte(lis2dw12_addr, LIS2DW12_CTRL + 1, 0x46);
-    i2c_write_byte(lis2dw12_addr, LIS2DW12_CTRL + 6, 0x10);
-    i2c_write_byte(lis2dw12_addr, LIS2DW12_CTRL + 2, 0x08 | 0x04);
-}
-
-void lis2dw12_read()
-{
-    // every 100 reads, read whoami again to make sure the device is working
-    static int reads;
-    if(++reads >= 100) {
-        uint8_t whoami[1] = {0};
-        i2c_read(lis2dw12_addr, 0x0F, whoami, 1);
-        if(whoami[0] != 0x44)
-            lis2dw12_init();            
-
-        reads = 0;
-    }
-    
-    packet.accelx = 0;
-    packet.accely = 0;
-    if(!lis2dw12_addr)
-        return;
-    
-    uint8_t reg_addr = 0x28+2;
-#ifdef I2C_MASTER
-    // nonblocking,  isr will update
-    i2c_master_transmit_receive(lis2dw12_addr, &reg_addr, 1, i2c_data, 6-2, -1); 
-#else
-    uint8_t data[6];
-    i2c_read(lis2dw12_addr, reg_addr, data+2, 6-2);
-    packet.accelx = (data[3] << 8) | data[2];
-    packet.accely = (data[5] << 8) | data[4];
-#endif
-}
-
 void setup(void)
 {
     //Set device in STA mode to begin with
 #ifdef DEBUG
     printf("Wind Transmitter\n");
 #endif  
-    memset(&chip, 0, sizeof(chip));
-    for (int ii = 0; ii < 6; ++ii)
-        chip.peer_addr[ii] = (uint8_t)0xff;
-
-    read_channel();
-    if(chip.channel != 1 && chip.channel != 11)
-        chip.channel = 6;
-
-    chip.channel=1;
-
-    //chip.ifidx = ESPNOW_WIFI_IF;  ???
-    chip.encrypt = 0;        // no encryption
+    read_settings();
 
     packet.id = ID;  // initialize packet ID
 
@@ -332,8 +224,9 @@ void setup(void)
     lis2dw12_init();
 
     wifi_init();
-    espnow_init();
     esp_log_level_set("wifi", ESP_LOG_NONE);
+
+    dhcp_set_captiveportal_url();
 
 #ifdef DEBUG
     printf("setup complete\n");
@@ -343,30 +236,46 @@ void setup(void)
 void loop()
 {
     static uint64_t t0 = 0;
-    lis2dw12_read();
+
+    int16_t x, y, z;
+    lis2dw12_read(&x, &y, &z);
+    packet.accelx = x;
+    packet.accely = y;
+    packet.accelz = z;
+
+    // enable access point if inverted long enough
+    static int inverted_count;
+    if(z < -6000)
+        if(inverted_count > 3*output_rate) // 3 seconds
+            enable_ap(0);
+        else
+            inverted_count++;
+    else
+        inverted_count = 0;
+    enable_ap_poll();
+
 #ifdef LOW_POWER
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // or WIFI_MODE_APSTA if needed
     ESP_ERROR_CHECK(esp_wifi_start());
 #endif
     uint64_t t1 = esp_timer_get_time();        
-    mt6816_read();
-    uint64_t t2 = esp_timer_get_time();        
     convert_speed();
+    uint64_t t2 = esp_timer_get_time();        
+    mt6816_read();
     uint64_t t3 = esp_timer_get_time();
 
-#if 0    
-    static int xa, xp = 1000;
-    packet.angle = xa+=10;
-    packet.period = xp+=5;
-    if(xa >= 16384)
-        xa = 0;
-    if(xp >= 20000)
-        xp = 500;
-#endif    
-    sendData();
+    sendData((uint8_t*)&packet, sizeof packet);
 
-    uint64_t t4 = esp_timer_get_time();        
+    uint64_t t4 = esp_timer_get_time();
 
+    if(wireless_ap_enabled) {
+        char msg[128];
+        snprintf(msg, sizeof msg,
+                 "{\"angle\":%d,\"period\":%d,\"accel\":"
+                 "{\"x\":%d,\"y\":%d,\"z\":%d}}",
+                 packet.angle, packet.period, packet.accelx, packet.accely, packet.accelz);
+        web_broadcast(msg);
+    }
     
     // Prepare for sleep
     vTaskDelay(5); //Short delay to finish transmit before esp_now_deinit()
@@ -376,7 +285,7 @@ void loop()
 #ifdef LOW_POWER
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL)); // effectively "Wi-Fi off"
 #endif
-    int period = 100;
+    int period = 1000 / output_rate;
     for(;;) {
         uint64_t tx = esp_timer_get_time();        
         uint64_t d = (tx - t0) / 1000;
@@ -397,16 +306,19 @@ void loop()
 #endif
    //     printf("sleep time %d %d\n", d,  millis()-tx);
     }
-    t0 = esp_timer_get_time();
 
 #ifdef DEBUG // for debugging
-    float angle = (packet.angle == 0xffff) ? NAN : packet.angle * 360.0 / 16384;
-    printf("result: %.02f %.02f %d %.02f %llu %llu %llu %llu\n", packet.accelx * 4.0 / 32768, packet.accely * 4.0 / 32768, packet.period, angle, t1 - t0, t2-t1,t3-t2,t4-t3);
+    float angle = (packet.angle == 0xffff) ? NAN : packet.angle * 360.0 / 32768;
+    printf("result: %.02f %.02f %d %.02f %llu %llu %llu %llu\n",
+           packet.accelx * 4.0 / 32768, packet.accely * 4.0 / 32768,
+           packet.period, angle, t1 - t0, t2-t1, t3-t2, t4-t3);
     //printf("result %.02f %d\n", angle, gpio_get_level(GPIO_NUM_34));
 #endif
+
+    t0 = esp_timer_get_time();
 }
 
-extern "C" void app_main(void)
+void app_main(void)
 {
     setup();
     for(;;)

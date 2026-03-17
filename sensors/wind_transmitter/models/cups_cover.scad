@@ -1,4 +1,7 @@
-$fn = 60;
+$fn = 240;
+
+
+key_r=.9;
 
 rod_d = 8;
 
@@ -13,7 +16,11 @@ difference() {
             cube([40, 40, 20]);
     }
     translate([0,0,-1])
-cylinder(r=rod_d/2, h = 16);
+        cylinder(r=rod_d/2, h = 16);
     translate([0,0,-.1])
-    cylinder(r=15, h=2);
+        cylinder(r=15, h=2);
+    
+   translate([0,0,6])
+       rotate([0,90,0])
+          cylinder(r=key_r, h=302);
 }

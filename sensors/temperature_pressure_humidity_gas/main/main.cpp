@@ -142,8 +142,6 @@ extern "C" void app_main(void)
     //Set device in STA mode to begin with
     printf("BME680 Transmitter!\n");
   
-    read_channel();
-
     packet.id = ID;  // initialize packet ID
 
     init_adc();
@@ -154,7 +152,6 @@ extern "C" void app_main(void)
 
     // printf("loop\n");
     wifi_init();
-    espnow_init();
     
     bme680_read();
 
@@ -191,7 +188,6 @@ extern "C" void app_main(void)
     }
     ESP_ERROR_CHECK(adc_continuous_stop(adc_handle));
     ESP_ERROR_CHECK(adc_continuous_deinit(adc_handle));
-
 
     val2v5 = values[0] / counts[0];
     val1v24 = values[1] / counts[1];

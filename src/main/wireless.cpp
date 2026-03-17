@@ -22,23 +22,36 @@
 #include "zeroconf.h"
 #include "sensors.h"
 #include "utils.h"
+#include "web.h"
 
 #define TAG "wireless"
 
-// Global copy of chip
-esp_now_peer_info_t chip;
+static void setup_wifi(void);
+
+bool wifi_connected;
+int wireless_message_count;
 
 #define MAX_DATA_LEN 16
+struct esp_now_data_t {
+    uint8_t mac[6];
+    int len;
+    uint8_t data[MAX_DATA_LEN];
+} esp_now_rb[256];
+
+volatile uint8_t rb_start, rb_end;
+volatile SemaphoreHandle_t esp_now_sem;
+
+// Global copy of chip
+static esp_now_peer_info_t chip;
 
 // crc is not really needed with espnow, however it adds a layer of protection against code changes
-#define WIND_ID 0xf179
+#define WIND_ID 0xB179
 
 struct wind_packet_t {
     uint16_t id;
     uint16_t angle;
     uint16_t period;  // period of cups rotation in 100uS
-    uint16_t accelx, accely;
-    uint16_t crc16;
+    int16_t accelx, accely, accelz;
 } __attribute__((packed));
 
 #define AIR_ID 0xa41b
@@ -50,7 +63,6 @@ struct air_packet_t {
     uint16_t air_quality;   // in 100th %
     uint16_t reserved;
     uint16_t battery_voltage; // in 100th of volts
-    uint16_t crc16;
 } __attribute__((packed));
 
 #define WATER_ID 0xc946
@@ -59,7 +71,6 @@ struct water_packet_t {
     uint16_t speed;        // in 100th knot
     uint16_t depth;        // in 100th meter
     uint16_t temperature;  // in 100th/deg C
-    uint16_t crc16;
 } __attribute__((packed));
 
 #define LIGHTNING_UV_ID 0xd255
@@ -68,25 +79,78 @@ struct lightning_uv_packet_t {
     uint16_t distance;
     uint16_t uva, uvb, uvc;
     uint16_t visible;
-    uint16_t crc16;
 } __attribute__((packed));
 
-#define CHANNEL_ID 0x0a21
-struct packet_channel_t {
-    uint16_t id;  // packet identifier
-    uint16_t channel;
-    uint16_t crc16;
-} __attribute__((packed));
+#define UNLOCK_ID 0x1B21
+struct packet_unlock_t {
+    uint16_t id;             // packet identifier
+};
+
+// callback when data is recv from Master
+// This function is run from the wifi thread, so post to a queue
+static void on_espnow_data(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
+    uint8_t *mac_addr = recv_info->src_addr;
+#if 0
+    char macStrt[18];
+    snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
+             mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+    // printf("Last Packet Recv from: %s %d\n", macStrt, data_len);
+    //print(" Last Packet Recv Data: "); print(*data);
+
+#endif
+    if (data_len > MAX_DATA_LEN)
+        return;
+
+    if (xSemaphoreTake(esp_now_sem, (TickType_t)1) == pdTRUE) {
+        esp_now_data_t &pos = esp_now_rb[rb_start];
+        memcpy(pos.mac, mac_addr, 6);
+        pos.len = data_len;
+        memcpy(pos.data, data, data_len);
+        xSemaphoreGive(esp_now_sem);
+        rb_start+=1;
+    } else
+        ESP_LOGW(TAG, "unable to get esp now semaphore");
+}
+
+// Init ESP Now with fallback
+static void InitESPNow(int channel) {
+    ESP_LOGI(TAG, "InitESPNow %d", channel);
+    memset(&chip, 0, sizeof(chip));
+    for (int ii = 0; ii < 6; ++ii)
+        chip.peer_addr[ii] = (uint8_t)0xff;
+    chip.channel = channel;
+    if (chip.channel > 12)
+        chip.channel = 1;
+
+    chip.encrypt = 0;
+
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+    if (esp_now_init() == ESP_OK) {
+        ESP_LOGI(TAG, "ESPNow Init Success");
+    } else {
+        ESP_LOGE(TAG, "ESPNow Init Failed");
+        abort();  // restart cpu on failure
+        return;
+    }
+
+    // Once ESPNow is successfully Init, we will register for recv CB to
+    // get recv packer info.
+    esp_now_register_recv_cb(on_espnow_data);
+
+    // chip not paired, attempt pair
+    esp_err_t addStatus = esp_now_add_peer(&chip);
+    if (addStatus != ESP_OK) {
+        ESP_LOGE(TAG, "ESP-NOW pair fail: %d", addStatus);
+        return;
+    }
+}
 
 static void connect_handler(void* arg, esp_event_base_t event_base,
                             int32_t event_id, void* event_data)
 {
-    printf("Wifi Connected\n");
+    ESP_LOGI(TAG, "Wifi Connected");
 }
 
-bool wifi_connected;
-
-esp_event_handler_instance_t instance;
 static void wifi_event_handler(void *arg,
                                esp_event_base_t event_base,
                                int32_t event_id,
@@ -110,6 +174,22 @@ static void wifi_event_handler(void *arg,
             esp_wifi_connect();
             break;
 
+        case WIFI_EVENT_SCAN_DONE: {
+            uint16_t count = 0;
+            esp_wifi_scan_get_ap_num(&count);
+            ESP_LOGI(TAG, "Scanning found %d networks", count);
+
+            if(count > 32) {
+                ESP_LOGI(TAG, "Found more than 32 networks, using only 32");
+                count = 32;
+            }
+            wifi_ap_record_t recs[count];
+            if (esp_wifi_scan_get_ap_records(&count, recs) == ESP_OK) {
+                web_scan_complete(recs, count);
+                setup_wifi();
+                web_update_wifi_networks();
+            }
+        } break;
         default:
             break;
         }
@@ -126,10 +206,9 @@ static void wifi_event_handler(void *arg,
     }
 }
 
-static bool wifi_initialized = false;
-
 static void wifi_global_init(void)
 {
+    static bool wifi_initialized = false;
     if (wifi_initialized)
         return;
 
@@ -164,6 +243,7 @@ static void setup_wifi(void)
     force_wifi_ap_mode = 1;
 #endif
 
+    ESP_ERROR_CHECK(esp_now_deinit());
     ESP_ERROR_CHECK(esp_wifi_stop());
 
     if (force_wifi_ap_mode || settings.wifi_mode == WIFI_MODE_AP) {
@@ -238,10 +318,31 @@ static void setup_wifi(void)
         esp_wifi_disconnect();
     }
 
+    InitESPNow(settings.wifi_channel);
+
     signalk_discovered = 0;
     pypilot_discovered = 0;
 }
 
+void wireless_scan_networks()
+{    
+    ESP_ERROR_CHECK(esp_now_deinit());
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    //ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_cfg));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    
+    wifi_scan_config_t cfg{};
+    cfg.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+    cfg.scan_time.active.min = 40;
+    cfg.scan_time.active.max = 120; // thorough
+
+    esp_err_t err = esp_wifi_scan_start(&cfg, false); // async
+    if (err != ESP_OK)
+        ESP_LOGE(TAG, "scan start failed: %s", esp_err_to_name(err));
+}
+
+#if 0
 static uint16_t crc16(const uint8_t *data_p, int length) {
     uint8_t x;
     uint16_t crc = 0xFFFF;
@@ -253,47 +354,38 @@ static uint16_t crc16(const uint8_t *data_p, int length) {
     }
     return crc;
 }
-
-int wireless_message_count;
-
-struct esp_now_data_t {
-    uint8_t mac[6];
-    int len;
-    uint8_t data[MAX_DATA_LEN];
-} esp_now_rb[256];
-
-volatile uint8_t rb_start, rb_end;
-volatile SemaphoreHandle_t esp_now_sem;
+#endif
 
 static void DataRecvWind(struct esp_now_data_t &data) {
     if (data.len != sizeof(wind_packet_t)) {
-        printf("received invalid wind packet %d\n", data.len);
+        ESP_LOGW(TAG, "received invalid wind packet %d\n", data.len);
         return;
     }
 
-    uint16_t crc = crc16(data.data, data.len - 2);
     wind_packet_t *packet = (wind_packet_t *)data.data;
-    if (crc != packet->crc16) {
-        printf("espnow wind data packet crc failed %x %x\n", crc, packet->crc16);
-        return;
-    }
-
     float dir;
-    if (packet->angle == 0xffff || packet->angle > 16384)
+    if (packet->angle == 0xffff || packet->angle >= 32768)
         dir = NAN;  // invalid
     else
-        dir = 360 - packet->angle * 360.0f / 16384.0f;
+        dir = 360 - packet->angle * 360.0f / 32768.0f;
 
     if (packet->period > 100) { // period of 100uS cups is about 193 knots for 100 rotations/s
         //        knots = 19350.0 / packet->period;
         float knots = 25800.0 / packet->period;  // corrected from preliminary calibration
-        wind_knots = knots * .3 + wind_knots * .7;
+        wind_knots = knots * .5 + wind_knots * .5;
     } else
         wind_knots = 0;
 
-    float accel_x = packet->accelx * 4.0f / 16384 * 9.8f * 1.944f;
-    float accel_y = packet->accely * 4.0f / 16384 * 9.8f * 1.944f;
+    float paccel_x = packet->accelx * 4.0f / 32768;
+    float paccel_y = packet->accely * 4.0f / 32768;
+    float paccel_z = packet->accelz * 4.0f / 32768;
+
+    //    printf("recv %d %d %d %d %d\n", packet->angle, packet->period, packet->accelx, packet->accely, packet->accelz);
+
     if (settings.compensate_wind_with_accelerometer && dir >= 0) {
+
+        float ax = paccel_x * 9.8f * 1.944f;
+        float ay = paccel_y * 9.8f * 1.944f;
         uint64_t t = esp_timer_get_time();
         static int lastt;
         float dt = (t - lastt) / 1e6;
@@ -301,8 +393,8 @@ static void DataRecvWind(struct esp_now_data_t &data) {
 
         // TODO: combine inertial sensors from autopilot somehow?
         static float vx, vy;
-        vx += accel_x * dt;
-        vy += accel_y * dt;
+        vx += ax * dt;
+        vy += ay * dt;
 
         vx *= .9;  // decay
 
@@ -319,20 +411,15 @@ static void DataRecvWind(struct esp_now_data_t &data) {
     }
 
     //    uint32_t t1 = millis();
-    sensors_wind_update(data.mac, dir, wind_knots, accel_x, accel_y);
+    sensors_wind_update(data.mac, dir, wind_knots, paccel_x, paccel_y, paccel_z);
 }
 
 
 static void DataRecvAir(struct esp_now_data_t &data) {
     if (data.len != sizeof(air_packet_t))
-        printf("received invalid air packet %d\n", data.len);
+        ESP_LOGW(TAG, "received invalid air packet %d\n", data.len);
 
-    uint16_t crc = crc16(data.data, data.len - 2);
     air_packet_t *packet = (air_packet_t *)data.data;
-    if (crc != packet->crc16) {
-        printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
-        return;
-    }
 
     sensors_air_update(data.mac, 1.0f + packet->pressure * .00001f, packet->rel_humidity * .01f, packet->temperature * .01f, packet->air_quality * .01f, packet->battery_voltage * .01f);
 }
@@ -341,12 +428,7 @@ static void DataRecvWater(struct esp_now_data_t &data) {
     if (data.len != sizeof(water_packet_t))
         printf("received invalid water packet %d\n", data.len);
 
-    uint16_t crc = crc16(data.data, data.len - 2);
     water_packet_t *packet = (water_packet_t *)data.data;
-    if (crc != packet->crc16) {
-        printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
-        return;
-    }
 
     sensors_water_update(data.mac, packet->speed * .01f, packet->depth * .01f, packet->temperature * .01f);
 }
@@ -355,12 +437,7 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
     if (data.len != sizeof(lightning_uv_packet_t))
         printf("received invalid lightning UV packet %d\n", data.len);
 
-    uint16_t crc = crc16(data.data, data.len - 2);
     lightning_uv_packet_t *packet = (lightning_uv_packet_t *)data.data;
-    if (crc != packet->crc16) {
-        printf("espnow air data packet crc failed %x %x\n", crc, packet->crc16);
-        return;
-    }
 
     lightning_distance = packet->distance * .01f;
     sensors_lightning_update(data.mac, lightning_distance);
@@ -369,65 +446,6 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
 
     //display_data_update(LIGHTNING_DISTANCE, wt.distance, ESP_DATA);
     printf("LIGHTNING!!! %f", lightning_distance);
-}
-
-// callback when data is recv from Master
-// This function is run from the wifi thread, so post to a queue
-void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int data_len) {
-    uint8_t *mac_addr = recv_info->src_addr;
-#if 0
-    char macStrt[18];
-    snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
-             mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-    // printf("Last Packet Recv from: %s %d\n", macStrt, data_len);
-    //print(" Last Packet Recv Data: "); print(*data);
-
-#endif
-    if (data_len > MAX_DATA_LEN)
-        return;
-
-    if (xSemaphoreTake(esp_now_sem, (TickType_t)1) == pdTRUE) {
-        esp_now_data_t &pos = esp_now_rb[rb_start];
-        memcpy(pos.mac, mac_addr, 6);
-        pos.len = data_len;
-        memcpy(pos.data, data, data_len);
-        xSemaphoreGive(esp_now_sem);
-        rb_start+=1;
-    }// else
-//        printf("unable to get esp now semaphore");
-}
-
-// Init ESP Now with fallback
-static void InitESPNow() {
-    printf("InitESPNow %d\n", chip.channel);
-    memset(&chip, 0, sizeof(chip));
-    for (int ii = 0; ii < 6; ++ii)
-        chip.peer_addr[ii] = (uint8_t)0xff;
-    chip.channel = settings.wifi_channel;
-    if (chip.channel > 12)
-        chip.channel = 1;
-
-    chip.encrypt = 0;
-
-    esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
-    if (esp_now_init() == ESP_OK) {
-        printf("ESPNow Init Success\n");
-    } else {
-        printf("ESPNow Init Failed\n");
-        //ESP.restart();  // restart cpu on failure
-        return;
-    }
-
-    // Once ESPNow is successfully Init, we will register for recv CB to
-    // get recv packer info.
-    esp_now_register_recv_cb(OnDataRecv);
-
-    // chip not paired, attempt pair
-    esp_err_t addStatus = esp_now_add_peer(&chip);
-    if (addStatus != ESP_OK) {
-        printf("ESP-NOW pair fail: %d\n", addStatus);
-        return;
-    }
 }
 
 static void receive_esp_now() {
@@ -441,7 +459,7 @@ static void receive_esp_now() {
         rb_end+=1;
 
         if (first.len > MAX_DATA_LEN) {
-            printf("espnow wrong packet size %d", first.len);
+            ESP_LOGW(TAG, "espnow wrong packet size %d", first.len);
             continue;
         }
 
@@ -454,17 +472,31 @@ static void receive_esp_now() {
         case WATER_ID: DataRecvWater(first); break;
         case LIGHTNING_UV_ID: DataRecvLightningUV(first); break;
         default:
-            printf("espnow packet ID mismatch %x\n", id);
+            ESP_LOGW(TAG, "espnow packet ID mismatch %x", id);
         }
 
         if(esp_timer_get_time() - t0 > 20e6) { // taking too long
-            printf("espnow receive failed to keep up\n");
+            ESP_LOGW(TAG, "espnow receive failed to keep up");
             rb_end = rb_start;
             break;
         }
     }
 }
 
+void wireless_unlock_channel(const std::string &mac) {
+    ESP_LOGI(TAG, "unlock sensor %s", mac.c_str());
+
+    uint64_t peer_addr = mac_str_to_int(mac);
+
+    packet_unlock_t packet;
+    packet.id = UNLOCK_ID;
+
+    esp_err_t result = esp_now_send((const uint8_t*)peer_addr, (uint8_t *)&packet, sizeof(packet));
+    if (result != ESP_OK)
+        printf("Send failed Status: %d\n", result);
+}
+
+#if 0
 void sendChannel() {
     packet_channel_t packet;
     packet.id = CHANNEL_ID;
@@ -475,86 +507,32 @@ void sendChannel() {
     const uint8_t *peer_addr = chip.peer_addr;
     esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
     //print("Send Status: ");
-    if (result != ESP_OK) {
+    if (result != ESP_OK)
         printf("Send failed Status: %d\n", result);
-    }
-}
-
-static std::map<std::string, int> wifi_networks;
-std::string wifi_networks_html;
-//static uint64_t scanning = 0;
-void wireless_scan_networks() {
-    printf("scanning not implemented\n");
-    /*
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
-    int32_t n = WiFi.scanNetworks(true);
-    n++; // avoid warning unused
-    scanning = esp_timer_get_time();
-    if (!scanning) scanning++;
-    // display on screen scanning for wifi networks progress
-    */
-}
-
-void wireless_poll() {
-    receive_esp_now();
-
-#if 0
-    if(!scanning)
-        return;
-    uint64_t t = esp_timer_get_time();
-    if (t - scanning < 5e6)
-        return;
-    scanning = 0;
-    int n = WiFi.scanComplete();
-    for (uint8_t i = 0; i < n; i++) {
-        std::string ssid = WiFi.SSID(i).c_str();
-        int channel = WiFi.channel(i);
-        if (ssid == settings.client_ssid)
-            settings.channel = channel;
-        if (wifi_networks.find(ssid) == wifi_networks.end()) {
-            wifi_networks[ssid] = channel;
-            std::string tr = "<tr><td>" + ssid + "</td><td>" + int_to_str(channel) + "</td>";
-            tr += "<td>" + int_to_str(WiFi.RSSI(i)) + "</td><td>";
-            //tr += WiFi.encryptionType(i) == ENC_TYPE_NONE ? "open" : "encrypted";
-            tr += "</td></tr>";
-            printf("wifi network %s\n", tr.c_str());
-            wifi_networks_html += tr;
-        }
-    }
-    WiFi.scanDelete();
-    setup_wifi();
-#endif
 }
 
 void wireless_program_channel() {
-#if 0
-    for (int c = 0; c <= 12; c++) {
-        esp_now_deinit();
-        WiFi.mode(WIFI_OFF);
+    ESP_ERROR_CHECK(esp_now_deinit());
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    InitESPNow(1);
 
-        WiFi.mode(WIFI_STA);
-        WiFi.disconnect();
+    for (int c = 1; c <= 12; c+=5) {
         esp_wifi_set_channel(c, WIFI_SECOND_CHAN_NONE);
-        chip.channel = c;
-        if (esp_now_init() != ESP_OK)
-            printf("ESPNow Init Failed");
-        esp_err_t addStatus = esp_now_add_peer(&chip);
-        if (addStatus == ESP_OK) {
-            for (int i = 0; i < 15; i++) {
-                sendChannel();
-                vTaskDelay(50 / portTICK_PERIOD_MS);
-            }
+        for (int i = 0; i < 15; i++) {
+            sendChannel();
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
-        vTaskDelay(50 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    esp_now_deinit();
-    WiFi.mode(WIFI_OFF);
-
     setup_wifi();
-    InitESPNow();
+}
 #endif
+
+void wireless_poll() {
+    receive_esp_now();
 }
 
 void wireless_toggle_mode() {
@@ -568,11 +546,9 @@ void wireless_toggle_mode() {
 }
 
 void wireless_setup() {
-    //printf("wireless setup\n");
     // Init ESPNow with a fallback logic
     if(!esp_now_sem)
         esp_now_sem = xSemaphoreCreateMutex();
 
     setup_wifi();
-    InitESPNow();
 }

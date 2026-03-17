@@ -1,7 +1,9 @@
-/*
- * SPDX-FileCopyrightText: 2010-2022 Espressif Systems (Shanghai) CO LTD
+/* Copyright (C) 2026 Sean D'Epagnier <seandepagnier@proton.me>
  *
- * SPDX-License-Identifier: CC0-1.0
+ * This Program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
  */
 
 #include <stdio.h>

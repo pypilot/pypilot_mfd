@@ -7,7 +7,7 @@
   <div class='container'>
     <div class='box'>
       <h2>WIFI Network Configuration</h2>
-        <table style='width: 90%;' id='wifi_networks_table'><tr><th>SSID</th><th>channel</th><th>Strength</th><th>Encryption</th></tr>%WIFI_NETWORKS%</table>
+        <table style='width: 90%;' id='wifi_networks'><tr><th>SSID</th><th>channel</th><th>rssi</th><th>encryption</th></tr></table>
         <div class='col3-grid'>
           <div> </div>
           <input class='button' type='button' style='width: 100%' value='Scan' onclick='cmd("scan_wifi")'>
@@ -22,15 +22,15 @@
           </select>
         </div>
         <div id="wifi_ap" class='col2-grid'>
-          <span>AP SSID</span><input type='text' id='ap_ssid' value='%AP_SSID%' autofocus style='width: 60%'>
-          <span>AP PSK</span><input type='text' id='ap_psk' value='%AP_PSK%' style='width: 60%'>
+          <span>AP SSID</span><input type='text' id='ap_ssid' autofocus style='width: 60%'>
+          <span>AP PSK</span><input type='text' id='ap_psk' style='width: 60%'>
         </div>
         <div id="wifi_client" class='col2-grid'>
-          <span>Client SSID</span><input type='text' id='client_ssid' value='%CLIENT_SSID%' autofocus style='width: 60%'>
-          <span>Client PSK</span><input type='text' id='client_psk' value='%CLIENT_PSK%' style='width: 60%'>
+          <span>Client SSID</span><input type='text' id='client_ssid' autofocus style='width: 60%'>
+          <span>Client PSK</span><input type='text' id='client_psk' style='width: 60%'>
         </div>
         <div class='col2-grid'>
-          <span>Wireless Channel</span><input type='number' id='wifi_channel' value=%CHANNEL% ></input>
+          <span>Wireless Channel</span><input type='number' id='wifi_channel'></input>
         </div>
         <div class='col3-grid'>
           <div> </div>
@@ -47,8 +47,7 @@
           <span>Wind Speed</span><span id='wind_knots'>N/A</span><span>Knots</span>
         </div>
       </div>
-      <table style='width: 90%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th></tr></table>
-      <input class='button' type='button' style='width: 100%' value='Program Channel' onclick='cmd("program_channel")'>
+      <table style='width: 90%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th><th>Unlock</th></tr></table>      
     </div>
 
     <div class='box'>
@@ -56,8 +55,8 @@
         <div class='col2-grid'>
           <span>USB data host (NMEA0183)</span>
           <span>
-            <input type='checkbox' id='input_usb_host' %INPUTUSBHOST%><label for='input_usb_host'>Input</label>
-            <input type='checkbox' id='output_usb_host' %OUTPUTUSBHOST%>
+            <input type='checkbox' id='input_usb_host'><label for='input_usb_host'>Input</label>
+            <input type='checkbox' id='output_usb_host'>
             <label for='output_usb_host'>Output</label>
             <select id='usb_host_baud_rate'>
               <option value='4800'>4800</option>
@@ -67,8 +66,8 @@
           </span>
           <span>USB data device (NMEA0183)</span>
           <span>
-            <input type='checkbox' id='input_usb' %INPUTUSB%><label for='input_usb'>Input</label>
-            <input type='checkbox' id='output_usb' %OUTPUTUSB%>
+            <input type='checkbox' id='input_usb'><label for='input_usb'>Input</label>
+            <input type='checkbox' id='output_usb'>
             <label for='output_usb'>Output</label>
             <select id='usb_baud_rate'>
               <option value='38400'>38400</option>
@@ -99,39 +98,39 @@
           <h3 class='box-title'>pypilot NMEA0183</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_nmea_pypilot' %INPUT_NMEA_PYPILOT%>
+            <input type='checkbox' id='input_nmea_pypilot'_NMEA_PYPILOT%>
             <label for='input_nmea_pypilot'>Input</label>
             <span>port 20220</span>
-            <input type='checkbox' id='output_nmea_pypilot' %OUTPUT_NMEA_PYPILOT%>
+            <input type='checkbox' id='output_nmea_pypilot'_NMEA_PYPILOT%>
             <label for='output_nmea_pypilot'>Output</label>
-            <span>pypilot server: <span id='pypilot_addr'>%PYPILOT_ADDR%</span></span>
+            <span>pypilot server: <span id='pypilot_addr'></span></span>
           </div>
         </div>
         <div class='box-frame'>
           <h3 class='box-title'>signalk-server NMEA0183</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_nmea_signalk' %INPUT_NMEA_SIGNALK%>
+            <input type='checkbox' id='input_nmea_signalk'>
             <label for='input_nmea_signalk'>Input</label>
             <span>port 10110</span>
-            <input type='checkbox' id='output_nmea_signalk' %OUTPUT_NMEA_SIGNALK%>
+            <input type='checkbox' id='output_nmea_signalk'>
             <label for='output_nmea_signalk'>Output</label>
-            <span>signalk server: <span id='signalk_addr'>%SIGNALK_ADDR%</span></span>
+            <span>signalk server: <span id='signalk_addr'></span></span>
           </div>
         </div>
         <div class='box-frame'>
           <h3 class='box-title'>TCP client NMEA0183</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_nmea_client' %INPUT_NMEA_CLIENT%></input>
+            <input type='checkbox' id='input_nmea_client'></input>
             <label for='input_nmea_client'>Input</label>
             <span></span>
-            <input type='checkbox' id='output_nmea_client' %OUTPUT_NMEA_CLIENT%></input>
+            <input type='checkbox' id='output_nmea_client'></input>
             <label for='output_nmea_client'>Output</label>
             <span>Host
-              <input type='text' id='nmea_client_addr' style='width: 10em;' value=%NMEACLIENTADDR% >
+              <input type='text' id='nmea_client_addr' style='width: 10em;'>
               Port
-              <input type='number' style='width: 4em;' id='nmea_client_port' value=%NMEACLIENTPORT% >
+              <input type='number' style='width: 4em;' id='nmea_client_port'>
             </span>
           </div>
         </div>
@@ -139,43 +138,42 @@
           <h3 class='box-title'>TCP server NMEA</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_nmea_server' %INPUT_NMEA_SERVER%></input>
+            <input type='checkbox' id='input_nmea_server'></input>
             <label for='input_nmea_server'>Input</label>
             <span></span>
-            <input type='checkbox' id='output_nmea_server' %OUTPUT_NMEA_SERVER%></input>
+            <input type='checkbox' id='output_nmea_server'></input>
             <label for='output_nmea_server'>Output</label>
-            <span>host ip <span id='ip_address'>%IPADDRESS%</span> Port <input type='text' id='nmea_server_port' style='width: 4em;' value=%NMEASERVERPORT%></input></span>          
+            <span>host ip <span id='ip_address'></span> Port <input type='text' id='nmea_server_port' style='width: 4em;'></input></span>          
           </div>
         </div>
         <div class='box-frame'>
           <h3 class='box-title'>SignalK</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_signalk' %INPUT_SIGNALK%></input>  
+            <input type='checkbox' id='input_signalk'></input>  
             <label for='input_signalk'>Input</label>
             <span></span>
-            <input type='checkbox' id='output_signalk' %OUTPUT_SIGNALK%></input>
+            <input type='checkbox' id='output_signalk'></input>
             <label for='output_signalk'>Output</label>
-            <span>SignalK server: %SIGNALK_ADDR%</span>          
           </div>
           <span>To output to signalk you may have to <a href='signalk.local:3000'>grant access</a></span>
         </div>
         <span>Forward data</span>
         <div class='data-grid'>
-          <input type='checkbox' id='forward_nmea_serial_to_serial' %FORWARD_NMEA_SERIAL_TO_SERIAL%>
+          <input type='checkbox' id='forward_nmea_serial_to_serial'>
           <label for='forward_nmea_serial_to_serial'>Forward nmea serial to serial </label>
-          <input type='checkbox' id='forward_nmea_serial_to_wifi' %FORWARD_NMEA_SERIAL_TO_WIFI%>
+          <input type='checkbox' id='forward_nmea_serial_to_wifi'>
           <label for='forward_nmea_serial_to_wifi'>Forward nmea serial to wifi </label>
         </div>
         <div class='col1-grid'>
           <span>Computation</span>          
           <span>
-            <input type='checkbox' id='compensate_wind_with_accelerometer' %COMPENSATE_WIND_WITH_ACCELEROMETER%>
+            <input type='checkbox' id='compensate_wind_with_accelerometer'>
             <label for='compensate_wind_with_accelerometer'>Compensate wind with accelerometer</label>
           </span>
-          <span><input type='checkbox' id='compute_true_wind_from_gps' %COMPUTE_TRUEWIND_FROM_GPS%><label for='output_wifi'>Compute True Wind from GPS</label></span>
+          <span><input type='checkbox' id='compute_true_wind_from_gps'><label for='output_wifi'>Compute True Wind from GPS</label></span>
           <span>
-            <input type='checkbox' id='compute_true_wind_from_water' %COMPUTE_TRUEWIND_FROM_WATERSPEED%>
+            <input type='checkbox' id='compute_true_wind_from_water'>
             <label for='compute_true_wind_from_water_speed'>Compute True Wind from Water Speed</label>
           </span>
         </div>
@@ -183,69 +181,9 @@
           <div></div>
           <input class='button' type='button' value='Submit' onclick='on_display_data()'>
         </div>
-      <h4><a href='/data.html'>View Current Display Data</a></h4>
-      <h4><a href='/history.html'>View History of Display Data</a></h4>
-      <h4><a href='/alarms.html'>Configure Alarms</a></h4>
     </div>
- 
-    <div class='box'>
-      <h2>Display Pages</h2>
-        <div class='col3-grid'>
-          <div> </div>
-          <input class='button' type='button' onclick='cmd("display_auto")' style='width: 100%' value='Auto-enable pages'>
-        </div>
-        <div class='col1-grid' id='display_pages'>
-
-        </div>
-        <div class='col3-grid'>
-          <div> </div>
-          <input class='button' type='submit' value='Submit' onclick='on_display_pages()'>
-        </div>
-    </div>
-
-    <div class='box'>
-      <h2>Display</h2>
-        <div class='col1-grid'>
-          <span><input type='checkbox' id='use_360' %USE360%>
-            <label for='use360'>Use 0-360 rather than 0-180 for angles</label></span>
-          <span><input type='checkbox' id='use_fahrenheit' %USEFAHRENHEIT%>
-            <label for='usefahrenheit'>Use Fahrenheit (default celcius)</label></span>
-          <span><input type='checkbox' id='use_inHg' %USEINHG%>
-            <label for='useinHg'>Use in Hg for pressure (default mbar)</label></span>
-          <span><input type='checkbox' id='use_depthft' %USEDEPTHFT%>
-            <label for='usedepthft'>Use depth ft (default meters)</label></span>
-          <span>Latitude Longitude Format
-            <select id='lat_lon_format'>
-              <option value='degrees'>Decimal Degrees</option>
-              <option value='minutes'>Decimal Minutes</option>
-              <option value='seconds'>Decimal Seconds</option>
-            </select>
-          </span>
-          <span><input type='checkbox' id='invert' %INVERT%>
-            <label for='invert'>Invert Display</label></span>
-          <span>LCD contrast <input type='number' id='contrast' style='width: 4em' value=%CONTRAST%></span>
-          <span>LCD backlight <input type='number' id='backlight' style='width: 4em' value=%BACKLIGHT%></span>
-          <span><input type='checkbox' id='mirror' %MIRROR%>
-            <label for='mirror'>Mirror display</label>
-          </span>
-          <span>Power button function
-            <select id='power_button'>
-              <option value='powerdown'>powerdown (lowest power consumption)</option>
-              <option value='powersave'>wake every minute to log sensor data</option>
-              <option value='screenoff'>turn screen/backlight off, remain running</option>
-            </select>
-          </span>
-        </div>
-        <div class='col3-grid'>
-          <div> </div>
-          <input class='button' type='button' value='Submit', onclick='on_display_settings()'>
-        </div>
-    </div>
-</div>
-<h3><a href='/update.html'>Update Software</a></h4>
-<h5>pypilot multi-function display version <span id='version'></span></h5>
+<h5>version <span id='version'></span></h5>
 <h5>written by Sean D'Epagnier</h5>
 </body>
-<script type='text/javascript' src='mfd.js'></script>
 <script type='text/javascript' src='index.js'></script>
 </html>

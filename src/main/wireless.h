@@ -11,7 +11,6 @@ extern bool wifi_connected;
 
 sensor_position wireless_str_position(const std::string &p);
 
-extern std::string wifi_networks_html;
-
 void wireless_scan_networks();
 void wireless_program_channel();
+void wireless_unlock_channel(const std::string &mac);

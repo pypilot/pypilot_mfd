@@ -175,13 +175,18 @@ static void cli_process_line(std::string cmd, int uart) {
         printf("list -- list settings\n");
         printf("get key -- show value of setting\n");
         printf("set key=value -- update setting\n");
-        printf("mem print memory info\n");
-        printf("cpu print cpu info\n");
+        printf("mem -- print memory info\n");
+        printf("cpu -- print cpu info\n");
+        printf("sensors help -- show sensors commands\n");
+        printf("reboot -- reboot device\n");
     } else if(cmd == "default") {
         settings_reset();
         printf("settings file removed, defaults will be after reset\n");
     } else if(cmd == "reboot") {
         abort();
+    } else if (cmd.rfind("sensors", 0) == 0) {  // starts with "sensors "
+        // TODO: list sensors, unlock sensors, set primary/secondary etc
+        printf("not yet implmented\n");
     } else if (cmd.rfind("set ", 0) == 0) {  // starts with "set "
         std::string rest = cmd.substr(4);
 

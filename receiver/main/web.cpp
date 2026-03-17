@@ -6,6 +6,7 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#include <cmath>
 #include <unordered_set>
 
 #include <esp_log.h>
@@ -39,6 +40,7 @@ void sensors_wireless_setting(const rapidjson::Document &d);
 
 static httpd_handle_t server;
 static std::unordered_set<int> ws_clients, ws_data_clients;
+static std::string wifi_networks_json = "{}";
 
 static std::string jsonCurrent()
 {
@@ -50,7 +52,11 @@ static std::string jsonCurrent()
         writer.Key("wind");
         writer.StartObject(); {
             writer.Key("direction");
-            writer.Double(lpwind_dir);
+            float dir = lpwind_dir;
+            if(std::isnan(dir) || std::isinf(dir))
+                writer.Null();
+            else
+                writer.Double(dir);
             writer.Key("knots");
             writer.Double(wind_knots);
         }
@@ -107,8 +113,8 @@ static std::string json_settings()
 {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    writer.StartObject();
 
-    //if(var == "WIFI_NETWORKS") return wifi_networks_html;
 #define S(KEY, VALUE) writer.Key(KEY); writer.String(VALUE.c_str());
 #define I(KEY, VALUE) writer.Key(KEY); writer.Int(VALUE);
 #define B(KEY, VALUE) writer.Key(KEY); writer.Bool(VALUE);
@@ -211,6 +217,8 @@ static std::string json_settings()
     B("pypilot_alarm_no_motor_controller", settings.pypilot_alarm_no_motor_controller);
     B("pypilot_alarm_lost_mode", settings.pypilot_alarm_lost_mode);
 
+    writer.EndObject();
+    
     return buffer.GetString();
 }
 
@@ -233,6 +241,7 @@ static esp_err_t send_ws(int fd, const char *msg) {
         .len = strlen(msg),
     };
 
+    ESP_LOGI(TAG, "send_ws %d len=%d", fd, frame.len);
     return httpd_ws_send_frame_async(server, fd, &frame);
 }
 
@@ -244,7 +253,8 @@ static void ws_add_client(std::unordered_set<int> &clients, int fd)
     }
 
     if(send_ws(fd, json_sensors().c_str()) != ESP_OK ||
-       send_ws(fd, json_settings().c_str()) != ESP_OK)
+       send_ws(fd, json_settings().c_str()) != ESP_OK ||
+       send_ws(fd, wifi_networks_json.c_str()) != ESP_OK)
         ESP_LOGW(TAG, "send to fd=%d failed", fd);
     else
         clients.insert(fd);
@@ -277,13 +287,37 @@ static void ws_broadcast_text(std::unordered_set<int> &clients, const char *msg)
     }
 }
 
+static void apply_command(const rapidjson::Value &value) {
+    if(!value.IsObject()) {
+        ESP_LOGW(TAG, "invalid command");
+        return;
+    }
+
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    if(value.HasMember("display_auto")) {
+        display_auto();
+    } else
+#endif
+    if(value.HasMember("scan_wifi")) {
+        wireless_scan_networks();
+    } else if(value.HasMember("unlock_sensor")) {
+        const rapidjson::Value &vmac = value["unlock_sensor"];
+        if(vmac.IsString()) {
+            std::string mac = vmac.GetString();
+            wireless_unlock_channel(mac);
+        } else
+            ESP_LOGW(TAG, "invalid unlock command");
+    } else
+        ESP_LOGW(TAG, "unhandled command");
+}
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     std::unordered_set<int> *clients = reinterpret_cast<std::unordered_set<int>*>(req->user_ctx);
 
     int fd = httpd_req_to_sockfd(req);
     if (req->method == HTTP_GET) {
-        printf("websocket client\n");
+        ESP_LOGI(TAG, "websocket client");
         ws_add_client(*clients, fd);
         // action before ws handshake
         return ESP_OK;
@@ -329,10 +363,19 @@ static esp_err_t ws_handler(httpd_req_t *req)
         rapidjson::Document doc;
         doc.Parse((char*)buf);
 
-        for (rapidjson::Value::ConstMemberIterator itr = doc.MemberBegin(); itr != doc.MemberEnd(); ++itr) {
+        for (rapidjson::Value::ConstMemberIterator itr = doc.MemberBegin(); itr != doc.MemberEnd(); ++itr) {            
             std::string name = itr->name.GetString();
             const rapidjson::Value &value = itr->value;
-            std::string v = value.GetString();
+
+            if(name == "command") {
+                apply_command(value);
+                continue;
+            }
+            
+            std::string v;
+            if(value.IsString())
+                v = value.GetString();
+
             if(name == "wifi_mode") {
                 if (v == "ap") settings.wifi_mode = WIFI_MODE_AP;
                 if (v == "client") settings.wifi_mode = WIFI_MODE_STA;
@@ -397,13 +440,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
             else if(name == "pypilot_alarm_no_imu") settings.pypilot_alarm_no_imu = value.GetBool();
             else if(name == "pypilot_alarm_no_motor_controller") settings.pypilot_alarm_no_motor_controller = value.GetBool();
             else if(name == "pypilot_alarm_lost_mode") settings.pypilot_alarm_lost_mode = value.GetBool();
-
-            // commands
-            else if(name == "scan_wifi")        wireless_scan_networks();
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-            else if(name == "display_auto")     display_auto();
-#endif
-            else if(name == "program_channel")  void wireless_program_channel();
 
             // display pages
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -671,4 +707,37 @@ void web_poll() {
 
     if(ws_data_clients.size())
         ws_broadcast_text(ws_data_clients, jsonDisplayData().c_str());
+}
+
+void web_update_wifi_networks() {
+    if(ws_clients.size())
+        ws_broadcast_text(ws_clients, wifi_networks_json.c_str());
+}
+
+void web_scan_complete(void *p, int count)
+{
+    wifi_ap_record_t *recs = (wifi_ap_record_t *)p;
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    
+    writer.Key("wifi_networks");
+    writer.StartObject();
+
+    for (int i = 0; i < count; i++) {
+        ESP_LOGI(TAG, "[%d] ssid=%s rssi=%d channel=%d auth=%d",
+                 i, (char *)recs[i].ssid, recs[i].rssi, recs[i].primary, recs[i].authmode);
+
+        writer.Key("ssid");
+        writer.String((const char*)recs[i].ssid);
+        writer.Key("rssi");
+        writer.Int(recs[i].rssi);
+        writer.Key("channel");
+        writer.Int(recs[i].primary);
+        writer.Key("encryption");
+        writer.Int(recs[i].authmode);
+    }
+
+    writer.EndObject();
+    wifi_networks_json = buffer.GetString();
 }

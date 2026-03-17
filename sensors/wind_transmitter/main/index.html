@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<title>WiFi Config</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+    }
+    .card {
+        background: white;
+        padding: 20px 25px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        width: 300px;
+    }
+    h2 {
+        margin-top: 0;
+        text-align: center;
+    }
+    label {
+        display: block;
+        margin-top: 12px;
+        font-size: 14px;
+        color: #333;
+    }
+    input, select {
+        width: 100%;
+        padding: 8px;
+        margin-top: 4px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 14px;
+        box-sizing: border-box;
+    }
+    button {
+        margin-top: 18px;
+        width: 100%;
+        padding: 10px;
+        border: none;
+        border-radius: 6px;
+        background: #007bff;
+        color: white;
+        font-size: 15px;
+        cursor: pointer;
+    }
+    button:hover {
+        background: #0056b3;
+    }
+</style>
+</head>
+<body>
+
+<div class='card'>
+    <h2>Wireless Wind Sensors Configuration</h2>
+
+    <div>Angle:<span id='angle' /></div>
+    <div>Period:<span id='period' /></div>
+    <div>Accel:<span id='accel' /></div>
+    
+    <form method='POST' action='/submit'>
+        <label for='channel'>WiFi Channel (default 1)</label>
+        <select id='channel' name='channel'>
+            <option value='1'>1</option>
+            <option value='6'>6</option>
+            <option value='11'>11</option>
+        </select>
+
+        <label for='rate'>Output Rate (recommend 10hz)</label>
+        <select id='rate' name='rate'>
+            <option value='1'>1</option>
+            <option value='2'>2</option>
+            <option value='5'>5</option>
+            <option value='10'>10</option>
+        </select>
+
+        <label for='psk'>PSK (minimum 8 characters or leave blank for no encryption)</label>
+        <input type='text' id='psk' name='psk' >
+
+        <button type='submit'>Save</button>
+    </form>
+</div>
+
+<script>
+var websocket;
+// Init web socket when the page loads
+window.addEventListener('load', onload);
+var init_timeout = 1;
+function onload() {
+    console.log('Trying to open a WebSocket connection');
+    var gateway = `ws://${window.location.hostname}/ws`;
+    websocket = new WebSocket(gateway);
+    websocket.onopen = onOpen;
+    websocket.onclose = onClose;
+    websocket.onmessage = onMessage;
+}
+
+// When websocket is established, call the getReadings() function
+function onOpen(event) {
+    console.log('Connection opened');
+    init_timeout = 1;
+}
+
+function onClose(event) {
+    console.log('Connection closed');
+    setTimeout(initWebSocket, init_timeout*1000);
+    init_timeout*=2;
+    if(init_timeout > 10)
+        init_timeout = 10;
+}
+
+function onMessage(event) {
+    var data = event.data;
+    var msg = JSON.parse(data);
+
+    if('angle' in msg) {
+        var angle = msg['angle'];
+        if(angle == 0xffff)
+            angle = 'not detected';
+        else if(angle == 0x8000)
+            angle = 'checksum/sensor failure';
+        else if(angle >= 32768)
+            angle = 'invalid reading';
+        else
+            angle = (angle*360.0/32768.0).toFixed(3);
+        document.getElementById('angle').innerText = angle;
+    }
+
+    if('period' in msg) {
+        var period = msg['period'];
+        document.getElementById('period').innerText = period.toFixed(1);
+    }
+
+    if('accel' in msg) {
+        var ax = msg['accel']['x'] / 8192.0;
+        var ay = msg['accel']['y'] / 8192.0;
+        var az = msg['accel']['z'] / 8192.0;
+        document.getElementById('accel').innerText = `X:${ax.toFixed(3)} Y:${ay.toFixed(3)} Z:${az.toFixed(3)}`;
+    }    
+}
+  
+fetch('/config')
+    .then(r => r.json())
+    .then(cfg => {
+        document.getElementById('psk').value = cfg.psk || '';
+        document.getElementById('channel').value = String(cfg.channel || 1);
+        document.getElementById('rate').value = String(cfg.rate || 1);
+    })
+    .catch(err => {
+        console.log('Failed to load config', err);
+    });
+
+</script>
+
+</body>
+</html>
