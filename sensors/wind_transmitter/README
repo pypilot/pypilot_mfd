@@ -1,0 +1,14 @@
+This project is for a wireless wind transmitter based on esp32
+
+The esp32 transmits using espnow for minimal latency to a receiver (either dedicated ttgo or pypilot_mfd) on the same wireless channel.
+
+To do OTA update, power the sensors inverted or held up side down (never occurs in normal use)
+
+If powered normally and booted, and then inverted for 3 seconds the access point is created without code.
+
+The access point can also be enabled later by sending an espnow message to turn it on, in this case with the wireless code.
+If the code is forgotten it must be inverted to regain access.
+
+
+
+Normally it outputs wind direction, cup rotation period (in ms) and accelerometer data.   The conversion to wind speed and direction is done by the receiver.
