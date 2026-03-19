@@ -120,7 +120,7 @@ bool lis2dw12_read(int16_t *x, int16_t *y, int16_t *z)
     i2c_read(lis2dw12_addr, reg_addr, data, 6);
     
     *z = (data[1] << 8) | data[0];
-    *x = (data[3] << 8) | data[2];
-    *y = (data[5] << 8) | data[4];
+    *y = (data[3] << 8) | data[2];
+    *x = (data[5] << 8) | data[4];
     return true;
 }

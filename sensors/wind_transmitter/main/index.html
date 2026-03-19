@@ -80,6 +80,14 @@
             <option value='10'>10</option>
         </select>
 
+        <label for='rate'>Output RF Power (high enough for reliable connection)</label>
+        <select id='tx_power' name='tx_power'>
+            <option value='8'>8</option>
+            <option value='13'>13</option>
+            <option value='16'>16</option>
+            <option value='20'>20</option>
+        </select>
+
         <label for='psk'>PSK (minimum 8 characters or leave blank for no encryption)</label>
         <input type='text' id='psk' name='psk' >
 
@@ -148,9 +156,10 @@ function onMessage(event) {
 fetch('/config')
     .then(r => r.json())
     .then(cfg => {
-        document.getElementById('psk').value = cfg.psk || '';
         document.getElementById('channel').value = String(cfg.channel || 1);
-        document.getElementById('rate').value = String(cfg.rate || 1);
+        document.getElementById('rate').value = String(cfg.rate || 10);
+        document.getElementById('tx_power').value = String(cfg.tx_power || 20);
+        document.getElementById('psk').value = cfg.psk || '';
     })
     .catch(err => {
         console.log('Failed to load config', err);

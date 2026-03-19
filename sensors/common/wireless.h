@@ -9,7 +9,8 @@
 void enable_ap_poll(void);
 void enable_ap(int);
 void wifi_init(void);
-void sendData(uint8_t *packet, int len);
+void wireless_send_data(uint8_t *packet, int len);
+void wireless_wait_sent();
 
 extern uint64_t wireless_ap_enabled;
 

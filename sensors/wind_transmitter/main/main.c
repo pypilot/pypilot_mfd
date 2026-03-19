@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Sean D'Epagnier <seandepagnier@gmail.com>
+/* Copyright (C) 2026 Sean D'Epagnier <seandepagnier@gmail.com>
  *
  * This Program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
@@ -11,6 +11,8 @@
 
 #include <math.h>
 #include <string.h>
+
+#include <esp_wifi.h>
 
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -31,7 +33,7 @@
 const gpio_num_t interruptPin = GPIO_NUM_34;
 
 // data in packet
-//#define LOW_POWER   // power down wireless while not working (save a lot of power?)
+#define LOW_POWER   // power down wireless while not working (save a lot of power?)
 //#define DEBUG
 
 #define ID 0xB179
@@ -157,8 +159,10 @@ void mt6816_read()
 
     if (angle & 0x2)
         packet.angle = 0xffff;
-    else
+    else {
+        angle += 16384; // rotate 90 degrees
         packet.angle = angle >> 1; // store angle using 15 bits, high bit indicates error
+    }
 }
 
 void speed_init() {
@@ -205,7 +209,6 @@ void convert_speed()
     }
 }
 
-
 void setup(void)
 {
     //Set device in STA mode to begin with
@@ -243,30 +246,27 @@ void loop()
     packet.accely = y;
     packet.accelz = z;
 
+#ifdef LOW_POWER
+    //    if(!wireless_ap_enabled)
+        ESP_ERROR_CHECK(esp_wifi_start());
+#endif
+
     // enable access point if inverted long enough
     static int inverted_count;
     if(z < -6000)
-        if(inverted_count > 3*output_rate) // 3 seconds
+        if(inverted_count > 3*rate) // 3 seconds
             enable_ap(0);
         else
             inverted_count++;
     else
         inverted_count = 0;
+
     enable_ap_poll();
-
-#ifdef LOW_POWER
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // or WIFI_MODE_APSTA if needed
-    ESP_ERROR_CHECK(esp_wifi_start());
-#endif
-    uint64_t t1 = esp_timer_get_time();        
     convert_speed();
-    uint64_t t2 = esp_timer_get_time();        
     mt6816_read();
-    uint64_t t3 = esp_timer_get_time();
 
-    sendData((uint8_t*)&packet, sizeof packet);
+    wireless_send_data((uint8_t*)&packet, sizeof packet);
 
-    uint64_t t4 = esp_timer_get_time();
 
     if(wireless_ap_enabled) {
         char msg[128];
@@ -277,17 +277,11 @@ void loop()
         web_broadcast(msg);
     }
     
-    // Prepare for sleep
-    vTaskDelay(5); //Short delay to finish transmit before esp_now_deinit()
-    //    if (esp_now_deinit() != ESP_OK)   //De-initialize ESP-NOW. (all information of paired devices will be deleted)
-    //        printf("esp_now_deinit() failed"); 
-
-#ifdef LOW_POWER
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL)); // effectively "Wi-Fi off"
-#endif
-    int period = 1000 / output_rate;
+    wireless_wait_sent(); // finish transmit before sleep
+    
+    int period = 1000 / rate;
     for(;;) {
-        uint64_t tx = esp_timer_get_time();        
+        uint64_t tx = esp_timer_get_time();
         uint64_t d = (tx - t0) / 1000;
 
         if (d >= period)
@@ -295,23 +289,27 @@ void loop()
 
         d = period - d;
 #ifdef LOW_POWER
-        // wake up on pin change for isr to count cup revolutions
-        gpio_wakeup_enable(GPIO_NUM_34, gpio_get_level(GPIO_NUM_34) ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
-    	esp_sleep_enable_gpio_wakeup();
-        esp_sleep_enable_timer_wakeup(d);
-        esp_light_sleep_start();
+        if(wireless_ap_enabled || t0 < 60e6) // ap enabled or first 60 seconds dont go in low power
+            vTaskDelay(d / portTICK_PERIOD_MS);
+        else {
+            esp_wifi_stop();
+            // wake up on pin change for isr to count cup revolutions
+            gpio_wakeup_enable(GPIO_NUM_34, gpio_get_level(GPIO_NUM_34) ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
+            esp_sleep_enable_gpio_wakeup();
+            esp_sleep_enable_timer_wakeup(1000*d);
+            esp_light_sleep_start();
+        }
 #else
         vTaskDelay(d / portTICK_PERIOD_MS);
-        //vTaskDelay(100/portTICK_PERIOD_MS);
 #endif
-   //     printf("sleep time %d %d\n", d,  millis()-tx);
+        //printf("sleep time %llu %llu\n", d, esp_timer_get_time()-tx);
     }
 
 #ifdef DEBUG // for debugging
     float angle = (packet.angle == 0xffff) ? NAN : packet.angle * 360.0 / 32768;
-    printf("result: %.02f %.02f %d %.02f %llu %llu %llu %llu\n",
+    printf("result: %.02f %.02f %d %.02f\n",
            packet.accelx * 4.0 / 32768, packet.accely * 4.0 / 32768,
-           packet.period, angle, t1 - t0, t2-t1, t3-t2, t4-t3);
+           packet.period, angle);
     //printf("result %.02f %d\n", angle, gpio_get_level(GPIO_NUM_34));
 #endif
 

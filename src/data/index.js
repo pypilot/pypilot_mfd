@@ -43,13 +43,13 @@ function onClose(event) {
 
 function handleOffsetChange(e) {
     let mac = e.getAttribute('data-mac');
-    msg = {mac: {'offset': e.value}};
+    msg = {transmitters: {wind: {[mac]: {'offset': e.value}}}};
     websocket.send(JSON.stringify(msg));
 }
 
 function handlePositionChange(e) {
     let mac = e.getAttribute('data-mac');
-    msg = {mac: {'position': e.value}};
+    msg = {transmitters: {wind: {[mac]: {'position': e.value}}}};
     websocket.send(JSON.stringify(msg));
 }
 
@@ -144,6 +144,9 @@ function onMessage(event) {
             }
         }
     }
+
+    if('transmitters' in msg)
+        onTransmitters(msg['transmitters']);
     
     for (const [key, value] of Object.entries(msg))
         setElementValue(key, value);
@@ -161,7 +164,9 @@ function onWindMessage(msg) {
         render(msg['direction'], msg['knots']);
         return;
     }
-    
+}
+
+function onTransmitters(msg) {
     function inp(mac, v) {
         var options = '';
         for(o of ['Primary', 'Secondary', 'Port', 'Starboard', 'Ignored'])
@@ -204,7 +209,7 @@ function onWindMessage(msg) {
 }
 
 function on_wifi_mode() {
-    var mode = gei('wifi_mode');
+    var mode = gei('wifi_mode').value;
     document.getElementById('wifi_ap').style.display = (mode == 'ap') ? 'grid' : 'none';
     document.getElementById('wifi_client').style.display = (mode == 'client') ? 'grid' : 'none';
 }
@@ -231,7 +236,7 @@ function on_wifi_settings() {
 function on_display_data() {
     post(['input_usb', 'output_usb', 'usb_baud_rate', 'rs422_1_baud_rate', 'rs422_2_baud_rate',
           'input_nmea_pypilot', 'output_nmea_pypilot', 'input_nmea_signalk', 'output_nmea_signalk',
-          'input_nmea_client', 'output_nmea_client', 'input_nmea_server', 'output_nmea_server',
+          'input_nmea_tcp_client', 'output_nmea_tcp_client', 'input_nmea_tcp_server', 'output_nmea_tcp_server',
           'input_signalk', 'output_signalk',
           'forward_nmea_serial_to_serial', 'forward_nmea_serial_to_wifi',
           'compensate_wind_with_accelerometer', 'compute_true_wind_from_gps',
@@ -240,9 +245,9 @@ function on_display_data() {
 }
 
 function cmd(cmd) {
-    if (typeof cmd === "string") {
+    if (typeof cmd === "string")
         cmd = {cmd : true};
-    }
+
     msg = {command : cmd};
     websocket.send(JSON.stringify(msg));
 }

@@ -32,9 +32,10 @@
 #include "zeroconf.h"
 
 // TODO: fix these to put in separate header or file
+void settings_load_doc(rapidjson::Document &s, bool defaults);
+rapidjson::StringBuffer settings_store_doc();
+
 void sensors_write_transmitters(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
-void sensors_read_transmitters(const rapidjson::Value &t);
-void sensors_wireless_setting(const rapidjson::Document &d);
 
 #define TAG "web"
 
@@ -42,7 +43,7 @@ static httpd_handle_t server;
 static std::unordered_set<int> ws_clients, ws_data_clients;
 static std::string wifi_networks_json = "{}";
 
-static std::string jsonCurrent()
+static std::string json_current()
 {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
@@ -67,7 +68,7 @@ static std::string jsonCurrent()
     return buffer.GetString();
 }
 
-static std::string jsonDisplayData() {
+static std::string json_display_data() {
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
 
@@ -111,115 +112,29 @@ static std::string get_ip() {
 
 static std::string json_settings()
 {
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    rapidjson::StringBuffer s = settings_store_doc();
+    return s.GetString();
+}
+
+static std::string json_info()
+{
+    rapidjson::StringBuffer s = settings_store_doc();
+    rapidjson::Writer<rapidjson::StringBuffer> writer(s);
     writer.StartObject();
 
-#define S(KEY, VALUE) writer.Key(KEY); writer.String(VALUE.c_str());
-#define I(KEY, VALUE) writer.Key(KEY); writer.Int(VALUE);
-#define B(KEY, VALUE) writer.Key(KEY); writer.Bool(VALUE);
+#define SR(KEY, VALUE) writer.Key(KEY); writer.String(VALUE.c_str());
 
-    S("wifi_mode", get_wifi_mode_str());
-    S("ap_ssid", settings.ap_ssid);
-    S("ap_psk", settings.ap_psk);
-    S("client_ssid", settings.client_ssid);
-    S("client_psk", settings.client_psk);
-    I("wifi_channel", settings.wifi_channel);
+    SR("wifi_mode", get_wifi_mode_str());
+    SR("version", float_to_str(VERSION, 2));
+    SR("pypilot_addr",(pypilot_discovered==2 ? settings.pypilot_addr : std::string("not detected")));
 
-    B("input_usb_host", settings.input_usb_host);
-    B("output_usb_host", settings.output_usb_host);
-    B("input_usb", settings.input_usb);
-    B("output_usb", settings.output_usb);
-    I("usb_baud_rate", settings.usb_baud_rate);
-    I("rs422_1_baud_rate", settings.rs422_1_baud_rate);
-    I("rs422_2_baud_rate", settings.rs422_2_baud_rate);
-
-    B("input_nmea_pypilot", settings.input_nmea_pypilot);
-    B("output_nmea_pypilot", settings.output_nmea_pypilot);
-    B("input_nmea_signalk", settings.input_nmea_signalk);
-    B("output_nmea_signalk", settings.output_nmea_signalk);
-    B("input_nmea_client", settings.input_nmea_client);
-    B("output_nmea_client", settings.output_nmea_client);
-    B("input_nmea_server", settings.input_nmea_server);
-    B("output_nmea_server", settings.output_nmea_server);
-    B("input_signalk", settings.input_signalk);
-    B("output_signalk", settings.output_signalk);
-
-    B("forward_nmea_serial_to_serial", settings.forward_nmea_serial_to_serial);
-    B("forward_nmea_serial_to_wifi", settings.forward_nmea_serial_to_wifi);
-
-    B("compesate_wind_with_acclerometer", settings.compensate_wind_with_accelerometer);
-    B("compute_truewind_from_gps", settings.compute_true_wind_from_gps);
-    B("compute_truewind_from_waterspeed", settings.compute_true_wind_from_water);
-
-    S("pypilot_addr",(pypilot_discovered==2 ? settings.pypilot_addr : "not detected"));
-
-    S("signalk_addr",(signalk_discovered==2 ? (settings.signalk_addr + ":" + int_to_str(settings.signalk_port)) :( "not detected")));
-    S("nmea_client_addr", settings.nmea_client_addr);
-    S("nmea_client_port", int_to_str(settings.nmea_client_port));
-    S("ip_address", get_ip());
-    S("nmea_server_port", int_to_str(settings.nmea_server_port));
-    B("use360", settings.use_360);
-    B("usefarenheit", settings.use_fahrenheit);
-    B("useinHg", settings.use_inHg);
-    B("usedepthft", settings.use_depth_ft);
-    S("lat_lon_format", settings.lat_lon_format);
-    B("invert", settings.invert);
-    S("contrast", int_to_str(settings.contrast));
-    S("backlight", int_to_str(settings.backlight));
-    B("mirror", settings.mirror);
-
-    S("power_button", settings.power_button);
-    //    if(var == "DISPLAYPAGES") return get_display_pages();
-
-    S("version", float_to_str(VERSION, 2));
-
-    // alarms
-
-    B("anchor_alarm", settings.anchor_alarm);
-    I("anchor_alarm_distance", settings.anchor_alarm_distance);
-
-    B("course_alarm", settings.course_alarm);
-    I("course_alarm_course", settings.course_alarm_course);
-    I("course_alarm_error", settings.course_alarm_error);
-
-    B("gps_speed_alarm", settings.gps_speed_alarm);
-    I("gps_min_speed_alarm_knots", settings.gps_min_speed_alarm_knots);
-    I("gps_max_speed_alarm_knots", settings.gps_max_speed_alarm_knots);
-
-    B("wind_speed_alarm", settings.wind_speed_alarm);
-    I("wind_min_speed_alarm_knots", settings.wind_min_speed_alarm_knots);
-    I("wind_max_speed_alarm_knots", settings.wind_max_speed_alarm_knots);
-
-    B("water_speed_alarm", settings.water_speed_alarm);
-    I("water_min_speed_alarm_knots", settings.water_min_speed_alarm_knots);
-    I("water_max_speed_alarm_knots", settings.water_max_speed_alarm_knots);
-
-    B("weather_alarm_pressure", settings.weather_alarm_pressure);
-    I("weather_alarm_min_pressure", settings.weather_alarm_min_pressure);
-    B("weather_alarm_pressure_rate", settings.weather_alarm_pressure_rate);
-    I("weather_alarm_pressure_rate_value", settings.weather_alarm_pressure_rate_value);
-    B("weather_alarm_lightning", settings.weather_alarm_lightning);
-    I("weather_alarm_lightning_distance", settings.weather_alarm_lightning_distance);
-
-    B("depth_alarm", settings.depth_alarm);
-    I("depth_alarm_min", settings.depth_alarm_min);
-    B("depth_alarm_rate", settings.depth_alarm_rate);
-    I("depth_alarm_rate_value", settings.depth_alarm_rate_value);
-
-    B("ais_alarm", settings.ais_alarm);
-    I("ais_alarm_cpa", settings.ais_alarm_cpa);
-    I("ais_alarm_tcpa", settings.ais_alarm_tcpa);
-
-    B("pypilot_alarm_noconnection", settings.pypilot_alarm_noconnection);
-    B("pypilot_alarm_fault", settings.pypilot_alarm_fault);
-    B("pypilot_alarm_no_imu", settings.pypilot_alarm_no_imu);
-    B("pypilot_alarm_no_motor_controller", settings.pypilot_alarm_no_motor_controller);
-    B("pypilot_alarm_lost_mode", settings.pypilot_alarm_lost_mode);
-
+    SR("signalk_addr",(signalk_discovered==2 ? (settings.signalk_addr + ":" + int_to_str(settings.signalk_port)) : std::string("not detected")));
+    SR("ip_address", get_ip());
+      
+#undef SR
     writer.EndObject();
     
-    return buffer.GetString();
+    return s.GetString();
 }
 
 static std::string json_sensors()
@@ -252,8 +167,8 @@ static void ws_add_client(std::unordered_set<int> &clients, int fd)
         return;
     }
 
-    if(send_ws(fd, json_sensors().c_str()) != ESP_OK ||
-       send_ws(fd, json_settings().c_str()) != ESP_OK ||
+    if(send_ws(fd, json_settings().c_str()) != ESP_OK ||
+       send_ws(fd, json_info().c_str()) != ESP_OK ||
        send_ws(fd, wifi_networks_json.c_str()) != ESP_OK)
         ESP_LOGW(TAG, "send to fd=%d failed", fd);
     else
@@ -360,101 +275,14 @@ static esp_err_t ws_handler(httpd_req_t *req)
         buf[frame.len] = 0;
         ESP_LOGI(TAG, "recv from fd=%d: %s", fd, (char *)buf);
 
-        rapidjson::Document doc;
-        doc.Parse((char*)buf);
-
-        for (rapidjson::Value::ConstMemberIterator itr = doc.MemberBegin(); itr != doc.MemberEnd(); ++itr) {            
-            std::string name = itr->name.GetString();
-            const rapidjson::Value &value = itr->value;
-
-            if(name == "command") {
-                apply_command(value);
-                continue;
-            }
-            
-            std::string v;
-            if(value.IsString())
-                v = value.GetString();
-
-            if(name == "wifi_mode") {
-                if (v == "ap") settings.wifi_mode = WIFI_MODE_AP;
-                if (v == "client") settings.wifi_mode = WIFI_MODE_STA;
-                if (v == "none") settings.wifi_mode = WIFI_MODE_NULL;
-                else printf("unknown wifi data setting %s\n", v.c_str());
-            }
-            else if(name == "ap_ssid")    settings.ap_ssid = v;
-            else if(name == "ap_psk")     settings.ap_psk = v;
-            else if(name == "client_ssid") settings.client_ssid = v;
-            else if(name == "client_psk") settings.client_psk = v;
-            else if(name == "wifi_channel") settings.wifi_channel = str_to_int(v);
-
-            else if(name == "use_360")        settings.use_360 = value.GetBool();
-            else if(name == "use_fahrenheit") settings.use_fahrenheit = value.GetBool();
-            else if(name == "use_inHg")       settings.use_inHg = value.GetBool();
-            else if(name == "use_depthft")    settings.use_depth_ft = value.GetBool();
-            else if(name == "lat_lon_format") settings.lat_lon_format = v;
-            else if(name == "invert")         settings.invert = value.GetBool();
-            else if(name == "contrast")       settings.contrast = std::min(std::max(str_to_int(v), 0), 50);
-            else if(name == "backlight")      settings.backlight = std::min(std::max(str_to_int(v), 0), 20);
-            else if(name == "mirror")         settings.mirror = str_to_int(v);
-            else if(name == "power_button")   settings.power_button = v;
-
-            // alarms
-            else if(name == "anchor_alarm")           settings.anchor_alarm = value.GetBool();
-            else if(name == "anchor_alarm_distance")  settings.anchor_alarm_distance = value.GetInt();
-
-            else if(name == "course_alarm")         settings.course_alarm = value.GetBool();
-            else if(name == "course_alarm_course")  settings.course_alarm_course = value.GetInt();
-            else if(name == "course_alarm_error")   settings.course_alarm_error = value.GetInt();
-            
-            else if(name == "gps_speed_alarm")        settings.gps_speed_alarm = value.GetBool();
-            else if(name == "gps_min_speed_alarm_knots")  settings.gps_min_speed_alarm_knots = value.GetInt();
-            else if(name == "gps_max_speed_alarm_knots")  settings.gps_max_speed_alarm_knots = value.GetInt();
-
-            else if(name == "wind_speed_alarm")        settings.wind_speed_alarm = value.GetBool();
-            else if(name == "wind_min_speed_alarm_knots")  settings.wind_min_speed_alarm_knots = value.GetInt();
-            else if(name == "wind_max_speed_alarm_knots")  settings.wind_max_speed_alarm_knots = value.GetInt();
-
-            else if(name == "water_speed_alarm")        settings.water_speed_alarm = value.GetBool();
-            else if(name == "water_min_speed_alarm_knots")  settings.water_min_speed_alarm_knots = value.GetInt();
-            else if(name == "water_max_speed_alarm_knots")  settings.water_max_speed_alarm_knots = value.GetInt();
-
-            else if(name == "weather_alarm_pressure")      settings.weather_alarm_pressure = value.GetBool();
-            else if(name == "weather_alarm_min_pressure")  settings.weather_alarm_min_pressure = value.GetInt();
-            else if(name == "weather_alarm_pressure_rate")      settings.weather_alarm_pressure_rate = value.GetBool();
-            else if(name == "weather_alarm_pressure_rate_value")  settings.weather_alarm_pressure_rate_value = value.GetInt();
-            else if(name == "weather_alarm_lightning")      settings.weather_alarm_lightning = value.GetBool();
-            else if(name == "weather_alarm_lightning_distance")  settings.weather_alarm_lightning_distance = value.GetInt();
-
-            else if(name == "depth_alarm")      settings.depth_alarm = value.GetBool();
-            else if(name == "depth_alarm_min")  settings.depth_alarm_min = value.GetInt();
-            else if(name == "depth_alarm_rate")      settings.depth_alarm_rate = value.GetBool();
-            else if(name == "depth_alarm_rate_value")  settings.depth_alarm_rate_value = value.GetInt();
-
-            else if(name == "ais_alarm")      settings.ais_alarm = value.GetBool();
-            else if(name == "ais_alarm_cpa")  settings.ais_alarm_cpa = value.GetInt();
-            else if(name == "ais_alarm_tcpa")      settings.ais_alarm_tcpa = value.GetInt();
-            
-            else if(name == "pypilot_alarm_noconnection") settings.pypilot_alarm_noconnection = value.GetBool();
-            else if(name == "pypilot_alarm_fault") settings.pypilot_alarm_fault = value.GetBool();
-            else if(name == "pypilot_alarm_no_imu") settings.pypilot_alarm_no_imu = value.GetBool();
-            else if(name == "pypilot_alarm_no_motor_controller") settings.pypilot_alarm_no_motor_controller = value.GetBool();
-            else if(name == "pypilot_alarm_lost_mode") settings.pypilot_alarm_lost_mode = value.GetBool();
-
-            // display pages
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-            else if(name.rfind("page", 0) == 0) {
-                for(int j=0; j < display_pages.size(); j++) {
-                    page_info &page = display_pages[j];
-                    if(page.name == name[4])
-                        page.enabled = value.GetBool();
-            }
-#endif            
-            else printf("web post unknown parameter %s %s\n", name.c_str(), v.c_str());
+        rapidjson::Document s;
+        s.Parse((char*)buf);
+        if(s.HasMember("command")) {
+            const rapidjson::Value &value = s["command"];
+            apply_command(value);
         }
 
-        // with keys of mac address of sensors, update wireless settings
-        sensors_wireless_setting(doc);
+        settings_load_doc(s, false);
     }
     return ESP_OK;
 }
@@ -689,7 +517,7 @@ void web_poll() {
 
     if(ws_clients.size())
     {
-        std::string s = jsonCurrent();
+        std::string s = json_current();
         if(!s.empty()) {
             //println("ws: " + s);
             ws_broadcast_text(ws_clients, s.c_str());
@@ -706,7 +534,7 @@ void web_poll() {
         ws_broadcast_text(ws_clients, json_sensors().c_str());
 
     if(ws_data_clients.size())
-        ws_broadcast_text(ws_data_clients, jsonDisplayData().c_str());
+        ws_broadcast_text(ws_data_clients, json_display_data().c_str());
 }
 
 void web_update_wifi_networks() {

@@ -29,8 +29,11 @@ std::string display_get_item_label(display_item_e item)
     return "<item label>";
 }
 
+static uint64_t last_wind_time;
 void display_data_update(display_item_e item, float value, data_source_e)
 {
+    if(item == WIND_SPEED)
+        last_wind_time = esp_timer_get_time();
 }
 
 bool display_data_get(display_item_e item, float &value, std::string &source, uint64_t &time)
@@ -46,21 +49,20 @@ void display_setup() {
     tft.init();
 
     printf("free=%u largest=%u\n",
-  heap_caps_get_free_size(MALLOC_CAP_8BIT),
-  heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+           heap_caps_get_free_size(MALLOC_CAP_8BIT),
+           heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 
- dsp.createSprite(tft.width(), tft.height()); // big RAM use
+    dsp.createSprite(tft.width(), tft.height()); // big RAM use
 
- printf("free=%u largest=%u\n",
-  heap_caps_get_free_size(MALLOC_CAP_8BIT),
-  heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
- 
- //    std::unordered_set<std::string> keys = settings_keys();
+    printf("free=%u largest=%u\n",
+           heap_caps_get_free_size(MALLOC_CAP_8BIT),
+           heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    
     dsp.setSwapBytes(true); // if you use pushImage / 16-bit data
     
     dsp.setRotation(0);
     dsp.fillScreen(TFT_BLACK);
-
+    
     tft.setTextSize(1);
 }
 
@@ -83,6 +85,11 @@ void display_poll()
         return;
     }
 #endif
+    static int blink;
+    if(esp_timer_get_time() - last_wind_time < 1e6)
+        blink = (blink+1)%5;
+    else
+        blink = 0;
 
     dsp.setTextColor(TFT_GREEN, TFT_BLACK);
     char buf[16];
@@ -130,26 +137,28 @@ void display_poll()
     snprintf(buf, sizeof buf, "%02d.%d", (int)iknots, (int)iknotf);
     dsp.drawString(buf, 0, 150, 6);
 
-    dsp.fillRect(0, 195, 135, 50, BLACK);  // clear heading text area
-    int accel_yi = accel_y * 135/2;
-    int accel_xi = accel_x * 30;
+    float roll = rad2deg(atan2(accel_x, accel_z));
+    float pitch = rad2deg(-atan2(accel_y, accel_z));
+
+    int accel_yi = roll / 90 * 135/2, w;
     float x0 = 135/2.0f;
     if(accel_yi > 0)
         x0 -= accel_yi;
-    float y0 = 195;
-    if(accel_xi > 0)
-        y0 += accel_xi;
 
-    dsp.fillRect(x0, y0, abs(accel_yi), 30-abs(accel_xi), TFT_GREEN);
-
-    dsp.setTextColor(TFT_BLUE);
-    snprintf(buf, sizeof buf, "%.0f", rad2deg(fabsf(asinf(accel_y))));
-    int w = dsp.textWidth(buf, 4);
+    dsp.fillRect(0, 195, 135, 50, BLACK);  // clear roll text area
+    dsp.fillRect(x0, 195, abs(accel_yi), 30, TFT_GREEN);
+    dsp.setTextColor(TFT_RED);
+    snprintf(buf, sizeof buf, "roll %.0f", fabsf(roll));
+    w = dsp.textWidth(buf, 4);
     dsp.drawString(buf, 135/2-w/2, 195, 4);
     
-    dsp.fillRect(0, 220, 135, 35, BLACK);  // c area
-    snprintf(buf, sizeof buf, "%.0f", rad2deg(fabsf(asinf(accel_x))));
-    dsp.drawString(buf, 0, 220, 4);
+    dsp.fillRect(0, 220, 135, 35, BLACK);  // pitch
+    if(blink > 2) // draw cursor
+        dsp.fillRect(135-5, 235-5, 5, 5, TFT_GREEN);
+    snprintf(buf, sizeof buf, "pitch %.0f", pitch);
+    w = dsp.textWidth(buf, 4);
+    dsp.drawString(buf, 135/2-w/2, 220, 4);
+        
     
     dsp.pushSprite(0, 0); // push to screen
 }

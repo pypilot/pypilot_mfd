@@ -376,9 +376,9 @@ struct ClientSock
 };
 
 static int server_sock;
-static ClientSock nmea_client;
-static ClientSock pypilot_nmea_client;
-static ClientSock signalk_nmea_client;
+static ClientSock nmea_tcp_client;
+static ClientSock nmea_pypilot_client;
+static ClientSock nmea_signalk_client;
 static ClientSock clients[5];
 
 static void close_server() {
@@ -440,7 +440,7 @@ static void connect_client(ClientSock &client, std::string addr, int port)
 static void connect_server()
 {
     static int server_port;
-    if(settings.nmea_server_port != server_port)
+    if(settings.nmea_tcp_server_port != server_port)
         close_server();
 
     if(server_sock)
@@ -455,7 +455,7 @@ static void connect_server()
     struct sockaddr_in *dest_addr_ip4 = (struct sockaddr_in *)&dest_addr;
     dest_addr_ip4->sin_addr.s_addr = htonl(INADDR_ANY);
     dest_addr_ip4->sin_family = AF_INET;
-    dest_addr_ip4->sin_port = htons(settings.nmea_server_port);
+    dest_addr_ip4->sin_port = htons(settings.nmea_tcp_server_port);
     ip_protocol = IPPROTO_IP;
 
     server_sock = socket(addr_family, SOCK_STREAM, ip_protocol);
@@ -480,7 +480,7 @@ static void connect_server()
         close_server();
         return;
     }
-    server_port = settings.nmea_server_port;
+    server_port = settings.nmea_tcp_server_port;
 
     fcntl(server_sock, F_SETFL, fcntl(server_sock, F_GETFL, 0) | O_NONBLOCK);
 
@@ -589,7 +589,7 @@ static void poll_server()
 
     accept_server();
     for(int i=0; i<(sizeof clients) / (sizeof *clients); i++)
-        poll_client(clients[i], settings.input_nmea_server);
+        poll_client(clients[i], settings.input_nmea_tcp_server);
 }
 
 void nmea_poll()
@@ -599,9 +599,9 @@ void nmea_poll()
        !wifi_connected) {
         //printf("not conn %d\n", server_sock);
         close_server();
-        nmea_client.close();
-        pypilot_nmea_client.close();
-        signalk_nmea_client.close();
+        nmea_tcp_client.close();
+        nmea_pypilot_client.close();
+        nmea_signalk_client.close();
         return;
     }
 
@@ -613,25 +613,25 @@ void nmea_poll()
     last_poll_time = t0;
 
     if(settings.input_nmea_pypilot || settings.output_nmea_pypilot) {
-        connect_client(pypilot_nmea_client, settings.pypilot_addr, 20220);
-        if(!poll_client(pypilot_nmea_client, settings.input_nmea_pypilot))
+        connect_client(nmea_pypilot_client, settings.pypilot_addr, 20220);
+        if(!poll_client(nmea_pypilot_client, settings.input_nmea_pypilot))
             // find pypilot address again with mdns                
             pypilot_discovered=0;
     }
 
     if(settings.input_nmea_signalk || settings.output_nmea_signalk) {
-        connect_client(signalk_nmea_client, settings.signalk_addr, 10110);
-        if(!poll_client(signalk_nmea_client, settings.input_nmea_signalk))
+        connect_client(nmea_signalk_client, settings.signalk_addr, 10110);
+        if(!poll_client(nmea_signalk_client, settings.input_nmea_signalk))
             // find address again with mdns                
             signalk_discovered=0;
     }
 
-    if(settings.input_nmea_client || settings.output_nmea_client) {
-        connect_client(nmea_client, settings.nmea_client_addr, settings.nmea_client_port);
-        poll_client(nmea_client, settings.input_nmea_client);
+    if(settings.input_nmea_tcp_client || settings.output_nmea_tcp_client) {
+        connect_client(nmea_tcp_client, settings.nmea_tcp_client_addr, settings.nmea_tcp_client_port);
+        poll_client(nmea_tcp_client, settings.input_nmea_tcp_client);
     }
     
-    if(settings.input_nmea_server || settings.output_nmea_server) {
+    if(settings.input_nmea_tcp_server || settings.output_nmea_tcp_server) {
         connect_server();
         poll_server();
     }
@@ -658,7 +658,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
     c.close();
 }
 
-static void write_nmea_server(const char *buf)
+static void write_nmea_tcp_server(const char *buf)
 {
     for(int i=0; i<(sizeof clients) / (sizeof *clients); i++)
         write_nmea_client(clients[i], buf);
@@ -667,13 +667,13 @@ static void write_nmea_server(const char *buf)
 void nmea_write_wifi(const char *buf)
 {
     if(settings.output_nmea_pypilot)
-        write_nmea_client(pypilot_nmea_client, buf);
-    if(settings.output_nmea_client)
-        write_nmea_client(signalk_nmea_client, buf);
-    if(settings.output_nmea_client)
-        write_nmea_client(nmea_client, buf);
-    if(settings.output_nmea_server)
-        write_nmea_server(buf);
+        write_nmea_client(nmea_pypilot_client, buf);
+    if(settings.output_nmea_signalk)
+        write_nmea_client(nmea_signalk_client, buf);
+    if(settings.output_nmea_tcp_client)
+        write_nmea_client(nmea_tcp_client, buf);
+    if(settings.output_nmea_tcp_server)
+        write_nmea_tcp_server(buf);
 }
 
 void nmea_send(const char *buf)

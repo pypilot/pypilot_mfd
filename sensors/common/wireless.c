@@ -145,8 +145,19 @@ static void on_espnow_data(const esp_now_recv_info_t *recv_info, const uint8_t *
     enable_ap(1);
 }
 
+static TaskHandle_t send_task;
+static void on_espnow_send(const wifi_tx_info_t *info, esp_now_send_status_t status)
+{
+    vTaskNotifyGiveFromISR(send_task, 0);
+}
+
+void wireless_wait_sent() {
+    ulTaskNotifyTake(pdTRUE, 1);
+}
+
 static void espnow_init(void)
 {
+    send_task = xTaskGetCurrentTaskHandle();
     /* Initialize ESPNOW and register sending and receiving callback function. */
     //esp_wifi_set_channel(chip.channel, WIFI_SECOND_CHAN_NONE);
     if (esp_now_init() == ESP_OK) {
@@ -157,6 +168,7 @@ static void espnow_init(void)
     }
 
     ESP_ERROR_CHECK( esp_now_register_recv_cb(on_espnow_data) );
+    ESP_ERROR_CHECK( esp_now_register_send_cb(on_espnow_send) );
 #if 0
 #if CONFIG_ESPNOW_ENABLE_POWER_SAVE
     ESP_ERROR_CHECK( esp_now_set_wake_window(CONFIG_ESPNOW_WAKE_WINDOW) );
@@ -184,6 +196,15 @@ void wifi_init(void)
     ESP_ERROR_CHECK( esp_wifi_start());
     ESP_ERROR_CHECK( esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE));
 
+    int mapped_tx_power = 80;
+    switch(tx_power) {
+    case 8:  mapped_tx_power = 34; break;
+    case 13: mapped_tx_power = 52; break;
+    case 16: mapped_tx_power = 66; break;
+    case 20: mapped_tx_power = 80; break;
+    }
+    ESP_ERROR_CHECK( esp_wifi_set_max_tx_power(mapped_tx_power) );
+
     memset(&chip, 0, sizeof(chip));
     for(int ii=0; ii<6; ii++)
         chip.peer_addr[ii] = 0xff;
@@ -195,7 +216,7 @@ void wifi_init(void)
 }
 
 // send data
-void sendData(uint8_t *packet, int len)
+void wireless_send_data(uint8_t *packet, int len)
 {
     const uint8_t *peer_addr = chip.peer_addr;
     esp_err_t result = esp_now_send(peer_addr, packet, len);

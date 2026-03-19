@@ -23,20 +23,22 @@ struct settings_t {
 
     uint8_t wifi_channel;
 
-    bool input_usb_host, output_usb_host;
     bool input_usb, output_usb;
-    int usb_host_baud_rate, usb_baud_rate;
+    int usb_baud_rate;
+
+    bool input_usb_host, output_usb_host;
+    int usb_host_baud_rate;
     int rs422_1_baud_rate;
     int rs422_2_baud_rate;
 
     bool input_nmea_pypilot, output_nmea_pypilot;
     bool input_nmea_signalk, output_nmea_signalk;
-    bool input_nmea_client, output_nmea_client;
-    bool input_nmea_server, output_nmea_server;
+    bool input_nmea_tcp_client, output_nmea_tcp_client;
+    bool input_nmea_tcp_server, output_nmea_tcp_server;
     bool input_signalk, output_signalk;
 
-    std::string nmea_client_addr;
-    int nmea_client_port, nmea_server_port;
+    std::string nmea_tcp_client_addr;
+    int nmea_tcp_client_port, nmea_tcp_server_port;
 
     bool forward_nmea_serial_to_serial;
     bool forward_nmea_serial_to_wifi;

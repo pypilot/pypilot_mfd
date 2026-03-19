@@ -174,35 +174,14 @@ static bool set_double(rapidjson::Value& v, const std::string& s) {
     return true;
 }
 
-// s is an object (e.g. doc["settings"])
-// key exists already and you want to set it using the existing type
-bool set_by_existing_type(rapidjson::Value& v,
-                          const std::string& value,
-                          rapidjson::Document::AllocatorType& alloc)
+void settings_load_doc(rapidjson::Document &s, bool defaults)
 {
-    if (v.IsBool()) return set_bool(v, value);
-    if (v.IsUint()) return set_int(v, value, true);
-    if (v.IsInt()) return set_int(v, value, false);
-    if (v.IsNumber()) return set_double(v, value);
-    if (v.IsString()) {
-        v.SetString(value.c_str(), (rapidjson::SizeType)value.size(), alloc);
-        return true;
-    }
-
-    return false;
-}
-
-static bool settings_load_suffix(std::string suffix="")
-{
-    rapidjson::Document s;
-    if(!settings_parse(s, suffix))
-        return false;
     
-#define LOAD_SETTING_B(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsBool()) settings.NAME = s[#NAME].GetBool(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_I(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = s[#NAME].GetInt(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_F(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsDouble()) settings.NAME = s[#NAME].GetFloat(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_S(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsString()) settings.NAME = s[#NAME].GetString(); else settings.NAME = DEFAULT;
-#define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = (TYPE)(int)s[#NAME].GetInt(); else settings.NAME = DEFAULT;
+#define LOAD_SETTING_B(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsBool()) settings.NAME = s[#NAME].GetBool(); else if(defaults) settings.NAME = DEFAULT;
+#define LOAD_SETTING_I(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = s[#NAME].GetInt(); else if(defaults) settings.NAME = DEFAULT;
+#define LOAD_SETTING_F(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsDouble()) settings.NAME = s[#NAME].GetFloat(); else if(defaults) settings.NAME = DEFAULT;
+#define LOAD_SETTING_S(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsString()) settings.NAME = s[#NAME].GetString(); else if(defaults) settings.NAME = DEFAULT;
+#define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = (TYPE)(int)s[#NAME].GetInt(); else if(defaults) settings.NAME = DEFAULT;
 
 #define LOAD_SETTING_BOUND(NAME, DEFAULT, MIN, MAX) \
     LOAD_SETTING_I(NAME, DEFAULT) \
@@ -242,13 +221,13 @@ static bool settings_load_suffix(std::string suffix="")
 
     LOAD_SETTING_B(output_nmea_pypilot, false)
     LOAD_SETTING_B(output_nmea_signalk, false)
-    LOAD_SETTING_B(output_nmea_client, false)
-    LOAD_SETTING_B(output_nmea_server, false)
+    LOAD_SETTING_B(output_nmea_tcp_client, false)
+    LOAD_SETTING_B(output_nmea_tcp_server, false)
     LOAD_SETTING_B(output_signalk, false)
 
-    LOAD_SETTING_S(nmea_client_addr, "")
-    LOAD_SETTING_I(nmea_client_port, 0);
-    LOAD_SETTING_I(nmea_server_port, 3600);
+    LOAD_SETTING_S(nmea_tcp_client_addr, "")
+    LOAD_SETTING_I(nmea_tcp_client_port, 0);
+    LOAD_SETTING_I(nmea_tcp_server_port, 3600);
 
     // forwarding data
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -338,8 +317,34 @@ static bool settings_load_suffix(std::string suffix="")
     // transmitters
     if(s.HasMember("transmitters"))
         sensors_read_transmitters(s["transmitters"]);
+}
 
+static bool settings_load_suffix(std::string suffix="")
+{
+    rapidjson::Document s;
+    if(!settings_parse(s, suffix))
+        return false;
+
+    settings_load_doc(s, true);
     return true;
+}
+
+// s is an object (e.g. doc["settings"])
+// key exists already and you want to set it using the existing type
+bool set_by_existing_type(rapidjson::Value& v,
+                          const std::string& value,
+                          rapidjson::Document::AllocatorType& alloc)
+{
+    if (v.IsBool()) return set_bool(v, value);
+    if (v.IsUint()) return set_int(v, value, true);
+    if (v.IsInt()) return set_int(v, value, false);
+    if (v.IsNumber()) return set_double(v, value);
+    if (v.IsString()) {
+        v.SetString(value.c_str(), (rapidjson::SizeType)value.size(), alloc);
+        return true;
+    }
+
+    return false;
 }
 
 bool settings_set_value(const std::string &key, const std::string &value) {
@@ -363,9 +368,8 @@ bool settings_set_value(const std::string &key, const std::string &value) {
     return true;
 }
 
-static bool settings_store_suffix(std::string suffix="")
+rapidjson::StringBuffer settings_store_doc()
 {
-    printf("SETTINGS STORE %s\n", suffix.c_str());
     rapidjson::StringBuffer s;
     rapidjson::PrettyWriter<rapidjson::StringBuffer> w(s);
     w.SetMaxDecimalPlaces(6);
@@ -406,20 +410,17 @@ static bool settings_store_suffix(std::string suffix="")
         
     STORE_SETTING_B(output_nmea_pypilot)
     STORE_SETTING_B(output_nmea_signalk)
-    STORE_SETTING_B(output_nmea_client)
-    STORE_SETTING_B(output_nmea_server)
+    STORE_SETTING_B(output_nmea_tcp_client)
+    STORE_SETTING_B(output_nmea_tcp_server)
     STORE_SETTING_B(output_signalk)
 
-    STORE_SETTING_S(nmea_client_addr)
-    STORE_SETTING_I(nmea_client_port)
-    STORE_SETTING_I(nmea_server_port)
+    STORE_SETTING_S(nmea_tcp_client_addr)
+    STORE_SETTING_I(nmea_tcp_client_port)
+    STORE_SETTING_I(nmea_tcp_server_port)
 
     // forwarding data
-#ifdef CONFIG_IDF_TARGET_ESP32S3
     STORE_SETTING_B(forward_nmea_serial_to_serial)
     STORE_SETTING_B(forward_nmea_serial_to_wifi)
-#endif
-
     STORE_SETTING_B(compensate_wind_with_accelerometer)
 #ifdef CONFIG_IDF_TARGET_ESP32S3
     STORE_SETTING_B(compute_true_wind_from_gps)
@@ -500,6 +501,13 @@ static bool settings_store_suffix(std::string suffix="")
 
     w.EndObject();
 
+    return s;
+}
+
+static bool settings_store_suffix(std::string suffix="")
+{
+    printf("SETTINGS STORE %s\n", suffix.c_str());
+    rapidjson::StringBuffer s = settings_store_doc();
     return settings_write(s.GetString(), s.GetSize(), suffix);
 }
 

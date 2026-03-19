@@ -7,9 +7,8 @@
  */
 
 extern char wifi_psk[64];
-extern uint8_t wifi_channel;
-extern uint8_t output_rate;
+extern uint8_t wifi_channel, rate, tx_power;
 
 void read_settings();
-esp_err_t write_settings(const char *psk, int channel, int rate);
+esp_err_t write_settings(int channel, int rate, int tx_power, const char *psk);
 

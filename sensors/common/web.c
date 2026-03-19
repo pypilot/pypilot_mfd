@@ -75,9 +75,10 @@ static esp_err_t submit_handler(httpd_req_t *req)
 {
     esp_err_t err;
     char *buf = NULL;
-    char psk[64] = "";
     char channel_str[8] = "";
     char rate_str[8] = "";
+    char tx_power_str[8] = "";
+    char psk[64] = "";
 
     if (req->content_len <= 0 || req->content_len > 256) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Bad form size");
@@ -98,18 +99,21 @@ static esp_err_t submit_handler(httpd_req_t *req)
     }
     buf[len] = 0;
 
+    httpd_query_key_value(buf, "channel", channel_str, sizeof(channel_str));
+    httpd_query_key_value(buf, "rate", rate_str, sizeof(rate_str));
+    httpd_query_key_value(buf, "tx_power", tx_power_str, sizeof(tx_power_str));
+
     if (httpd_query_key_value(buf, "psk", psk, sizeof(psk)) != ESP_OK) {
         free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing PSK");
         return ESP_FAIL;
     }
 
-    httpd_query_key_value(buf, "channel", channel_str, sizeof(channel_str));
-    httpd_query_key_value(buf, "rate", rate_str, sizeof(rate_str));
     free(buf);
 
     int channel = atoi(channel_str);
     int rate = atoi(rate_str);
+    int tx_power = atoi(tx_power_str);
 
     if (!(channel == 1 || channel == 6 || channel == 11)) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid channel");
@@ -121,7 +125,12 @@ static esp_err_t submit_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    err = write_settings(psk, channel, rate);
+    if (!(tx_power == 8 || tx_power == 13 || tx_power == 16 || tx_power == 20)) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid tx_power");
+        return ESP_FAIL;
+    }
+
+    err = write_settings(channel, rate, tx_power, psk);
     if (err != ESP_OK) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to save config");
         return ESP_FAIL;
@@ -131,7 +140,7 @@ static esp_err_t submit_handler(httpd_req_t *req)
     httpd_resp_sendstr(req,
         "<!DOCTYPE html><html><head>"
         "<meta charset='UTF-8'>"
-        "<meta http-equiv='refresh' content='5;url=/'>"
+        "<meta http-equiv='refresh' content='3;url=/'>"
         "<style>"
         "body{font-family:Arial,sans-serif;background:#f4f6f8;text-align:center;padding-top:40px;}"
         ".card{display:inline-block;background:white;padding:24px 32px;border-radius:10px;"
@@ -141,7 +150,7 @@ static esp_err_t submit_handler(httpd_req_t *req)
         "<div class='card'>"
         "<h2>Settings saved</h2>"
         "<p>Rebooting device...</p>"
-        "<script>setTimeout(()=>{window.location='/'},5000);</script>"
+        "<script>setTimeout(()=>{window.location='/'},3000);</script>"
         "</div>"
         "</body></html>");
 
@@ -153,8 +162,8 @@ static esp_err_t submit_handler(httpd_req_t *req)
 static esp_err_t config_handler(httpd_req_t *req)
 {
     char config[1024];
-    snprintf(config, sizeof config, "{\"psk\":\"%s\",\"channel\":%d,\"rate\":%d}",
-             wifi_psk, wifi_channel, output_rate);
+    snprintf(config, sizeof config, "{\"channel\":%d,\"rate\":%d,\"tx_power\":%d,\"psk\":\"%s\"}",
+             wifi_channel, rate, tx_power, wifi_psk);
     
     httpd_resp_send(req, (const char *) config, strlen(config));
     return ESP_OK;
