@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name lightning_detector)(type KiCad)(uri ${KIPRJMOD}/lightning_detector.pretty)(options "")(descr ""))
+)

@@ -3,3 +3,7 @@
 *.xml
 *.bck
 *.net
+gerber
+fp-info-cache
+pypilot_mfd-cache.lib
+pypilot_mfd-rescue.kicad_sym

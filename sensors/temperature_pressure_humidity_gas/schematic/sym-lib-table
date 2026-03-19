@@ -1,0 +1,7 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "lmr14030")(type "Legacy")(uri "/home/sean/schematics/libraries/lmr14030.lib")(options "")(descr ""))
+  (lib (name "tps")(type "Legacy")(uri "${KIPRJMOD}/tps.lib")(options "")(descr ""))
+  (lib (name "pypilot_components")(type "Legacy")(uri "/home/sean/schematics/libraries/pypilot_components.lib")(options "")(descr ""))
+  (lib (name "temperature_pressure_humidity_gas-rescue")(type "KiCad")(uri "${KIPRJMOD}/temperature_pressure_humidity_gas-rescue.kicad_sym")(options "")(descr ""))
+)

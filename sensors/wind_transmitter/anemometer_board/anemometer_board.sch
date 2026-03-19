@@ -1,0 +1,315 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L Sensor_Magnetic:A1101ELHL U1
+U 1 1 65AAD1BF
+P 3100 1650
+F 0 "U1" H 3200 1850 50  0000 R CNN
+F 1 "SC2402" H 3300 1550 50  0000 R CNN
+F 2 "anemometer_board2:SOT-23" H 3450 1550 50  0001 L CIN
+F 3 "http://www.allegromicro.com/~/media/Files/Datasheets/A1363-Datasheet.ashx?la=en" H 3100 1650 50  0001 C CNN
+F 4 "C496739" H 3100 1650 50  0001 C CNN "LCSC"
+	1    3100 1650
+	-1   0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR0101
+U 1 1 65AAD9FE
+P 3200 2050
+F 0 "#PWR0101" H 3200 1800 50  0001 C CNN
+F 1 "GND" H 3205 1877 50  0001 C CNN
+F 2 "" H 3200 2050 50  0001 C CNN
+F 3 "" H 3200 2050 50  0001 C CNN
+	1    3200 2050
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2800 1650 2600 1650
+$Comp
+L Device:R R1
+U 1 1 65AAEE2A
+P 2600 1500
+F 0 "R1" H 2670 1546 50  0000 L CNN
+F 1 "10k" V 2600 1450 50  0000 L CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 2530 1500 50  0001 C CNN
+F 3 "~" H 2600 1500 50  0001 C CNN
+F 4 "C17414" H 2600 1500 50  0001 C CNN "LCSC"
+	1    2600 1500
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:C C1
+U 1 1 65AAF206
+P 4200 1250
+F 0 "C1" H 4100 1350 50  0000 L CNN
+F 1 "100n" H 4000 1150 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0805_2012Metric" H 4238 1100 50  0001 C CNN
+F 3 "~" H 4200 1250 50  0001 C CNN
+F 4 "C49678" H 4200 1250 50  0001 C CNN "LCSC"
+	1    4200 1250
+	1    0    0    -1  
+$EndComp
+$Comp
+L Diode:1.5KExxA D1
+U 1 1 65AAF595
+P 4500 1250
+F 0 "D1" V 4454 1329 50  0000 L CNN
+F 1 "6v" V 4545 1329 50  0000 L CNN
+F 2 "Diode_SMD:D_SOD-323" H 4500 1050 50  0001 C CNN
+F 3 "https://www.vishay.com/docs/88301/15ke.pdf" H 4450 1250 50  0001 C CNN
+F 4 "C502527" V 4500 1250 50  0001 C CNN "LCSC"
+	1    4500 1250
+	0    1    1    0   
+$EndComp
+$Comp
+L power:+3V3 #PWR0102
+U 1 1 65AAFAED
+P 4500 1100
+F 0 "#PWR0102" H 4500 950 50  0001 C CNN
+F 1 "+3V3" H 4515 1273 50  0000 C CNN
+F 2 "" H 4500 1100 50  0001 C CNN
+F 3 "" H 4500 1100 50  0001 C CNN
+	1    4500 1100
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR0103
+U 1 1 65AAFD75
+P 4500 1400
+F 0 "#PWR0103" H 4500 1150 50  0001 C CNN
+F 1 "GND" H 4505 1227 50  0001 C CNN
+F 2 "" H 4500 1400 50  0001 C CNN
+F 3 "" H 4500 1400 50  0001 C CNN
+	1    4500 1400
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	4500 1400 4200 1400
+Connection ~ 4500 1400
+Wire Wire Line
+	4200 1100 4500 1100
+Connection ~ 4500 1100
+$Comp
+L power:+3V3 #PWR0104
+U 1 1 65AB196D
+P 2600 1350
+F 0 "#PWR0104" H 2600 1200 50  0001 C CNN
+F 1 "+3V3" H 2615 1523 50  0000 C CNN
+F 2 "" H 2600 1350 50  0001 C CNN
+F 3 "" H 2600 1350 50  0001 C CNN
+	1    2600 1350
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:+3V3 #PWR0105
+U 1 1 65AB206F
+P 3200 1250
+F 0 "#PWR0105" H 3200 1100 50  0001 C CNN
+F 1 "+3V3" H 3215 1423 50  0000 C CNN
+F 2 "" H 3200 1250 50  0001 C CNN
+F 3 "" H 3200 1250 50  0001 C CNN
+	1    3200 1250
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_02x03_Odd_Even J1
+U 1 1 65AB253D
+P 2000 1450
+F 0 "J1" H 2050 1500 50  0000 C CNN
+F 1 "Conn_02x03_Odd_Even" H 2050 1676 50  0001 C CNN
+F 2 "anemometer_board2:end" H 2000 1450 50  0001 C CNN
+F 3 "~" H 2000 1450 50  0001 C CNN
+	1    2000 1450
+	1    0    0    -1  
+$EndComp
+Text Notes 1050 1200 0    50   ~ 0
+3v3
+$Comp
+L power:GND #PWR0106
+U 1 1 65AAC3D2
+P 1500 1550
+F 0 "#PWR0106" H 1500 1300 50  0001 C CNN
+F 1 "GND" H 1505 1377 50  0001 C CNN
+F 2 "" H 1500 1550 50  0001 C CNN
+F 3 "" H 1500 1550 50  0001 C CNN
+	1    1500 1550
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:+3V3 #PWR0107
+U 1 1 65AABAF6
+P 1500 1150
+F 0 "#PWR0107" H 1500 1000 50  0001 C CNN
+F 1 "+3V3" H 1515 1323 50  0000 C CNN
+F 2 "" H 1500 1150 50  0001 C CNN
+F 3 "" H 1500 1150 50  0001 C CNN
+	1    1500 1150
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x07 J2
+U 1 1 5F5F9FD2
+P 1300 1450
+F 0 "J2" H 1300 1850 50  0000 C CNN
+F 1 "Conn_01x04" H 1380 1351 50  0001 L CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical" H 1300 1450 50  0001 C CNN
+F 3 "~" H 1300 1450 50  0001 C CNN
+	1    1300 1450
+	-1   0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR0108
+U 1 1 65AB6D4A
+P 2300 1550
+F 0 "#PWR0108" H 2300 1300 50  0001 C CNN
+F 1 "GND" H 2305 1377 50  0001 C CNN
+F 2 "" H 2300 1550 50  0001 C CNN
+F 3 "" H 2300 1550 50  0001 C CNN
+	1    2300 1550
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2300 1450 2300 1500
+Wire Wire Line
+	2300 1500 1500 1500
+Wire Wire Line
+	1500 1500 1500 1450
+Wire Wire Line
+	1500 1350 1800 1350
+Wire Wire Line
+	1800 1450 1700 1450
+Wire Wire Line
+	1700 1450 1700 1150
+Wire Wire Line
+	1700 1150 1500 1150
+Connection ~ 1500 1150
+Text Notes 1000 1700 0    50   ~ 0
+MISO
+Text Notes 1000 1500 0    50   ~ 0
+SCK
+Text Notes 950  1300 0    50   ~ 0
+SPEED
+Wire Wire Line
+	1500 1650 2400 1650
+Wire Wire Line
+	2400 1650 2400 1350
+Wire Wire Line
+	2400 1350 2300 1350
+Wire Wire Line
+	1500 1250 2500 1250
+Wire Wire Line
+	2500 1250 2500 1650
+Wire Wire Line
+	2500 1650 2600 1650
+Connection ~ 2600 1650
+Wire Wire Line
+	1800 1550 1800 1750
+Wire Wire Line
+	1800 1750 1500 1750
+$Comp
+L Device:C C2
+U 1 1 65ACE7C4
+P 3600 1600
+F 0 "C2" H 3500 1700 50  0000 L CNN
+F 1 "100n" H 3400 1500 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0805_2012Metric" H 3638 1450 50  0001 C CNN
+F 3 "~" H 3600 1600 50  0001 C CNN
+F 4 "C49678" H 3600 1600 50  0001 C CNN "LCSC"
+	1    3600 1600
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3600 1750 3600 2050
+Wire Wire Line
+	3600 2050 3200 2050
+Connection ~ 3200 2050
+Wire Wire Line
+	3600 1450 3600 1250
+Wire Wire Line
+	3600 1250 3200 1250
+Connection ~ 3200 1250
+Text Notes 1050 1800 0    50   ~ 0
+SS
+Text Notes 1000 1400 0    50   ~ 0
+MOSI
+$Comp
+L Connector_Generic:Conn_02x03_Odd_Even J3
+U 1 1 65B0926E
+P 2100 3050
+F 0 "J3" H 2150 3100 50  0000 C CNN
+F 1 "Conn_02x03_Odd_Even" H 2150 3276 50  0001 C CNN
+F 2 "Connector_PinHeader_2.00mm:PinHeader_2x03_P2.00mm_Vertical_SMD" H 2100 3050 50  0001 C CNN
+F 3 "~" H 2100 3050 50  0001 C CNN
+F 4 "C2827498" H 2100 3050 50  0001 C CNN "LCSC"
+	1    2100 3050
+	1    0    0    -1  
+$EndComp
+$Comp
+L mt6816:MT6816 U2
+U 1 1 65B09612
+P 2150 3600
+F 0 "U2" H 2150 3825 50  0000 C CNN
+F 1 "MT6816" H 2150 3734 50  0000 C CNN
+F 2 "anemometer_board2:SOIC-8_3.9x4.9mm_P1.27mm" H 2150 3550 50  0001 C CNN
+F 3 "" H 2150 3550 50  0001 C CNN
+F 4 "C879560" H 2150 3600 50  0001 C CNN "LCSC"
+	1    2150 3600
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	1900 2950 1700 2950
+Wire Wire Line
+	1700 2950 1700 2700
+Wire Wire Line
+	1700 2700 2750 2700
+Wire Wire Line
+	2750 2700 2750 3900
+Wire Wire Line
+	2750 3900 2550 3900
+Wire Wire Line
+	2550 3800 2700 3800
+Wire Wire Line
+	2700 3800 2700 2950
+Wire Wire Line
+	2700 2950 2400 2950
+Wire Wire Line
+	2400 3050 2650 3050
+Wire Wire Line
+	2650 3050 2650 3700
+Wire Wire Line
+	2650 3700 2550 3700
+Wire Wire Line
+	2550 3600 2600 3600
+Wire Wire Line
+	2600 3600 2600 3150
+Wire Wire Line
+	2600 3150 2400 3150
+Wire Wire Line
+	1900 3150 1750 3150
+Wire Wire Line
+	1750 3150 1750 3600
+Wire Wire Line
+	1900 3050 1700 3050
+Wire Wire Line
+	1700 3050 1700 3700
+Wire Wire Line
+	1700 3900 1750 3900
+Wire Wire Line
+	1750 3700 1700 3700
+Connection ~ 1700 3700
+Wire Wire Line
+	1700 3700 1700 3900
+$EndSCHEMATC

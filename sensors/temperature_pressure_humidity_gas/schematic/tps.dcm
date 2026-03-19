@@ -1,0 +1,21 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP TPS7133
+D 500mA Low Drop-out Voltage Regualtor, Fixed Output 3.3V, SO-8/DIP-8
+K LDO Voltage Regulator 500mA
+F http://www.ti.com/lit/ds/symlink/tps71.pdf
+$ENDCMP
+#
+$CMP TPS7148
+D 500mA Low Drop-out Voltage Regualtor, Fixed Output 4.85V, SO-8/DIP-8
+K LDO Voltage Regulator 500mA
+F http://www.ti.com/lit/ds/symlink/tps71.pdf
+$ENDCMP
+#
+$CMP TPS7150
+D 500mA Low Drop-out Voltage Regualtor, Fixed Output 5V, SO-8/DIP-8
+K LDO Voltage Regulator 500mA
+F http://www.ti.com/lit/ds/symlink/tps71.pdf
+$ENDCMP
+#
+#End Doc Library

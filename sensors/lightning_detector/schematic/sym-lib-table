@@ -1,0 +1,8 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "pypilot_components")(type "Legacy")(uri "/home/sean/schematics/libraries/pypilot_components.lib")(options "")(descr ""))
+  (lib (name "lmr14030")(type "Legacy")(uri "/home/sean/schematics/libraries/lmr14030.lib")(options "")(descr ""))
+  (lib (name "tps")(type "Legacy")(uri "/home/sean/schematics/temperature_pressure_humidity_gas/tps.lib")(options "")(descr ""))
+  (lib (name "light_sensors")(type "Legacy")(uri "${KIPRJMOD}/light_sensors.lib")(options "")(descr ""))
+  (lib (name "lightning_detector-rescue")(type "KiCad")(uri "${KIPRJMOD}/lightning_detector-rescue.kicad_sym")(options "")(descr ""))
+)

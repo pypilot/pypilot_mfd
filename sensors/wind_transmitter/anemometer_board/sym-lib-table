@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name anemometer_board-rescue)(type Legacy)(uri ${KIPRJMOD}/anemometer_board-rescue.lib)(options "")(descr ""))
+  (lib (name mt6816)(type Legacy)(uri ${KIPRJMOD}/mt6816.lib)(options "")(descr ""))
+)

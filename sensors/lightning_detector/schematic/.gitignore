@@ -3,3 +3,7 @@
 *.xml
 *.bck
 *.net
+fp-info-cache
+*-cache.lib
+*-rescue.kicad_sym
+gerber

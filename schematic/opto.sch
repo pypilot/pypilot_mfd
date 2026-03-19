@@ -1,0 +1,207 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 2 2
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L pypilot_components:tlp2361 U14
+U 1 1 6562D10C
+P 7200 1600
+F 0 "U?" H 7300 1750 50  0000 L CNN
+F 1 "TLP2361(TPL,E(T" H 7544 1555 50  0001 L CNN
+F 2 "pypilot_footprints:SO-5_4.4x3.6mm_P1.27mm" H 7110 1600 50  0001 C CNN
+F 3 "https://www.fairchildsemi.com/datasheets/H1/H11L1M.pdf" H 7110 1600 50  0001 C CNN
+F 4 "C107626" H 7200 1600 50  0001 C CNN "LCSC"
+	1    7200 1600
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7100 2050 7850 2050
+Wire Wire Line
+	7850 2050 7850 1300
+Wire Wire Line
+	7200 1900 7200 1950
+Wire Wire Line
+	7200 1950 7450 1950
+Connection ~ 7850 1300
+Wire Wire Line
+	7850 1300 8000 1300
+Wire Wire Line
+	7500 1600 8000 1600
+Wire Wire Line
+	8000 1600 8100 1600
+$Comp
+L Device:R R33
+U 1 1 6563D580
+P 6400 1700
+F 0 "R?" V 6300 1750 50  0000 C CNN
+F 1 "1k" V 6400 1700 50  0000 C CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 6285 1700 50  0001 C CNN
+F 3 "~" H 6400 1700 50  0001 C CNN
+F 4 "C17513" V 6400 1700 50  0001 C CNN "LCSC"
+	1    6400 1700
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:C C17
+U 1 1 6629153B
+P 7650 1700
+F 0 "C?" H 7450 1750 50  0000 L CNN
+F 1 "100n" H 7450 1600 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0805_2012Metric" H 7688 1550 50  0001 C CNN
+F 3 "~" H 7650 1700 50  0001 C CNN
+F 4 "C49678" H 7650 1700 50  0001 C CNN "LCSC"
+	1    7650 1700
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7650 1850 7650 1950
+Wire Wire Line
+	7650 1550 7650 1300
+Connection ~ 7650 1300
+Wire Wire Line
+	7650 1300 7850 1300
+$Comp
+L Device:C C16
+U 1 1 662934E8
+P 6400 2250
+F 0 "C?" H 6200 2150 50  0000 L CNN
+F 1 "100n" H 6400 2150 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0805_2012Metric" H 6438 2100 50  0001 C CNN
+F 3 "~" H 6400 2250 50  0001 C CNN
+	1    6400 2250
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6400 2400 6400 2450
+Wire Wire Line
+	6400 2450 6800 2450
+Wire Wire Line
+	6400 2100 6400 1800
+Wire Wire Line
+	6400 1800 6800 1800
+Connection ~ 6800 1800
+Wire Wire Line
+	6800 1800 6800 1850
+$Comp
+L pypilot_components:tlp2361 U13
+U 1 1 6629744F
+P 6800 2150
+F 0 "U?" H 6900 2300 50  0000 L CNN
+F 1 "TLP2361(TPL,E(T" H 7144 2105 50  0001 L CNN
+F 2 "pypilot_footprints:SO-5_4.4x3.6mm_P1.27mm" H 6710 2150 50  0001 C CNN
+F 3 "https://www.fairchildsemi.com/datasheets/H1/H11L1M.pdf" H 6710 2150 50  0001 C CNN
+F 4 "C107626" H 6800 2150 50  0001 C CNN "LCSC"
+	1    6800 2150
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	6250 1700 5650 1700
+Wire Wire Line
+	6550 1700 6900 1700
+$Comp
+L Device:R R35
+U 1 1 6562E6DB
+P 8000 1450
+F 0 "R?" H 7900 1350 50  0000 R CNN
+F 1 "100k" V 8000 1550 50  0000 R CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 7885 1450 50  0001 C CNN
+F 3 "~" H 8000 1450 50  0001 C CNN
+F 4 "C149504" V 8000 1450 50  0001 C CNN "LCSC"
+	1    8000 1450
+	-1   0    0    1   
+$EndComp
+Connection ~ 8000 1600
+Text HLabel 8100 1600 2    60   Output ~ 0
+RXA
+$Comp
+L power:GND #PWR0152
+U 1 1 664ED20D
+P 7450 1950
+F 0 "#PWR?" H 7450 1700 50  0001 C CNN
+F 1 "GND" H 7455 1777 50  0001 C CNN
+F 2 "" H 7450 1950 50  0001 C CNN
+F 3 "" H 7450 1950 50  0001 C CNN
+	1    7450 1950
+	1    0    0    -1  
+$EndComp
+Connection ~ 7450 1950
+Wire Wire Line
+	7450 1950 7650 1950
+Text HLabel 8100 2250 2    60   Input ~ 0
+TXA
+Text HLabel 5650 1700 0    60   Output ~ 0
+TXB
+Wire Wire Line
+	8100 2250 7400 2250
+$Comp
+L Device:R R34
+U 1 1 66C4DCFC
+P 7250 2250
+F 0 "R?" V 7150 2300 50  0000 C CNN
+F 1 "510" V 7250 2250 50  0000 C CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 7135 2250 50  0001 C CNN
+F 3 "~" H 7250 2250 50  0001 C CNN
+F 4 "C17734" V 7250 2250 50  0001 C CNN "LCSC"
+	1    7250 2250
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	7200 1300 7550 1300
+$Comp
+L power:+3V3 #PWR0153
+U 1 1 66C4F8BD
+P 7550 1300
+F 0 "#PWR?" H 7550 1150 50  0001 C CNN
+F 1 "+3V3" H 7565 1473 50  0000 C CNN
+F 2 "" H 7550 1300 50  0001 C CNN
+F 3 "" H 7550 1300 50  0001 C CNN
+	1    7550 1300
+	1    0    0    -1  
+$EndComp
+Connection ~ 7550 1300
+Wire Wire Line
+	7550 1300 7650 1300
+$Comp
+L Device:R R32
+U 1 1 66C52FBE
+P 6000 2000
+F 0 "R?" H 5900 1900 50  0000 R CNN
+F 1 "100k" V 6000 2100 50  0000 R CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 5885 2000 50  0001 C CNN
+F 3 "~" H 6000 2000 50  0001 C CNN
+F 4 "C149504" V 6000 2000 50  0001 C CNN "LCSC"
+	1    6000 2000
+	-1   0    0    1   
+$EndComp
+Text HLabel 5600 2150 0    50   Input ~ 0
+RXB
+Text HLabel 6400 2450 3    50   Input ~ 0
+GNDB
+Text HLabel 6450 1500 1    50   Input ~ 0
+5VB
+Wire Wire Line
+	5600 2150 6000 2150
+Connection ~ 6000 2150
+Wire Wire Line
+	6000 2150 6500 2150
+Wire Wire Line
+	6000 1850 6000 1500
+Wire Wire Line
+	6000 1500 6800 1500
+Connection ~ 6800 1500
+Wire Wire Line
+	6800 1500 6800 1800
+Wire Wire Line
+	6900 1500 6800 1500
+$EndSCHEMATC

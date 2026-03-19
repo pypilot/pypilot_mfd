@@ -1,0 +1,127 @@
+EESchema Schematic File Version 4
+EELAYER 26 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L mlx90316:mlx90316 U?
+U 1 1 5CBC5058
+P 3050 1700
+F 0 "U?" H 3050 1925 50  0000 C CNN
+F 1 "mlx90316" H 3050 1834 50  0000 C CNN
+F 2 "" H 3050 1650 50  0001 C CNN
+F 3 "" H 3050 1650 50  0001 C CNN
+	1    3050 1700
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5CBC50C4
+P 2400 1850
+F 0 "R?" H 2470 1896 50  0000 L CNN
+F 1 "100k" H 2470 1805 50  0000 L CNN
+F 2 "" V 2330 1850 50  0001 C CNN
+F 3 "~" H 2400 1850 50  0001 C CNN
+	1    2400 1850
+	1    0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x02 J?
+U 1 1 5CBC515D
+P 1950 1250
+F 0 "J?" H 2050 1200 50  0000 C CNN
+F 1 "Reed Switch" H 1870 1376 50  0000 C CNN
+F 2 "" H 1950 1250 50  0001 C CNN
+F 3 "~" H 1950 1250 50  0001 C CNN
+	1    1950 1250
+	-1   0    0    -1  
+$EndComp
+$Comp
+L Connector_Generic:Conn_01x04 J?
+U 1 1 5CBC520B
+P 1950 1700
+F 0 "J?" H 2050 1650 50  0000 C CNN
+F 1 "Conn_01x04" H 2000 1400 50  0000 C CNN
+F 2 "" H 1950 1700 50  0001 C CNN
+F 3 "~" H 1950 1700 50  0001 C CNN
+	1    1950 1700
+	-1   0    0    -1  
+$EndComp
+$Comp
+L Device:R R?
+U 1 1 5CBC5265
+P 2350 1350
+F 0 "R?" V 2350 1350 50  0000 C CNN
+F 1 "47" V 2450 1350 50  0000 C CNN
+F 2 "" V 2280 1350 50  0001 C CNN
+F 3 "~" H 2350 1350 50  0001 C CNN
+	1    2350 1350
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	2400 2000 2400 2100
+Wire Wire Line
+	2400 2100 3450 2100
+Wire Wire Line
+	3450 2100 3450 2000
+Wire Wire Line
+	2400 1700 2650 1700
+Wire Wire Line
+	3450 1600 3450 1700
+Wire Wire Line
+	2150 1700 2400 1700
+Connection ~ 2400 1700
+Wire Wire Line
+	2150 1800 2300 1800
+Wire Wire Line
+	2300 1800 2300 2100
+Wire Wire Line
+	2300 2100 2400 2100
+Connection ~ 2400 2100
+$Comp
+L Device:R R?
+U 1 1 5CBC55AB
+P 2600 1400
+F 0 "R?" H 2670 1446 50  0000 L CNN
+F 1 "100k" H 2670 1355 50  0000 L CNN
+F 2 "" V 2530 1400 50  0001 C CNN
+F 3 "~" H 2600 1400 50  0001 C CNN
+	1    2600 1400
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2500 1350 2500 1600
+Wire Wire Line
+	2150 1600 2500 1600
+Connection ~ 2500 1600
+Wire Wire Line
+	2500 1600 2600 1600
+Wire Wire Line
+	2150 1350 2200 1350
+Wire Wire Line
+	2150 1900 2200 1900
+Wire Wire Line
+	2200 1250 2150 1250
+Wire Wire Line
+	2200 1250 2200 1900
+Wire Wire Line
+	2600 1250 2200 1250
+Connection ~ 2200 1250
+Wire Wire Line
+	2600 1550 2600 1600
+Connection ~ 2600 1600
+Wire Wire Line
+	2600 1600 3450 1600
+Entry Bus Bus
+	800  -350 900  -250
+$EndSCHEMATC

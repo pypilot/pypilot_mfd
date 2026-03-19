@@ -1,1 +1,4 @@
 components
+managed_components
+build-esp32
+build-esp32s3

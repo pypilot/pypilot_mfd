@@ -1,0 +1,4 @@
+(fp_lib_table
+  (lib (name pypilot_footprints)(type KiCad)(uri /home/sean/schematics/libraries/pypilot_footprints.pretty)(options "")(descr ""))
+  (lib (name temperature_pressure_humidity_gas)(type KiCad)(uri ${KIPRJMOD}/temperature_pressure_humidity_gas.pretty)(options "")(descr ""))
+)

@@ -1,0 +1,5 @@
+(fp_lib_table
+  (lib (name Button_Switch_THT)(type KiCad)(uri /home/sean/kicad-footprints/Button_Switch_THT.pretty)(options "")(descr ""))
+  (lib (name freetronics_footprints)(type KiCad)(uri /home/sean/schematics/libraries/freetronics_kicad_library/freetronics_footprints.pretty)(options "")(descr ""))
+  (lib (name wind_transmitter)(type KiCad)(uri ${KIPRJMOD}/wind_transmitter.pretty)(options "")(descr ""))
+)

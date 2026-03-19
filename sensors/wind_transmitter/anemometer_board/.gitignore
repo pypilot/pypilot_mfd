@@ -7,3 +7,5 @@ fp-info-cache
 cache.lib
 *-rescue.kicad_sym
 *-cache.lib
+*.kicad_pcb-bak
+gerber

@@ -1,0 +1,62 @@
+    <div class='box'>
+      <h2>Display Pages</h2>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='button' onclick='cmd("display_auto")' style='width: 100%' value='Auto-enable pages'>
+        </div>
+        <div class='col1-grid' id='display_pages'>
+
+        </div>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='submit' value='Submit' onclick='on_display_pages()'>
+        </div>
+    </div>
+
+    <div class='box'>
+      <h2>Display</h2>
+        <div class='col1-grid'>
+          <span><input type='checkbox' id='use_360'>
+            <label for='use360'>Use 0-360 rather than 0-180 for angles</label></span>
+          <span><input type='checkbox' id='use_fahrenheit'>
+            <label for='usefahrenheit'>Use Fahrenheit (default celcius)</label></span>
+          <span><input type='checkbox' id='use_inHg'>
+            <label for='useinHg'>Use in Hg for pressure (default mbar)</label></span>
+          <span><input type='checkbox' id='use_depthft'>
+            <label for='usedepthft'>Use depth ft (default meters)</label></span>
+          <span>Latitude Longitude Format
+            <select id='lat_lon_format'>
+              <option value='degrees'>Decimal Degrees</option>
+              <option value='minutes'>Decimal Minutes</option>
+              <option value='seconds'>Decimal Seconds</option>
+            </select>
+          </span>
+          <span><input type='checkbox' id='invert'>
+            <label for='invert'>Invert Display</label></span>
+          <span>LCD contrast <input type='number' id='contrast' style='width: 4em'></span>
+          <span>LCD backlight <input type='number' id='backlight' style='width: 4em'></span>
+          <span><input type='checkbox' id='mirror'>
+            <label for='mirror'>Mirror display</label>
+          </span>
+          <span>Power button function
+            <select id='power_button'>
+              <option value='powerdown'>powerdown (lowest power consumption)</option>
+              <option value='powersave'>wake every minute to log sensor data</option>
+              <option value='screenoff'>turn screen/backlight off, remain running</option>
+            </select>
+          </span>
+        </div>
+        <div class='col3-grid'>
+          <div> </div>
+          <input class='button' type='button' value='Submit', onclick='on_display_settings()'>
+        </div>
+    </div>
+</div>
+<h3><a href='/update.html'>Update Software</a></h4>
+
+<h4><a href='/data.html'>View Current Display Data</a></h4>
+<h4><a href='/history.html'>View History of Display Data</a></h4>
+<h4><a href='/alarms.html'>Configure Alarms</a></h4>
+
+<h5>pypilot multi-function display</hf>
+<script type='text/javascript' src='mfd.js'></script>
