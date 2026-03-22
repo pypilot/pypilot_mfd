@@ -82,9 +82,18 @@ struct lightning_uv_packet_t {
 } __attribute__((packed));
 
 #define UNLOCK_ID 0x1B21
-struct packet_unlock_t {
+struct unlock_packet_t {
     uint16_t id;             // packet identifier
 };
+
+#define INFO_ID 0xC9D2
+typedef struct __attribute__((packed)) {
+    uint16_t id;
+    uint16_t packet_count;
+    uint32_t runtime;
+    uint8_t sw_version, hw_version;
+} info_packet_t;
+
 
 // callback when data is recv from Master
 // This function is run from the wifi thread, so post to a queue
@@ -160,7 +169,7 @@ static void wifi_event_handler(void *arg,
         switch (event_id) {
         case WIFI_EVENT_STA_START:
             ESP_LOGI(TAG, "STA start, connecting...");
-            esp_wifi_connect();
+            //esp_wifi_connect();
             break;
 
         case WIFI_EVENT_STA_CONNECTED:
@@ -171,10 +180,11 @@ static void wifi_event_handler(void *arg,
         case WIFI_EVENT_STA_DISCONNECTED:
             ESP_LOGI(TAG, "STA disconnected, reconnecting...");
             wifi_connected = false;
-            esp_wifi_connect();
+            //esp_wifi_connect();
             break;
 
         case WIFI_EVENT_SCAN_DONE: {
+            
             uint16_t count = 0;
             esp_wifi_scan_get_ap_num(&count);
             ESP_LOGI(TAG, "Scanning found %d networks", count);
@@ -183,9 +193,14 @@ static void wifi_event_handler(void *arg,
                 ESP_LOGI(TAG, "Found more than 32 networks, using only 32");
                 count = 32;
             }
-            wifi_ap_record_t recs[count];
-            if (esp_wifi_scan_get_ap_records(&count, recs) == ESP_OK) {
-                web_scan_complete(recs, count);
+
+            std::vector<wifi_ap_record_t> recs(count);
+            if (esp_wifi_scan_get_ap_records(&count, recs.data()) == ESP_OK) {
+                void web_scan_complete(const std::vector<wifi_ap_record_t> &recs);
+                web_scan_complete(recs);
+                for(auto i = recs.begin(); i!=recs.end(); i++)
+                    printf("ssid: %s rssi: %d channel %d encryption %d\n",
+                           i->ssid, i->rssi, i->primary, i->authmode);
                 setup_wifi();
                 web_update_wifi_networks();
             }
@@ -235,6 +250,13 @@ static void wifi_global_init(void)
     wifi_initialized = true;
 }
 
+struct wifi_mode_config_t {
+    std::string mode, ssid, psk;
+    uint8_t channel;
+};
+
+static wifi_mode_config_t wifi_config;
+
 static void setup_wifi(void)
 {
     wifi_global_init();
@@ -246,17 +268,18 @@ static void setup_wifi(void)
     ESP_ERROR_CHECK(esp_now_deinit());
     ESP_ERROR_CHECK(esp_wifi_stop());
 
-    if (force_wifi_ap_mode || settings.wifi_mode == WIFI_MODE_AP) {
+    wifi_config.channel = settings.wifi_channel;
+    if (force_wifi_ap_mode || settings.wifi_mode == "ap") {
+        wifi_config.mode = "ap";
+        wifi_config.ssid = settings.ap_ssid;
+        wifi_config.psk = settings.ap_psk;
+
         wifi_config_t ap_cfg = {
             .ap = {
-#ifndef CONFIG_IDF_TARGET_ESP32S3
-                .ssid = "wind_receiver",
-#else
-                .ssid = settings.ap_ssid.c_str(),
-#endif
-                .password = "", // settings.ap_psk.c_str()  TODO: fix this after testing
+                .ssid = "",
+                .password = "",
                 .ssid_len = 0,
-                .channel = 1, // settings.wifi_channel  TODO: fix this after testing
+                .channel = settings.wifi_channel,
                 .authmode = WIFI_AUTH_WPA2_PSK,
                 .ssid_hidden = 0,
                 .max_connection = 4,
@@ -274,13 +297,20 @@ static void setup_wifi(void)
             }
         };
 
+        strncpy((char*)ap_cfg.ap.ssid, settings.ap_ssid.c_str(), sizeof ap_cfg.ap.ssid);
+        strncpy((char*)ap_cfg.ap.password, settings.ap_psk.c_str(), sizeof ap_cfg.ap.password);
+
         if (strlen((char *)ap_cfg.ap.password) == 0)
             ap_cfg.ap.authmode = WIFI_AUTH_OPEN;
 
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
         ESP_ERROR_CHECK(esp_wifi_start());
-    } else if (settings.wifi_mode == WIFI_MODE_STA && !settings.client_ssid.empty()) {
+    } else if (settings.wifi_mode == "client" && !settings.client_ssid.empty()) {
+        wifi_config.mode = "client";
+        wifi_config.ssid = settings.client_ssid;
+        wifi_config.psk = settings.client_psk;
+
         wifi_config_t sta_cfg = {};
         strncpy((char *)sta_cfg.sta.ssid,
                 settings.client_ssid.c_str(),
@@ -313,6 +343,8 @@ static void setup_wifi(void)
         ESP_ERROR_CHECK(esp_wifi_start());
         ESP_ERROR_CHECK(esp_wifi_connect());
     } else {
+        wifi_config.mode = "none";
+        
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         ESP_ERROR_CHECK(esp_wifi_start());
         esp_wifi_disconnect();
@@ -325,7 +357,7 @@ static void setup_wifi(void)
 }
 
 void wireless_scan_networks()
-{    
+{
     ESP_ERROR_CHECK(esp_now_deinit());
     ESP_ERROR_CHECK(esp_wifi_stop());
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -448,6 +480,16 @@ static void DataRecvLightningUV(struct esp_now_data_t &data) {
     printf("LIGHTNING!!! %f", lightning_distance);
 }
 
+static void DataRecvInfo(struct esp_now_data_t &data) {
+    if (data.len != sizeof(info_packet_t))
+        printf("received invalid info UV packet %d\n", data.len);
+
+    info_packet_t *packet = (info_packet_t *)data.data;
+
+    // for now not using version
+    sensors_info_update(data.mac, packet->runtime, packet->packet_count);
+}
+
 static void receive_esp_now() {
     //printf("receive_esp_now %d %d\n", rb_start, rb_end);
     uint64_t t0 = esp_timer_get_time();
@@ -471,6 +513,7 @@ static void receive_esp_now() {
         case AIR_ID: DataRecvAir(first); break;
         case WATER_ID: DataRecvWater(first); break;
         case LIGHTNING_UV_ID: DataRecvLightningUV(first); break;
+        case INFO_ID: DataRecvInfo(first); break;
         default:
             ESP_LOGW(TAG, "espnow packet ID mismatch %x", id);
         }
@@ -486,53 +529,45 @@ static void receive_esp_now() {
 void wireless_unlock_channel(const std::string &mac) {
     ESP_LOGI(TAG, "unlock sensor %s", mac.c_str());
 
-    uint64_t peer_addr = mac_str_to_int(mac);
+    uint64_t peer_addr_int = mac_str_to_int(mac);
+    uint8_t peer_addr[6];
+    int_as_mac(peer_addr, peer_addr_int);
 
-    packet_unlock_t packet;
+    unlock_packet_t packet;
     packet.id = UNLOCK_ID;
+
+    if (!esp_now_is_peer_exist(peer_addr)) {
+        esp_now_peer_info_t peer = {};
+        memcpy(peer.peer_addr, peer_addr, 6);
+        peer.channel = settings.wifi_channel;
+        peer.ifidx = WIFI_IF_STA;
+        peer.encrypt = false;
+        ESP_ERROR_CHECK( esp_now_add_peer(&peer) );
+    }
 
     esp_err_t result = esp_now_send((const uint8_t*)peer_addr, (uint8_t *)&packet, sizeof(packet));
     if (result != ESP_OK)
         printf("Send failed Status: %d\n", result);
 }
 
-#if 0
-void sendChannel() {
-    packet_channel_t packet;
-    packet.id = CHANNEL_ID;
-    packet.channel = settings.wifi_channel;
-    // compute checksum
-    packet.crc16 = crc16((uint8_t *)&packet, sizeof(packet) - 2);
-
-    const uint8_t *peer_addr = chip.peer_addr;
-    esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
-    //print("Send Status: ");
-    if (result != ESP_OK)
-        printf("Send failed Status: %d\n", result);
-}
-
-void wireless_program_channel() {
-    ESP_ERROR_CHECK(esp_now_deinit());
-    ESP_ERROR_CHECK(esp_wifi_stop());
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    InitESPNow(1);
-
-    for (int c = 1; c <= 12; c+=5) {
-        esp_wifi_set_channel(c, WIFI_SECOND_CHAN_NONE);
-        for (int i = 0; i < 15; i++) {
-            sendChannel();
-            vTaskDelay(pdMS_TO_TICKS(10));
-        }
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-
-    setup_wifi();
-}
-#endif
-
 void wireless_poll() {
     receive_esp_now();
+
+    static uint64_t last_wifi_update;
+    uint64_t t = esp_timer_get_time();
+
+    if(t-last_wifi_update > 1e6) {
+        if(settings.wifi_mode != wifi_config.mode ||
+           wifi_config.channel != settings.wifi_channel ||
+           (wifi_config.mode == "ap" &&
+            (wifi_config.ssid != settings.ap_ssid ||
+             wifi_config.psk != settings.ap_psk)) ||
+           (wifi_config.mode == "client" &&
+            (wifi_config.ssid != settings.client_ssid ||
+             wifi_config.psk != settings.client_psk)))
+            setup_wifi();
+        last_wifi_update = t;
+    }
 }
 
 void wireless_toggle_mode() {

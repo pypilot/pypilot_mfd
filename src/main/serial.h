@@ -1,4 +1,4 @@
-/* Copyright (C) 2024 Sean D'Epagnier <seandepagnier@gmail.com>
+/* Copyright (C) 2026 Sean D'Epagnier <seandepagnier@gmail.com>
  *
  * This Program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public
@@ -9,4 +9,4 @@
 void serial_setup();
 void serial_poll();
 void serial_write_nmea(const char *buf);
-
+void serial_process_line(const std::string &cmd);

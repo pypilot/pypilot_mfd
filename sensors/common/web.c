@@ -165,14 +165,12 @@ static esp_err_t config_handler(httpd_req_t *req)
     snprintf(config, sizeof config, "{\"channel\":%d,\"rate\":%d,\"tx_power\":%d,\"psk\":\"%s\"}",
              wifi_channel, rate, tx_power, wifi_psk);
     
-    httpd_resp_send(req, (const char *) config, strlen(config));
-    return ESP_OK;
+    return httpd_resp_send(req, (const char *) config, strlen(config));
 }
 
 static esp_err_t root_handler(httpd_req_t *req)
 {
-    httpd_resp_send(req, (const char *) index_html_start, index_html_end - index_html_start);
-	return ESP_OK;
+    return httpd_resp_send(req, (const char *) index_html_start, index_html_end - index_html_start);
 }
 
 void web_stop() {

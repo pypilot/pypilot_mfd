@@ -9,8 +9,10 @@
 extern int wireless_message_count;
 extern bool wifi_connected;
 
-sensor_position wireless_str_position(const std::string &p);
-
 void wireless_scan_networks();
 void wireless_program_channel();
 void wireless_unlock_channel(const std::string &mac);
+
+void wireless_toggle_mode();
+void wireless_setup();
+void wireless_poll();

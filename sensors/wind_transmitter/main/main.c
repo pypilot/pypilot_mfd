@@ -33,7 +33,7 @@
 const gpio_num_t interruptPin = GPIO_NUM_34;
 
 // data in packet
-#define LOW_POWER   // power down wireless while not working (save a lot of power?)
+//#define LOW_POWER   // power down wireless while not working (save a lot of power?)
 //#define DEBUG
 
 #define ID 0xB179
@@ -111,7 +111,7 @@ static void mt6816_init()
         .sclk_io_num=18,
         .quadwp_io_num=-1,
         .quadhd_io_num=-1,
-        .max_transfer_sz=32,//2
+        .max_transfer_sz=32,
     };
     
     spi_device_interface_config_t devcfg={
@@ -214,7 +214,7 @@ void setup(void)
     //Set device in STA mode to begin with
 #ifdef DEBUG
     printf("Wind Transmitter\n");
-#endif  
+#endif
     read_settings();
 
     packet.id = ID;  // initialize packet ID
@@ -227,7 +227,7 @@ void setup(void)
     lis2dw12_init();
 
     wifi_init();
-    esp_log_level_set("wifi", ESP_LOG_NONE);
+    //    esp_log_level_set("wifi", ESP_LOG_NONE);
 
     dhcp_set_captiveportal_url();
 
@@ -236,10 +236,12 @@ void setup(void)
 #endif
 }
 
+static int jitter = 0;
+uint64_t ts;
 void loop()
 {
-    static uint64_t t0 = 0;
-
+    uint64_t t0 = esp_timer_get_time();
+    
     int16_t x, y, z;
     lis2dw12_read(&x, &y, &z);
     packet.accelx = x;
@@ -267,7 +269,6 @@ void loop()
 
     wireless_send_data((uint8_t*)&packet, sizeof packet);
 
-
     if(wireless_ap_enabled) {
         char msg[128];
         snprintf(msg, sizeof msg,
@@ -278,32 +279,39 @@ void loop()
     }
     
     wireless_wait_sent(); // finish transmit before sleep
-    
-    int period = 1000 / rate;
+
+    int period = 1e6/rate;
+    jitter += 7400;
+    jitter %= 4000;
+
+    uint64_t te = ts + period;// + jitter - 2000;
     for(;;) {
         uint64_t tx = esp_timer_get_time();
-        uint64_t d = (tx - t0) / 1000;
-
-        if (d >= period)
+        if (tx >= te)
             break;
 
-        d = period - d;
+        uint64_t d = te-tx;
 #ifdef LOW_POWER
-        if(wireless_ap_enabled || t0 < 60e6) // ap enabled or first 60 seconds dont go in low power
-            vTaskDelay(d / portTICK_PERIOD_MS);
-        else {
+        // ap enabled or first 60 seconds dont go in low power
+        if(!wireless_ap_enabled && t0 >= 60e6) {// && d > 10000) {
+            //            d -= 2000;
             esp_wifi_stop();
             // wake up on pin change for isr to count cup revolutions
-            gpio_wakeup_enable(GPIO_NUM_34, gpio_get_level(GPIO_NUM_34) ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
+            gpio_wakeup_enable(GPIO_NUM_34, gpio_get_level(GPIO_NUM_34) ?
+                               GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
             esp_sleep_enable_gpio_wakeup();
-            esp_sleep_enable_timer_wakeup(1000*d);
+            esp_sleep_enable_timer_wakeup(d);
             esp_light_sleep_start();
-        }
-#else
-        vTaskDelay(d / portTICK_PERIOD_MS);
+        } else
 #endif
+            vTaskDelay(d / 1000 / portTICK_PERIOD_MS);
         //printf("sleep time %llu %llu\n", d, esp_timer_get_time()-tx);
     }
+
+    if(ts < t0 - period/2 || ts > t0 + period/2)
+        ts=t0;
+    else
+        ts += period;
 
 #ifdef DEBUG // for debugging
     float angle = (packet.angle == 0xffff) ? NAN : packet.angle * 360.0 / 32768;
@@ -312,12 +320,10 @@ void loop()
            packet.period, angle);
     //printf("result %.02f %d\n", angle, gpio_get_level(GPIO_NUM_34));
 #endif
-
-    t0 = esp_timer_get_time();
 }
 
 void app_main(void)
-{
+{   
     setup();
     for(;;)
         loop();

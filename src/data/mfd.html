@@ -1,4 +1,40 @@
     <div class='box'>
+      <h2>Data Configuration</h2>
+        <div class='col2-grid'>
+          <span>USB data host (NMEA0183)</span>
+          <span>
+            <input type='checkbox' id='input_usb_host'><label for='input_usb_host'>Input</label>
+            <input type='checkbox' id='output_usb_host'>
+            <label for='output_usb_host'>Output</label>
+            <select id='usb_host_baud_rate'>
+              <option value='4800'>4800</option>
+              <option value='38400'>38400</option>
+              <option value='115200'>115200</option>
+            </select>
+          </span>
+          <span>RS422 1 data (NMEA0183)</span>
+          <div>
+            <select id='rs422_1_baud_rate'>
+              <option value='0'>Disable</option>
+              <option value='4800'>4800</option>
+              <option value='38400'>38400</option>
+              <option value='115200'>115200</option>
+            </select>
+          </div>
+          <span>RS422 2 data (NMEA0183)</span>
+          <div>
+            <select id='rs422_2_baud_rate'>
+              <option value='0'>Disable</option>
+              <option value='4800'>4800</option>
+              <option value='38400'>38400</option>
+              <option value='115200'>115200</option>
+            </select>
+          </div>
+          <input type='checkbox' id='forward_nmea_serial_to_serial' />
+          <label for='forward_nmea_serial_to_serial'>Forward nmea serial to serial </label>
+        </div>
+    </div>
+    <div class='box'>
       <h2>Display Pages</h2>
         <div class='col3-grid'>
           <div> </div>
@@ -40,9 +76,9 @@
           </span>
           <span>Power button function
             <select id='power_button'>
-              <option value='powerdown'>powerdown (lowest power consumption)</option>
-              <option value='powersave'>wake every minute to log sensor data</option>
               <option value='screenoff'>turn screen/backlight off, remain running</option>
+              <option value='powersave'>wake every minute to log sensor data</option>
+              <option value='powerdown'>powerdown (lowest power consumption)</option>
             </select>
           </span>
         </div>
@@ -60,3 +96,13 @@
 
 <h5>pypilot multi-function display</hf>
 <script type='text/javascript' src='mfd.js'></script>
+
+          <input type='checkbox' id='input_usb'><label for='input_usb'>Input</label>
+
+          <span><input type='checkbox' id='compute_true_wind_from_gps'><label for='output_wifi'>Compute True Wind from GPS</label></span>
+          <span>
+            <input type='checkbox' id='compute_true_wind_from_water' />
+            <label for='compute_true_wind_from_water_speed'>Compute True Wind from Water Speed</label>
+          </span>
+
+          

@@ -7,127 +7,198 @@
  */
 
 #include <string>
+#include <vector>
+#include <algorithm>
 #include <unordered_set>
 
-#define VERSION 0.12
+#define VERSION 0.20
 enum data_source_e {ESP_DATA, USB_DATA, RS422_DATA, COMPUTED_DATA, WIFI_DATA, DATA_SOURCE_COUNT};
 
-struct settings_t {
-    int wifi_mode;
+struct SettingsChoice {
+    SettingsChoice(std::vector<std::string> c, const char *s)
+        : choices(std::move(c)) {
+        set(s);
+    }
+
+    void set(const char *s) {
+        auto f = std::find(choices.begin(), choices.end(), s);
+        if(f != choices.end())
+            choice = f-choices.begin();
+        else {
+            printf("invalid choice %s, valid choices include: ", s);
+            for(auto i = choices.begin(); i!=choices.end(); i++)
+                printf("%s ", i->c_str());
+            printf("\n");
+        }
+    }        
     
-    std::string ap_ssid;
-    std::string ap_psk;
-
-    std::string client_ssid;
-    std::string client_psk;
-
-    uint8_t wifi_channel;
-
-    bool input_usb, output_usb;
-    int usb_baud_rate;
-
-    bool input_usb_host, output_usb_host;
-    int usb_host_baud_rate;
-    int rs422_1_baud_rate;
-    int rs422_2_baud_rate;
-
-    bool input_nmea_pypilot, output_nmea_pypilot;
-    bool input_nmea_signalk, output_nmea_signalk;
-    bool input_nmea_tcp_client, output_nmea_tcp_client;
-    bool input_nmea_tcp_server, output_nmea_tcp_server;
-    bool input_signalk, output_signalk;
-
-    std::string nmea_tcp_client_addr;
-    int nmea_tcp_client_port, nmea_tcp_server_port;
-
-    bool forward_nmea_serial_to_serial;
-    bool forward_nmea_serial_to_wifi;
+    operator const std::string&() const { return choices[choice]; }
+    bool operator==(const char* s) const { return choices[choice] == s; }
+    bool operator==(const std::string& s) const { return choices[choice] == s; }
     
-    bool compensate_wind_with_accelerometer;
-    bool compute_true_wind_from_gps;
-    bool compute_true_wind_from_water;
-
-    //display
-    bool use_360, use_fahrenheit, use_inHg, use_depth_ft;
-    std::string lat_lon_format;
-
-    bool invert;
-    std::string color_scheme;
-    int contrast, backlight;
-    int buzzer_volume;
-
-    bool show_status;
-    int rotation; // 0-3 are set, 4 is auto
-    int mirror; // 2 is auto
-    std::string power_button; // power down or just turn of screen on power button
-
-    std::string enabled_pages;
-    int cur_page;
-
-    // alarms
-    bool anchor_alarm;
-    float anchor_lat, anchor_lon;
-    int anchor_alarm_distance; // meters
-
-    bool course_alarm;
-    int course_alarm_course;
-    int course_alarm_error;
-
-    bool gps_speed_alarm;
-    int gps_min_speed_alarm_knots;
-    int gps_max_speed_alarm_knots;
-
-    bool wind_speed_alarm;
-    int wind_min_speed_alarm_knots;
-    int wind_max_speed_alarm_knots;
-
-    bool water_speed_alarm;
-    int water_min_speed_alarm_knots;
-    int water_max_speed_alarm_knots;
-    
-    bool weather_alarm_pressure;
-    int weather_alarm_min_pressure;
-    bool weather_alarm_pressure_rate;
-    int weather_alarm_pressure_rate_value; // in mbar/min
-    bool weather_alarm_lightning;
-    int weather_alarm_lightning_distance; // in NMi
-
-    bool depth_alarm;
-    int depth_alarm_min;
-    bool depth_alarm_rate;
-    int depth_alarm_rate_value; // in m/min
-
-    bool ais_alarm;
-    int ais_alarm_cpa;  // in NMi
-    int ais_alarm_tcpa; // in minutes
-    
-    bool pypilot_alarm_noconnection;
-    bool pypilot_alarm_fault;
-    bool pypilot_alarm_no_imu;
-    bool pypilot_alarm_no_motor_controller;
-    bool pypilot_alarm_lost_mode;
-    
-    // cache mdns 
-    std::string pypilot_addr, signalk_addr;
-    int signalk_port;
-    std::string signalk_token;
+    std::vector<std::string> choices;
+    int choice;
 };
 
-enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
+struct ChoiceWifiMode : SettingsChoice {
+    ChoiceWifiMode(const char *s) : SettingsChoice({"ap", "client", "none"}, s) {} };
+struct ChoiceLatLonFormat : SettingsChoice {
+    ChoiceLatLonFormat(const char *s) : SettingsChoice({"degrees", "minutes", "seconds"}, s) {} };
+struct ChoiceColorScheme : SettingsChoice { ChoiceColorScheme(const char *s) :
+    SettingsChoice({"none", "light", "sky", "mars"}, s) {} };
+struct ChoicePowerButton : SettingsChoice { ChoicePowerButton(const char *s) :
+    SettingsChoice({"screenoff", "powersave", "powerdown"}, s) {} };
+struct ChoiceLogLevel : SettingsChoice { ChoiceLogLevel(const char *s) :
+    SettingsChoice({"none", "error", "warn", "info", "debug"}, s) {} };
 
-std::unordered_set<std::string> settings_keys();
-std::string settings_get_value(const std::string &key);
-bool settings_set_value(const std::string &key, const std::string &value);
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#define DEF_SSID "pypilot_mfd"
+#else
+#define DEF_SSID "wind_receiver"
+#endif
+#define DEF_WIFI_CHANNEL 1
+
+#define SETTINGS_FIELDS_BASE(X)                 \
+    X(ChoiceWifiMode, wifi_mode, "ap")          \
+    X(std::string, ap_ssid, DEF_SSID)           \
+    X(std::string, ap_psk, "")                  \
+    X(std::string, client_ssid, "pypilot")      \
+    X(std::string, client_psk, "")              \
+    X(uint8_t, wifi_channel, DEF_WIFI_CHANNEL)  \
+    X(bool, input_usb, false)                   \
+    X(bool, output_usb, true)                   \
+    X(int, usb_baud_rate, 115200)               \
+    \
+    X(bool, input_nmea_pypilot, false)                  \
+    X(bool, output_nmea_pypilot, false)                 \
+    X(bool, input_nmea_signalk, false)                  \
+    X(bool, output_nmea_signalk, false)                 \
+    X(bool, input_nmea_tcp_client, false)               \
+    X(bool, output_nmea_tcp_client, false)              \
+    X(bool, input_nmea_tcp_server, false)               \
+    X(bool, output_nmea_tcp_server, false)              \
+    X(std::string, nmea_tcp_client_addr, "")            \
+    X(int, nmea_tcp_client_port, 3000)                  \
+    X(int, nmea_tcp_server_port, 7114)                  \
+    X(bool, output_signalk, false)                      \
+    X(bool, input_signalk, false)                       \
+    \
+    X(bool, forward_nmea_serial_to_wifi, false)         \
+    \
+    X(bool, compensate_wind_with_accelerometer, false)  \
+    \
+    X(ChoiceLogLevel, loglevel, "warn")              \
+    \
+    X(std::string, pypilot_addr, "192.168.14.1")    \
+    X(std::string, signalk_addr, "10.10.10.1")      \
+    X(int, signalk_port, 3000)                      \
+    X(std::string, signalk_token, "")               \
+
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#define SETTINGS_FIELDS_MFD(X)               \
+    X(bool, input_usb_host, false)           \
+    X(bool, output_usb_host, false)          \
+    X(int, usb_host_baud_rate, 38400)        \
+    X(int rs422_1_baud_rate, 38400)          \
+    X(int rs422_2_baud_rate, 38400)          \
+    \
+    X(bool, forward_nmea_serial_to_serial)      \
+    X(bool, compute_true_wind_from_gps)         \
+    X(bool, compute_true_wind_from_water)       \
+    \
+    X(bool, use_360, false)                                     \
+    X(bool, use_fahrenheit, false)                              \
+    X(bool, use_inHg, false)                                    \
+    X(bool, use_depth_ft, false)                                \
+    X(ChoiceLatLonFormat, lat_lon_format, "minutes")      \
+    \
+    X(bool, invert, false)                      \
+    X(ChoiceColorScheme, color_scheme, "none")  \
+    X(int, contrast, 20, 0, 50)                 \
+    X(int, backlight, 10, 0, 20)                \
+    X(int, buzzer_volume, 5, 0, 10)             \
+    \
+    X(bool, show_status, true)                       \
+    X(int, rotation, 0)                              \
+    X(int, mirror, 2)                               \
+     // power down or just turn of screen on power button
+    X(ChoicePowerButton, power_button, "screeoff")      \
+    /
+    X(std::string, enabled_pages, "ABCD")                \
+    X(int, cur_page, 0)                                  \
+    /
+    // alarms
+    X(bool, anchor_alarm, false)                        \
+    X(float, anchor_lat, 0)                             \
+    X(float, anchor_lon, 0)                             \
+    X(int, anchor_alarm_distance, 5)                    \
+    /
+    X(bool, course_alarm, false)                      \
+    X(int, course_alarm_course, 0, 0, 360)            \
+    X(int, course_alarm_error 20, 5, 90)              \
+    
+    X(bool, gps_speed_alarm, false)                      \
+    X(int, gps_min_speed_alarm_knots, 0, 0, 30)          \
+    X(int, gps_max_speed_alarm_knots, 10, 1, 100)        \
+    \
+    X(bool, wind_speed_alarm, false)                          \
+    X(int, wind_min_speed_alarm_knots, 0, 0, 100)             \
+    X(int, wind_max_speed_alarm_knots, 30, 1, 100)            \
+    \
+    X(bool, water_speed_alarm, false)                         \
+    X(int, water_min_speed_alarm_knots, 0, 0, 10)             \
+    X(int, water_max_speed_alarm_knots, 10, 1, 100)           \
+    \
+    X(bool, weather_alarm_pressure, false)                              \
+    X(int, weather_alarm_min_pressure, 980, 900, 1100)                  \
+    X(bool, weather_alarm_pressure_rate, false)                         \
+    X(int, weather_alarm_pressure_rate_value, 10, 1, 100)               \ // in mbar/min
+    X(bool, weather_alarm_lightning, false)                             \
+    X(int, weather_alarm_lightning_distance, 10, 1, 50) \ // in NMi
+    \
+    X(bool, depth_alarm, false)                                         \
+    X(int, depth_alarm_min, 5, 1, 100)                                  \
+    X(bool, depth_alarm_rate, false)                                    \
+    X(int, depth_alarm_rate_value, 1, 1, 100)              \ // in m/min
+    \
+    X(bool, ais_alarm, false)                                           \
+    X(int, ais_alarm_cpa, 5, 1, 100)                       \ // in NMi
+    X(int, ais_alarm_tcpa, 10, 1, 100)                     \ // in minutes
+    \
+    X(bool, pypilot_alarm_noconnection, false)                          \
+    X(bool, pypilot_alarm_fault, false)                                 \
+    X(bool, pypilot_alarm_no_imu, false)                                \
+    X(bool, pypilot_alarm_no_motor_controller, false)                   \
+    X(bool, pypilot_alarm_lost_mode, false)                             \
+
+#else
+#define SETTINGS_FIELDS_MFD(X)
+#endif
+
+#define SETTINGS_FIELDS(X)                      \
+    SETTINGS_FIELDS_BASE(X)                     \
+    SETTINGS_FIELDS_MFD(X)                      \
+
+struct settings_t {
+#define DECL_FIELD(type, name, def, ...) type name = {def};
+    SETTINGS_FIELDS(DECL_FIELD)
+#undef DECL_FIELD
+
+    void defaults();
+};
 
 void settings_reset();
-void settings_load();
 void settings_store();
-std::string get_wifi_mode_str();
+void settings_load();
+
+
+std::unordered_set<std::string> settings_keys();
+void settings_list();
+std::string settings_get_string(const std::string &key);
+
+bool settings_set_value(const std::string &key, const std::string &value);
+bool settings_get_transmitter(const std::string &mac, const std::string &key, std::string &output, std::string *type=0);
 
 extern settings_t settings;
 extern bool force_wifi_ap_mode;
 extern uint8_t hw_version;
-
-void wireless_toggle_mode();
-void wireless_setup();
-void wireless_poll();

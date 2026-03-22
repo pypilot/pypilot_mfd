@@ -12,7 +12,7 @@
 #include <esp_timer.h>
 
 #include <rapidjson/document.h>
-#include <rapidjson/writer.h>
+#include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
 
 #include "settings.h"
@@ -21,13 +21,14 @@
 #include "nmea.h"
 #include "signalk.h"
 #include "display.h"
-//#include "alarm.h"
 
-void sensors_write_transmitters(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
 float lpwind_dir = NAN, wind_knots = 0;
 float accel_x = 0, accel_y = 0, accel_z;
 
 float lightning_distance;
+
+using PrettyWriter = rapidjson::PrettyWriter<rapidjson::StringBuffer>;
+bool read_field(float &x, const rapidjson::Value& v);
 
 static float lowpass(float a, float b) {
     const float lp = .2;
@@ -57,19 +58,26 @@ static float lowpass_direction(float lp_dir, float dir) {
 
 struct sensor_transmitter_t {
   sensor_transmitter_t()
-      : position(SECONDARY), t(0) {}
-    virtual void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info) = 0;
-    virtual void setting(const rapidjson::Value &t) {}
+      : position(SECONDARY), t(0), info_t(0),
+        rate(0), packet_loss(NAN), last_info_packet_count(0), packet_count(0),
+        runtime(0) {}
+    virtual void json(PrettyWriter &writer, bool info) = 0;
+    virtual void settings_read(const rapidjson::Value &t) {}
     // settings
     sensor_position position;
     uint64_t t;  // last received message
+    uint64_t info_t;  // last info message
+
+    float rate, packet_loss;
+    uint32_t last_info_packet_count, packet_count; // count of packets received
+    uint32_t runtime;
 };
 
 struct wind_transmitter_t : sensor_transmitter_t {
   wind_transmitter_t()
       : dir(NAN), knots(NAN), offset(0) {}
-    virtual void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
-    virtual void setting(const rapidjson::Value &t);
+    virtual void json(PrettyWriter &writer, bool info);
+    virtual void settings_read(const rapidjson::Value &t);
 
     float dir, knots;
     float offset;  // transmitter settings
@@ -78,21 +86,21 @@ struct wind_transmitter_t : sensor_transmitter_t {
 struct air_transmitter_t : sensor_transmitter_t {
     air_transmitter_t()
         : pressure(NAN), temperature(NAN), rel_humidity(NAN), air_quality(NAN), battery_voltage(NAN) {}
-    virtual void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
+    virtual void json(PrettyWriter &writer, bool info);
 
     float pressure, temperature, rel_humidity, air_quality, battery_voltage;
 };
 
 struct water_transmitter_t : sensor_transmitter_t {
     water_transmitter_t() : speed(NAN), depth(NAN), temperature(NAN) {}
-    virtual void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
+    virtual void json(PrettyWriter &writer, bool info);
 
     float speed, depth, temperature;
 };
 
 struct lightning_uv_transmitter_t : sensor_transmitter_t {
     lightning_uv_transmitter_t() : distance(NAN), uva(NAN), uvb(NAN), uvc(NAN), visible(NAN) {}
-    virtual void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
+    virtual void json(PrettyWriter &writer, bool info);
 
     float distance, uva, uvb, uvc, visible;
 };
@@ -109,13 +117,14 @@ static std::string position_str(sensor_position p)
     return "Ignored";
 }
 
-sensor_position wireless_str_position(const std::string &p)
+static void wireless_str_position(const std::string &p, sensor_position &pos)
 {
-    if(p == "Primary")   return PRIMARY;
-    if(p == "Secondary") return SECONDARY;
-    if(p == "Port")      return PORT;
-    if(p == "Starboard") return STARBOARD;
-    return IGNORED;
+    const char *q = p.c_str();
+    if(strcasecmp(q, "Primary") == 0)   pos = PRIMARY;
+    if(strcasecmp(q, "Secondary") == 0) pos = SECONDARY;
+    if(strcasecmp(q, "Port") == 0)      pos = PORT;
+    if(strcasecmp(q, "Starboard") == 0) pos = STARBOARD;
+    if(strcasecmp(q, "Ignored") == 0)   pos = IGNORED;
 }
 
 template<class T>
@@ -131,7 +140,8 @@ struct transmitters {
         uint64_t t = esp_timer_get_time();
         T& wt = macs[mac_int];
         if (macs.size() == 1)
-            wt.position = PRIMARY;  // if there are no known transmitters assign it as primary, more likely to ignore another boat nearby
+            // if there are no known transmitters assign it as primary
+            wt.position = PRIMARY;
         if (!isnan(dir)) {
             if ((wt.position == PRIMARY) || (wt.position == SECONDARY && !cur_primary) || (wt.position == PORT && (dir > 200 && dir < 340)) || (wt.position == STARBOARD && (dir > 20 && dir < 160)))
                 cur_primary = mac_int;
@@ -141,12 +151,34 @@ struct transmitters {
         if (primary)
             cur_primary_time = t;
         wt.t = t;
+        wt.packet_count++;
         if (t - cur_primary_time > 1000)
             cur_primary = 0;
         return wt;
     }
 
-    void json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info=false) {
+    void info(uint8_t mac[6], uint32_t runtime, uint32_t packet_count) {
+        uint64_t mac_int = mac_as_int(mac);
+        if(macs.find(mac_int) == macs.end())
+            return;
+        
+        T& wt = macs[mac_int];
+        wt.runtime = runtime;
+
+        uint64_t t = esp_timer_get_time(), dt = t-wt.info_t;
+        if(t > 0)
+            wt.rate = (float)wt.packet_count * 1e6 / dt;
+        wt.info_t = t;
+
+        uint32_t diff = packet_count - wt.last_info_packet_count;
+        wt.last_info_packet_count = packet_count;
+        if(diff > 0)
+            wt.packet_loss = (1.0f - (float)wt.packet_count / diff) * 100.0f;
+
+        wt.packet_count = 0;
+    }
+
+    void json(PrettyWriter &writer, bool info=false) {
         writer.StartObject();
         for(auto i = macs.begin(); i != macs.end(); i++) {
             std::string x = mac_int_to_str(i->first);
@@ -160,30 +192,37 @@ struct transmitters {
                 writer.Key("dt");
                 uint64_t t = esp_timer_get_time();
                 writer.Int((int)(t - wt.t)/1000);
+
+                writer.Key("rate");
+                writer.Double(wt.rate);
+                writer.Key("packet_loss");
+                if(std::isnan(wt.packet_loss))
+                    writer.Null();
+                else
+                    writer.Double(wt.packet_loss);
+                writer.Key("runtime");
+                writer.Uint(wt.runtime);
             }
             writer.EndObject();
         }
         writer.EndObject();
     }
 
-    void setting(uint64_t maci, const rapidjson::Value &s) {
-        if(macs.find(maci) == macs.end())
-            return;
+    void settings_read(std::string &mac, const rapidjson::Value &s) {
+        uint64_t maci = mac_str_to_int(mac);
 
         T &t = macs[maci];
         if(s.HasMember("position"))
-            t.position = wireless_str_position(s["position"].GetString());
-        t.setting(s);
+            wireless_str_position(s["position"].GetString(), t.position);
+
+        t.settings_read(s);
     }
 
-    void read_settings(const rapidjson::Value &t) {
+    void settings_read(const rapidjson::Value &t) {
         for (rapidjson::Value::ConstMemberIterator itr = t.MemberBegin(); itr != t.MemberEnd(); ++itr) {
             std::string mac = itr->name.GetString();
             const rapidjson::Value &u = itr->value;
-            T tr;
-            uint64_t maci = mac_str_to_int(mac);
-            macs[maci] = tr;
-            setting(maci, u);
+            settings_read(mac, u);
         }
     }
 };
@@ -193,12 +232,13 @@ static transmitters<air_transmitter_t> air_transmitters;
 static transmitters<water_transmitter_t> water_transmitters;
 static transmitters<lightning_uv_transmitter_t> lightning_uv_transmitters;
 
-void wind_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+void wind_transmitter_t::json(PrettyWriter &writer, bool info)
 {
     writer.Key("offset");
     writer.Double(offset);
     if(!info)
         return;
+
     writer.Key("direction");
     if(std::isnan(dir) || std::isinf(dir))
         writer.Null();
@@ -208,13 +248,16 @@ void wind_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer
     writer.Double(knots);
 }
 
-void wind_transmitter_t::setting(const rapidjson::Value &s)
+void wind_transmitter_t::settings_read(const rapidjson::Value &s)
 {
-    if(s.HasMember("offset") && s["offset"].IsNumber())
-        offset=fminf(fmaxf(s["offset"].GetDouble(), -180), 180);
+    if(s.HasMember("offset")) {
+        float off;
+        if(read_field(off, s["offset"]))
+            offset = fminf(fmaxf(off, -180), 180);
+    }
 }
 
-void air_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+void air_transmitter_t::json(PrettyWriter &writer, bool info)
 {
     if(!info)
         return;
@@ -233,10 +276,11 @@ void air_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer,
     writer.Double(battery_voltage);
 }
 
-void water_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+void water_transmitter_t::json(PrettyWriter &writer, bool info)
 {
     if(!info)
         return;
+
     writer.Key("speed");
     writer.Double(speed);
     writer.Key("depth");
@@ -245,7 +289,7 @@ void water_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &write
     writer.Double(temperature);
 }
 
-void lightning_uv_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+void lightning_uv_transmitter_t::json(PrettyWriter &writer, bool info)
 {
     if(!info)
         return;
@@ -262,22 +306,28 @@ void lightning_uv_transmitter_t::json(rapidjson::Writer<rapidjson::StringBuffer>
     writer.Double(visible);
 }
 
-void sensors_write_transmitters(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info)
+void sensors_write_transmitters(PrettyWriter &writer, bool info)
 {
     writer.StartObject();
+    if(wind_transmitters.macs.size()) {
+        writer.Key("wind");
+        wind_transmitters.json(writer, info);
+    }
 
-    writer.Key("wind");
-    wind_transmitters.json(writer, info);
+    if(air_transmitters.macs.size()) {
+        writer.Key("air");
+        air_transmitters.json(writer, info);
+    }
 
-    writer.Key("air");
-    air_transmitters.json(writer, info);
+    if(water_transmitters.macs.size()) {
+        writer.Key("water");
+        water_transmitters.json(writer, info);
+    }
 
-    writer.Key("water");
-    water_transmitters.json(writer, info);
-
-    writer.Key("lightning_uv");
-    lightning_uv_transmitters.json(writer, info);
-
+    if(lightning_uv_transmitters.macs.size()) {
+        writer.Key("lightning_uv");
+        lightning_uv_transmitters.json(writer, info);
+    }
     writer.EndObject();
 }
 
@@ -286,13 +336,13 @@ void sensors_read_transmitters(const rapidjson::Value &t)
     for (rapidjson::Value::ConstMemberIterator itr = t.MemberBegin(); itr != t.MemberEnd(); ++itr) {
         std::string name = itr->name.GetString();
         if(name == "wind")
-            wind_transmitters.read_settings(itr->value);
+            wind_transmitters.settings_read(itr->value);
         else if(name == "air")
-            air_transmitters.read_settings(itr->value);
+            air_transmitters.settings_read(itr->value);
         else if(name == "water")
-            water_transmitters.read_settings(itr->value);
+            water_transmitters.settings_read(itr->value);
         else if(name == "lightning_uv")
-            lightning_uv_transmitters.read_settings(itr->value);
+            lightning_uv_transmitters.settings_read(itr->value);
     }
 }
 
@@ -305,9 +355,7 @@ void sensors_wind_update(uint8_t mac[6], float dir, float knots, float paccel_x,
     if(!primary) // if not primary done
         return;
 
-    //uint32_t t2 = millis();
-
-    lpwind_dir = lowpass_direction(lpwind_dir, dir);
+    lpwind_dir = lowpass_direction(lpwind_dir, wt.dir);
 
     accel_x = lowpass(accel_x, paccel_x);
     accel_y = lowpass(accel_y, paccel_y);
@@ -408,4 +456,11 @@ void sensors_lightning_update(uint8_t mac[6], float distance) {
     bool primary;
     lightning_uv_transmitter_t &wt = lightning_uv_transmitters.update(mac, primary);
     wt.distance = distance;
+}
+
+void sensors_info_update(uint8_t mac[6], uint32_t runtime, uint32_t packet_count) {
+    wind_transmitters.info(mac, runtime, packet_count);
+    air_transmitters.info(mac, runtime, packet_count);
+    water_transmitters.info(mac, runtime, packet_count);
+    lightning_uv_transmitters.info(mac, runtime, packet_count);
 }

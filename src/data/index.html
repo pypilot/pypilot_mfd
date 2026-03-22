@@ -7,12 +7,6 @@
   <div class='container'>
     <div class='box'>
       <h2>WIFI Network Configuration</h2>
-        <table style='width: 90%;' id='wifi_networks'><tr><th>SSID</th><th>channel</th><th>rssi</th><th>encryption</th></tr></table>
-        <div class='col3-grid'>
-          <div> </div>
-          <input class='button' type='button' style='width: 100%' value='Scan' onclick='cmd("scan_wifi")'>
-        </div>
-
         <div class='col2-grid'>
           <span>Wireless Mode</span>
           <select id='wifi_mode' onchange='on_wifi_mode()'>
@@ -21,16 +15,28 @@
             <option value='none'>None</option>
           </select>
         </div>
-        <div id="wifi_ap" class='col2-grid'>
+        <div id="wifi_ap" class='col2-grid' style="display:none">
           <span>AP SSID</span><input type='text' id='ap_ssid' autofocus style='width: 60%'>
           <span>AP PSK</span><input type='text' id='ap_psk' style='width: 60%'>
         </div>
-        <div id="wifi_client" class='col2-grid'>
-          <span>Client SSID</span><input type='text' id='client_ssid' autofocus style='width: 60%'>
+        <div id="wifi_client" class='col2-grid' style="display:none">
+          <table style='width: 90%;' id='wifi_networks_table'><tr><th>SSID</th><th>channel</th><th>rssi</th><th>encryption</th></tr></table>
+          <div class='col3-grid'>
+            <div> </div>
+            <input class='button' type='button' style='width: 100%' value='Scan' onclick='cmd("scan_wifi")'>
+          </div>
+          <span>Client SSID</span><span class='combo'><input list='ssids_list' id='client_ssid' autofocus style='width: 60%'></span>
+          <datalist id='ssids_list'>
+          </datalist>
           <span>Client PSK</span><input type='text' id='client_psk' style='width: 60%'>
         </div>
         <div class='col2-grid'>
-          <span>Wireless Channel</span><input type='number' id='wifi_channel'></input>
+          <span>Wireless Channel</span>
+          <select id='wifi_channel'>
+            <option value=1>1</option>
+            <option value=6>6</option>
+            <option value=11>11</option>
+          </select>
         </div>
         <div class='col3-grid'>
           <div> </div>
@@ -45,67 +51,39 @@
         <div class='col3-grid'>
           <span>Wind Direction</span><span id='wind_direction'>N/A</span><span>Degrees</span>
           <span>Wind Speed</span><span id='wind_knots'>N/A</span><span>Knots</span>
+          <span>Accel</span><span id='wind_accel'>N/A</span><span>G</span>
         </div>
       </div>
-      <table style='width: 90%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th><th>Unlock</th></tr></table>      
+      <table style='width: 90%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th><th>Rate</th><th>Packet Loss</th><th>Runtime</th><th>AP</th></tr></table>
     </div>
 
     <div class='box'>
       <h2>Data Configuration</h2>
-        <div class='col2-grid'>
-          <span>USB data host (NMEA0183)</span>
-          <span>
-            <input type='checkbox' id='input_usb_host'><label for='input_usb_host'>Input</label>
-            <input type='checkbox' id='output_usb_host'>
-            <label for='output_usb_host'>Output</label>
-            <select id='usb_host_baud_rate'>
-              <option value='4800'>4800</option>
-              <option value='38400'>38400</option>
-              <option value='115200'>115200</option>
-            </select>
-          </span>
-          <span>USB data device (NMEA0183)</span>
-          <span>
-            <input type='checkbox' id='input_usb'><label for='input_usb'>Input</label>
-            <input type='checkbox' id='output_usb'>
-            <label for='output_usb'>Output</label>
-            <select id='usb_baud_rate'>
-              <option value='38400'>38400</option>
-              <option value='115200'>115200</option>
-            </select>
-          </span>
-          <span>RS422 1 data (NMEA0183)</span>
-          <div>
-            <select id='rs422_1_baud_rate'>
-              <option value='0'>Disable</option>
-              <option value='4800'>4800</option>
-              <option value='38400'>38400</option>
-              <option value='115200'>115200</option>
-            </select>
-          </div>
-          <span>RS422 2 data (NMEA0183)</span>
-          <div>
-            <select id='rs422_2_baud_rate'>
-              <option value='0'>Disable</option>
-              <option value='4800'>4800</option>
-              <option value='38400'>38400</option>
-              <option value='115200'>115200</option>
-            </select>
-          </div>
-        </div>
+      <div class='col2-grid'>
+        <span>USB data device (NMEA0183)</span>
+        <span>
+          <input type='checkbox' id='output_usb'><label for='output_usb'>Output</label>
+          <select id='usb_baud_rate'>
+            <option value='38400'>38400</option>
+            <option value='115200'>115200</option>
+          </select>
+        </span>
+      </div>
+      <div class='col1-grid'>
         <span>WIFI data</span>
         <div class='box-frame'>
           <h3 class='box-title'>pypilot NMEA0183</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_nmea_pypilot'_NMEA_PYPILOT%>
+            <input type='checkbox' id='input_nmea_pypilot'>
             <label for='input_nmea_pypilot'>Input</label>
             <span>port 20220</span>
-            <input type='checkbox' id='output_nmea_pypilot'_NMEA_PYPILOT%>
+            <input type='checkbox' id='output_nmea_pypilot'>
             <label for='output_nmea_pypilot'>Output</label>
             <span>pypilot server: <span id='pypilot_addr'></span></span>
           </div>
         </div>
+        <!--
         <div class='box-frame'>
           <h3 class='box-title'>signalk-server NMEA0183</h3>
           <br>
@@ -118,19 +96,20 @@
             <span>signalk server: <span id='signalk_addr'></span></span>
           </div>
         </div>
+        -->
         <div class='box-frame'>
           <h3 class='box-title'>TCP client NMEA0183</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_nmea_client'></input>
-            <label for='input_nmea_client'>Input</label>
+            <input type='checkbox' id='input_nmea_tcp_client'></input>
+            <label for='input_nmea_tcp_client'>Input</label>
             <span></span>
-            <input type='checkbox' id='output_nmea_client'></input>
-            <label for='output_nmea_client'>Output</label>
+            <input type='checkbox' id='output_nmea_tcp_client'></input>
+            <label for='output_nmea_tcp_client'>Output</label>
             <span>Host
-              <input type='text' id='nmea_client_addr' style='width: 10em;'>
+              <input type='text' id='nmea_tcp_client_addr' style='width: 10em;'>
               Port
-              <input type='number' style='width: 4em;' id='nmea_client_port'>
+              <input type='number' style='width: 4em;' id='nmea_tcp_client_port'>
             </span>
           </div>
         </div>
@@ -138,14 +117,15 @@
           <h3 class='box-title'>TCP server NMEA</h3>
           <br>
           <div class='col3-grid'>
-            <input type='checkbox' id='input_nmea_server'></input>
-            <label for='input_nmea_server'>Input</label>
+            <input type='checkbox' id='input_nmea_tcp_server'></input>
+            <label for='input_nmea_tcp_server'>Input</label>
             <span></span>
-            <input type='checkbox' id='output_nmea_server'></input>
-            <label for='output_nmea_server'>Output</label>
-            <span>host ip <span id='ip_address'></span> Port <input type='text' id='nmea_server_port' style='width: 4em;'></input></span>          
+            <input type='checkbox' id='output_nmea_tcp_server'></input>
+            <label for='output_nmea_tcp_server'>Output</label>
+            <span>host ip <span id='ip_address'></span> Port <input type='text' id='nmea_tcp_server_port' style='width: 4em;'></input></span>          
           </div>
         </div>
+        <!--
         <div class='box-frame'>
           <h3 class='box-title'>SignalK</h3>
           <br>
@@ -158,32 +138,27 @@
           </div>
           <span>To output to signalk you may have to <a href='signalk.local:3000'>grant access</a></span>
         </div>
+        -->
         <span>Forward data</span>
         <div class='data-grid'>
-          <input type='checkbox' id='forward_nmea_serial_to_serial'>
-          <label for='forward_nmea_serial_to_serial'>Forward nmea serial to serial </label>
-          <input type='checkbox' id='forward_nmea_serial_to_wifi'>
+          <input type='checkbox' id='forward_nmea_serial_to_wifi' />
           <label for='forward_nmea_serial_to_wifi'>Forward nmea serial to wifi </label>
         </div>
         <div class='col1-grid'>
           <span>Computation</span>          
           <span>
-            <input type='checkbox' id='compensate_wind_with_accelerometer'>
+            <input type='checkbox' id='compensate_wind_with_accelerometer' />
             <label for='compensate_wind_with_accelerometer'>Compensate wind with accelerometer</label>
-          </span>
-          <span><input type='checkbox' id='compute_true_wind_from_gps'><label for='output_wifi'>Compute True Wind from GPS</label></span>
-          <span>
-            <input type='checkbox' id='compute_true_wind_from_water'>
-            <label for='compute_true_wind_from_water_speed'>Compute True Wind from Water Speed</label>
           </span>
         </div>
         <div class='col3-grid'>
           <div></div>
-          <input class='button' type='button' value='Submit' onclick='on_display_data()'>
+          <input class='button' type='button' value='Submit' onclick='on_display_data()' />
         </div>
+      </div>
     </div>
-<h5>version <span id='version'></span></h5>
-<h5>written by Sean D'Epagnier</h5>
+    <h5>version <span id='version'> </span>&nbsp;<span>written by Sean D'Epagnier</span></h5>
+  </div>
 </body>
 <script type='text/javascript' src='index.js'></script>
 </html>

@@ -9,7 +9,7 @@
 #include <vector>
 
 #include <esp_log.h>
-#include <esp_spiffs.h>
+#include <esp_littlefs.h>
 #include <esp_wifi_types_generic.h>
 
 #include <rapidjson/document.h>
@@ -19,41 +19,228 @@
 #include "utils.h"
 #include "settings.h"
 
-void sensors_write_transmitters(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
-void sensors_read_transmitters(const rapidjson::Value &t);
-
-#define DEFAULT_CHANNEL 1
-#define MAGIC "3A61CF00"
-
 #define TAG "settings"
 
+using PrettyWriter = rapidjson::PrettyWriter<rapidjson::StringBuffer>;
+
+void sensors_write_transmitters(PrettyWriter &writer, bool info);
+void sensors_read_transmitters(const rapidjson::Value &t);
+
+#define MAGIC "3A61CF00"
+
 settings_t settings;
-static std::string settings_filename = "/spiffs/settings.json";
+
+static std::string settings_filename = "/storage/settings.json";
 bool force_wifi_ap_mode = false;
 uint8_t hw_version;
 
-std::string get_wifi_mode_str()
-{
-    switch(settings.wifi_mode) {
-        case WIFI_MODE_AP: return "ap";
-        case WIFI_MODE_STA: return "client";
-        default:  break;
-    }
-    return "none";    
+void settings_t::defaults() {
+#define SET_DEFAULT(type, name, def, ...) name = def;
+    SETTINGS_FIELDS(SET_DEFAULT)
+#undef SET_DEFAULT
 }
 
-void settings_reset() {
-    std::string filename = settings_filename;
-    if(remove(filename.c_str()) != 0)
-        ESP_LOGW(TAG, "failed to remove: %s", filename.c_str());
-    filename += ".bak";
-    if(remove(filename.c_str()) != 0)
-        ESP_LOGW(TAG, "failed to remove: %s", filename.c_str());
-}    
+/* read settings from json document into settings_t
+   if defaults is true, replace invalid or missing values in document with default ones
+   otherwise do not modify the current settings
+*/
 
-static bool settings_parse(rapidjson::Document &s,
-                           std::string suffix="")
+static bool read_field(std::string &x, const rapidjson::Value& v)
 {
+    if(v.IsString()) {
+        x = v.GetString();
+        return true;
+    }
+    
+    rapidjson::StringBuffer buffer;
+    PrettyWriter writer(buffer);
+    //    writer.SetIndent(' ', 2);  // optional: 2 spaces (default is 4)
+
+    v.Accept(writer);
+    x = buffer.GetString();
+    return true;
+}
+
+static bool read_field(bool &x, const rapidjson::Value& v)
+{
+    if(v.IsBool()) {
+        x = v.GetBool();
+        return true;
+    }
+
+    if(v.IsNumber()) {
+        if(v.GetDouble() == 0)
+            x = false;
+        else
+            x = true;
+        return true;
+    }
+    
+    if(v.IsString()) {
+        std::string b = v.GetString();
+        if(b == "true")
+            x = true;
+        else if(b == "false")
+            x = false;
+        else
+            return false;
+        return true;
+    }
+    return false;
+}
+
+bool read_field(float &x, const rapidjson::Value& v)
+{
+    if (v.IsNumber()) {
+        x = v.GetDouble();
+        return true;
+    }
+
+    if (v.IsString()) {
+        const char *s = v.GetString();
+        char* end;
+        errno = 0;
+        double d = std::strtod(s, &end);
+        if (errno != 0 || end == s || *end != '\0')
+            return false;
+        x = d;
+        return true;
+    }
+    return false;
+}
+
+static bool read_field(int &x, const rapidjson::Value& v)
+{
+    float y;
+    if(read_field(y, v)) {
+        x = y;
+        return true;
+    }
+    return false;
+}
+
+static bool read_field(int &x, const rapidjson::Value& v, int min, int max) {
+    int y;
+    if(!read_field(y, v))
+        return false;
+    if(y < min || y > max)
+        return false;
+    x = y;
+    return true;
+}
+
+static bool read_field(uint8_t& x, const rapidjson::Value& v) {
+    int y;
+    if(read_field(y, v)) {
+        x = y;
+        return true;
+    }
+    return false;
+}
+
+static bool read_field(SettingsChoice& x, const rapidjson::Value& v) {
+    if(v.IsString()) {
+        x.set(v.GetString());
+        return true;
+    }
+    return false;
+}
+ 
+void settings_read(rapidjson::Document &s)
+{
+#define VISIT_FIELD(type, name, def, ...)        \
+    if(s.HasMember(#name))                       \
+        read_field(settings.name, s[#name]  __VA_OPT__(,) __VA_ARGS__);
+    SETTINGS_FIELDS(VISIT_FIELD)
+#undef VISIT_FIELD
+
+    if(settings.ap_ssid.size() < 4)
+        settings.ap_ssid = DEF_SSID;
+
+    uint8_t &channel = settings.wifi_channel;
+    if(channel != 1 && channel != 6 && channel != 11)
+        channel = DEF_WIFI_CHANNEL;
+
+    int &usb_baud_rate = settings.usb_baud_rate;
+    if(usb_baud_rate != 38400 && usb_baud_rate != 115200)
+        usb_baud_rate = 115200;
+
+    const std::string &loglevel = settings.loglevel;
+    if(loglevel == "none")
+        esp_log_level_set("*", ESP_LOG_NONE);
+    else if(loglevel == "error")
+        esp_log_level_set("*", ESP_LOG_ERROR);
+    else if(loglevel == "warn")
+        esp_log_level_set("*", ESP_LOG_WARN);
+    else if(loglevel == "info")
+        esp_log_level_set("*", ESP_LOG_INFO);
+    else if(loglevel == "debug")
+        esp_log_level_set("*", ESP_LOG_DEBUG);
+    else if(loglevel == "verbose")
+        esp_log_level_set("*", ESP_LOG_VERBOSE);
+    else
+        ESP_LOGW(TAG, "invalid loglevel: %s", loglevel.c_str());
+
+    // transmitters
+    if(s.HasMember("transmitters"))
+        sensors_read_transmitters(s["transmitters"]);
+}
+
+static void write_field(const std::string &x, PrettyWriter &w)
+{
+    w.String(x.c_str());
+}
+
+static void write_field(bool x, PrettyWriter &w)
+{
+    w.Bool(x);
+}
+
+static void write_field(float x, PrettyWriter &w)
+{
+    w.Double(x);
+}
+
+static void write_field(int x, PrettyWriter &w)
+{
+    w.Int(x);
+}
+
+/* return stringbuffer wtih complete */
+rapidjson::StringBuffer settings_json()
+{
+    rapidjson::StringBuffer s;
+    PrettyWriter w(s);
+    w.SetMaxDecimalPlaces(6);
+
+    w.StartObject();
+    
+    w.Key("magic");
+    w.String(MAGIC);
+
+#define VISIT_FIELD(type, name, def, ...)            \
+        w.Key(#name);                            \
+        write_field(settings.name, w);
+    SETTINGS_FIELDS(VISIT_FIELD)
+#undef VISIT_FIELD
+
+    // transmitters
+    w.Key("transmitters");
+    sensors_write_transmitters(w, false);
+    w.EndObject();
+
+    return s;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+
+// read a file from disk into settings
+static bool settings_load_suffix(std::string suffix="")
+{
+    rapidjson::Document s;
+
     // start with default settings
     std::string filename = settings_filename + suffix;
     bool ret = false;
@@ -71,36 +258,65 @@ static bool settings_parse(rapidjson::Document &s,
         
         if (got != 1) return false;
         
-        //        printf("READ SETTINGS %ld %d %s\n", n, got, data.data());
+        ESP_LOGD(TAG, "READ SETTINGS %ld %d %s", n, got, data.data());
         if(s.Parse(data.data()).HasParseError())
-            printf("settings file '%s' invalid/corrupted, will ignore data\n", filename.c_str());
+            ESP_LOGE(TAG, "settings file '%s' invalid/corrupted, will ignore data", filename.c_str());
         else
             ret = true;
 
         if(!s.IsObject() || !s.HasMember("magic") || !s["magic"].IsString() || s["magic"].GetString() != std::string(MAGIC)) {
             ret = false;
-            printf("settings file '%s' magic identifier failed, will ignore data\n", filename.c_str());
+            ESP_LOGW(TAG, "settings file '%s' magic identifier failed, will ignore data", filename.c_str());
         }
     } else
-        printf("failed to open '%s' for reading\n", filename.c_str());
+        ESP_LOGW(TAG, "failed to open '%s' for reading", filename.c_str());
 
     if(!ret) {
         if(suffix.empty())
             return false;
-        s.Parse("{}").HasParseError();
+        s.Parse("{}");
     }
 
+    settings.defaults();
+    settings_read(s);
     return ret;
+}
+
+static esp_err_t littlefs_mount_format_on_fail(void) {
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path = "/storage",
+        .partition_label = NULL,
+        .partition = NULL,
+        .format_if_mount_failed = true,
+        .read_only = false,
+        .dont_mount = false,
+        .grow_on_mount = false,
+    };
+
+    esp_err_t err = esp_vfs_littlefs_register(&conf);
+    ESP_LOGW(TAG, "register returned: %s", esp_err_to_name(err));
+    return err;
+}
+
+// delete settings files (they will be replaced by defaults
+void settings_reset() {
+    std::string filename = settings_filename;
+    if(remove(filename.c_str()) != 0)
+        ESP_LOGW(TAG, "failed to remove: %s", filename.c_str());
+    filename += ".bak";
+    if(remove(filename.c_str()) != 0)
+        ESP_LOGW(TAG, "failed to remove: %s", filename.c_str());
+
+    settings.defaults();
 }
 
 static bool settings_write(const char *cdata, int len, std::string suffix="")
 {
-    printf("SETTINGS WRITE %s\n", cdata);
-    
+    ESP_LOGD(TAG, "WRITE SETTINGS %s", cdata);
     std::string filename = settings_filename + suffix;
     FILE *f = fopen(filename.c_str(), "wb");
-    if(!f){
-        printf("failed to open '%s' for writing\n", settings_filename.c_str());
+    if(!f) {
+        ESP_LOGE(TAG, "failed to open '%s' for writing", settings_filename.c_str());
         return false;
     }
 
@@ -109,38 +325,91 @@ static bool settings_write(const char *cdata, int len, std::string suffix="")
     return true;
 }
 
+static bool settings_store_suffix(std::string suffix="")
+{
+    ESP_LOGI(TAG, "SETTINGS STORE %s", suffix.c_str());
+    rapidjson::StringBuffer s = settings_json();
+    return settings_write(s.GetString(), s.GetSize(), suffix);
+}
+
+void settings_store()
+{
+    settings_store_suffix();
+}
+
+void settings_load()
+{
+#ifndef __linux__
+    ESP_ERROR_CHECK(littlefs_mount_format_on_fail());
+#endif    
+    if (settings_load_suffix())
+        settings_store_suffix(".bak");
+    else if(!settings_load_suffix(".bak")) {
+        ESP_LOGE(TAG, "Unable to parse JSON!");
+        settings_reset();
+    }
+    //    settings_store();
+
+#if 0
+    nvs_handle_t version_handle;
+    if(nvs_open("version", NVS_READONLY, &version_handle) == ESP_OK) {
+        nvs_get_u8(version_handle, "hw_version", &hw_version);
+        nvs_close(version_handle);
+    }
+
+    ESP_LOGI(TAG, "Hardware Version: %d", hw_version);
+    if(hw_version != 1) { // power
+        gpio_hold_dis((gpio_num_t)14);
+        pinMode(14, OUTPUT);  // 422 power
+        digitalWrite(14, 1);  // enable 422 for now?  disable if settings disable it
+    }
+#endif
+}
+
+/////////////////////////////////////////////////////////////////////////
+//  Accessors for serial console
+/////////////////////////////////////////////////////////////////////////
+
+static bool settings_parse(rapidjson::Document &doc) {
+    rapidjson::StringBuffer s = settings_json();
+    if(doc.Parse(s.GetString()).HasParseError()) {
+        ESP_LOGE(TAG, "settings_keys fail to parse doc");
+        return false;
+    }
+    return true;
+}
+
 std::unordered_set<std::string> settings_keys() {
     std::unordered_set<std::string> keys;
-
     rapidjson::Document s;
-    if(!settings_parse(s))
-        return keys;
-
-    for (auto& m : s.GetObject()) {
-        const char* key = m.name.GetString();
-        keys.insert(key);
-    }
+    if(settings_parse(s))
+        for (auto& m : s.GetObject())
+            keys.insert(m.name.GetString());
     return keys;
 }
 
-static std::string to_string(const rapidjson::Value& v)
-{
-    if (v.IsString()) return v.GetString();
-    if (v.IsInt()) return std::to_string(v.GetInt());
-    if (v.IsDouble()) return std::to_string(v.GetFloat());
-    if (v.IsBool()) return v.GetBool() ? "true" : "false";
-    return "<unsupported>";
-}
-
-std::string settings_get_value(const std::string &key) {
+void settings_list() {
     rapidjson::Document s;
     if(!settings_parse(s))
-        return "failed to parse";
+        return;
+    for (auto& m : s.GetObject()) {
+        const char* key = m.name.GetString();
+        std::string x;
+        if(read_field(x, m.value))
+            printf("%s %s\n", key, x.c_str());
+    }
+}
 
+std::string settings_get_string(const std::string &key) {
+    rapidjson::Document s;
+    if(!settings_parse(s))
+        return "";
     if(!s.HasMember(key.c_str()))
-        return "not found";
-
-    return to_string(s[key.c_str()]);
+        return "<unset>";
+    std::string x;
+    if(read_field(x, s[key.c_str()]))
+        return x;
+    return "";
 }
 
 static bool set_bool(rapidjson::Value& v, const std::string& s) {
@@ -158,7 +427,7 @@ static bool set_int(rapidjson::Value& v, const std::string& s, bool unsign) {
     char* end = nullptr;
     errno = 0;
     int32_t n = std::strtol(s.c_str(), &end, 0); // base 0 handles 0x.. too
-    if(n < 0 || unsign)
+    if(n < 0 && unsign)
         return false;
     if (errno != 0 || end == s.c_str() || *end != '\0') return false;
     v.SetInt((int)n);
@@ -174,166 +443,11 @@ static bool set_double(rapidjson::Value& v, const std::string& s) {
     return true;
 }
 
-void settings_load_doc(rapidjson::Document &s, bool defaults)
-{
-    
-#define LOAD_SETTING_B(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsBool()) settings.NAME = s[#NAME].GetBool(); else if(defaults) settings.NAME = DEFAULT;
-#define LOAD_SETTING_I(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = s[#NAME].GetInt(); else if(defaults) settings.NAME = DEFAULT;
-#define LOAD_SETTING_F(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsDouble()) settings.NAME = s[#NAME].GetFloat(); else if(defaults) settings.NAME = DEFAULT;
-#define LOAD_SETTING_S(NAME, DEFAULT)   if(s.HasMember(#NAME) && s[#NAME].IsString()) settings.NAME = s[#NAME].GetString(); else if(defaults) settings.NAME = DEFAULT;
-#define LOAD_SETTING_E(NAME, TYPE, DEFAULT) if(s.HasMember(#NAME) && s[#NAME].IsInt()) settings.NAME = (TYPE)(int)s[#NAME].GetInt(); else if(defaults) settings.NAME = DEFAULT;
-
-#define LOAD_SETTING_BOUND(NAME, DEFAULT, MIN, MAX) \
-    LOAD_SETTING_I(NAME, DEFAULT) \
-    if(settings.NAME < MIN) settings.NAME = MIN; \
-    if(settings.NAME > MAX) settings.NAME = MAX; \
-
-    LOAD_SETTING_I(wifi_mode, WIFI_MODE_AP)
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    LOAD_SETTING_S(ap_ssid, "pypilot_mfd")
-#else
-    LOAD_SETTING_S(ap_ssid, "wind_receiver")
-#endif
-        
-    LOAD_SETTING_S(ap_psk, "")
-
-    LOAD_SETTING_S(client_ssid, "pypilot")
-    LOAD_SETTING_S(client_psk, "")
-
-    LOAD_SETTING_I(wifi_channel, DEFAULT_CHANNEL);
-    if(settings.wifi_channel == 0 || settings.wifi_channel > 12)
-        settings.wifi_channel = DEFAULT_CHANNEL;
-
-    LOAD_SETTING_B(output_usb, true)
-    LOAD_SETTING_I(usb_baud_rate, 115200)
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    LOAD_SETTING_B(input_usb, true)
-    LOAD_SETTING_I(rs422_1_baud_rate, 0)
-    LOAD_SETTING_I(rs422_2_baud_rate, 38400)
-
-    LOAD_SETTING_B(input_nmea_pypilot, true)
-    LOAD_SETTING_B(input_nmea_signalk, false)
-    LOAD_SETTING_B(input_nmea_client, false)
-    LOAD_SETTING_B(input_nmea_server, false)
-    LOAD_SETTING_B(input_signalk, false)
-#endif
-
-    LOAD_SETTING_B(output_nmea_pypilot, false)
-    LOAD_SETTING_B(output_nmea_signalk, false)
-    LOAD_SETTING_B(output_nmea_tcp_client, false)
-    LOAD_SETTING_B(output_nmea_tcp_server, false)
-    LOAD_SETTING_B(output_signalk, false)
-
-    LOAD_SETTING_S(nmea_tcp_client_addr, "")
-    LOAD_SETTING_I(nmea_tcp_client_port, 0);
-    LOAD_SETTING_I(nmea_tcp_server_port, 3600);
-
-    // forwarding data
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    LOAD_SETTING_B(forward_nmea_serial_to_serial, false)
-    LOAD_SETTING_B(forward_nmea_serial_to_wifi, true)
-#endif
-        
-    // computations
-    LOAD_SETTING_B(compensate_wind_with_accelerometer, false)
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    LOAD_SETTING_B(compute_true_wind_from_gps, true)
-    LOAD_SETTING_B(compute_true_wind_from_water, true)
-#endif
-        
-    //display
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    LOAD_SETTING_B(use_360, false)
-    LOAD_SETTING_B(use_fahrenheit, false)
-    LOAD_SETTING_B(use_inHg, false)
-    LOAD_SETTING_B(use_depth_ft, false)
-    LOAD_SETTING_S(lat_lon_format, "minutes")
-    LOAD_SETTING_B(invert, false)
-    LOAD_SETTING_S(color_scheme, "default")
-    LOAD_SETTING_BOUND(contrast, 20, 0, 50)
-    LOAD_SETTING_BOUND(backlight, 10, 0, 20)
-    LOAD_SETTING_BOUND(buzzer_volume, 5, 0, 10)
-    
-    LOAD_SETTING_B(show_status, true)
-    LOAD_SETTING_I(rotation, 4)
-    LOAD_SETTING_I(mirror, 2)
-
-    LOAD_SETTING_S(power_button, "powersave")
-
-    LOAD_SETTING_S(enabled_pages, "ABCD")
-    LOAD_SETTING_I(cur_page, 0)
-
-    // alarms
-    LOAD_SETTING_B(anchor_alarm, false)
-    LOAD_SETTING_F(anchor_lat, 0)
-    LOAD_SETTING_F(anchor_lon, 0)
-    LOAD_SETTING_I(anchor_alarm_distance, 10)
-
-    LOAD_SETTING_B(course_alarm, false)
-    LOAD_SETTING_BOUND(course_alarm_course, 0, 0, 360)
-    LOAD_SETTING_BOUND(course_alarm_error, 20, 5, 90)
-        
-    LOAD_SETTING_B(gps_speed_alarm, false)
-    LOAD_SETTING_BOUND(gps_min_speed_alarm_knots, 0, 0, 10)
-    LOAD_SETTING_BOUND(gps_max_speed_alarm_knots, 10, 1, 100)
-
-    LOAD_SETTING_B(wind_speed_alarm, false)
-    LOAD_SETTING_BOUND(wind_min_speed_alarm_knots, 0, 0, 100)
-    LOAD_SETTING_BOUND(wind_max_speed_alarm_knots, 30, 1, 100)
-
-    LOAD_SETTING_B(water_speed_alarm, false)
-    LOAD_SETTING_BOUND(water_min_speed_alarm_knots, 0, 0, 10)
-    LOAD_SETTING_BOUND(water_max_speed_alarm_knots, 10, 1, 100)
-
-    LOAD_SETTING_B(weather_alarm_pressure, false)
-    LOAD_SETTING_BOUND(weather_alarm_min_pressure, 980, 900, 1100)
-    LOAD_SETTING_B(weather_alarm_pressure_rate, false)
-    LOAD_SETTING_BOUND(weather_alarm_pressure_rate_value, 10, 1, 100)
-    LOAD_SETTING_B(weather_alarm_lightning, false)
-    LOAD_SETTING_BOUND(weather_alarm_lightning_distance, 10, 1, 50)
-
-    LOAD_SETTING_B(depth_alarm, false)
-    LOAD_SETTING_I(depth_alarm_min, 3)
-    LOAD_SETTING_B(depth_alarm_rate, false)
-    LOAD_SETTING_I(depth_alarm_rate_value, 5)
-
-    LOAD_SETTING_B(ais_alarm, false)
-    LOAD_SETTING_I(ais_alarm_cpa, 1)
-    LOAD_SETTING_I(ais_alarm_tcpa, 10)
-        
-    LOAD_SETTING_B(pypilot_alarm_noconnection, false)
-    LOAD_SETTING_B(pypilot_alarm_fault, false)
-    LOAD_SETTING_B(pypilot_alarm_no_imu, false)
-    LOAD_SETTING_B(pypilot_alarm_no_motor_controller, false)
-    LOAD_SETTING_B(pypilot_alarm_lost_mode, false)
-#endif
-
-    // mdns
-    LOAD_SETTING_S(pypilot_addr, "192.168.14.1")
-    LOAD_SETTING_S(signalk_addr, "10.10.10.1")
-    LOAD_SETTING_I(signalk_port, 3000)
-
-    // transmitters
-    if(s.HasMember("transmitters"))
-        sensors_read_transmitters(s["transmitters"]);
-}
-
-static bool settings_load_suffix(std::string suffix="")
-{
-    rapidjson::Document s;
-    if(!settings_parse(s, suffix))
-        return false;
-
-    settings_load_doc(s, true);
-    return true;
-}
-
 // s is an object (e.g. doc["settings"])
 // key exists already and you want to set it using the existing type
-bool set_by_existing_type(rapidjson::Value& v,
-                          const std::string& value,
-                          rapidjson::Document::AllocatorType& alloc)
+static bool set_by_existing_type(rapidjson::Value& v,
+                                 const std::string& value,
+                                 rapidjson::Document::AllocatorType& alloc)
 {
     if (v.IsBool()) return set_bool(v, value);
     if (v.IsUint()) return set_int(v, value, true);
@@ -343,217 +457,80 @@ bool set_by_existing_type(rapidjson::Value& v,
         v.SetString(value.c_str(), (rapidjson::SizeType)value.size(), alloc);
         return true;
     }
-
     return false;
 }
 
 bool settings_set_value(const std::string &key, const std::string &value) {
-    rapidjson::Document doc;
-    if(!settings_parse(doc))
+    rapidjson::Document s;
+    if(!settings_parse(s))
         return false;
 
-    if (!doc.IsObject() || !doc.HasMember(key.c_str()))
+    if (!s.IsObject() || !s.HasMember(key.c_str())) {
+        ESP_LOGI(TAG, "settings has no key %s", key.c_str());
         return false;
+    }
 
-    if(!set_by_existing_type(doc[key.c_str()], value, doc.GetAllocator()))
+    if(!set_by_existing_type(s[key.c_str()], value, s.GetAllocator())) {
+        ESP_LOGI(TAG, "settings_set_value failed %s", key.c_str());
         return false;
+    }
 
-    rapidjson::StringBuffer s;
-    rapidjson::PrettyWriter<rapidjson::StringBuffer> w(s);
-    doc.Accept(w);
- 
-    settings_write(s.GetString(), s.GetSize());
+    settings_read(s); // put it back in settings
 
-    settings_load_suffix();
+    // now read back into document, validating fields
+    if(!settings_parse(s))
+        return false;
+    
+    if (!s.IsObject() || !s.HasMember(key.c_str())) {
+        ESP_LOGI(TAG, "settings_set_value 2 no key %s", key.c_str());
+        return false;
+    }
+
+    std::string str;
+    read_field(str, s[key.c_str()]);
+    ESP_LOGI(TAG, "setting %s = %s", key.c_str(), str.c_str());
+
+    settings_store(); // write to disk
     return true;
 }
 
-rapidjson::StringBuffer settings_store_doc()
-{
+bool settings_get_transmitter(const std::string &mac, const std::string &key, std::string &output, std::string *type) {
     rapidjson::StringBuffer s;
-    rapidjson::PrettyWriter<rapidjson::StringBuffer> w(s);
+    PrettyWriter w(s);
     w.SetMaxDecimalPlaces(6);
 
-    w.StartObject();
-    
-#define STORE_SETTING(NAME, SET, VALUE) w.Key(#NAME); w.SET(VALUE);
-#define STORE_SETTING_S(NAME) STORE_SETTING(NAME, String, settings.NAME.c_str())
-#define STORE_SETTING_B(NAME) STORE_SETTING(NAME, Bool, settings.NAME)
-#define STORE_SETTING_I(NAME) STORE_SETTING(NAME, Int, (int)settings.NAME)
-#define STORE_SETTING_E(NAME) STORE_SETTING(NAME, Uint, (unsigned int)settings.NAME)
-#define STORE_SETTING_F(NAME) STORE_SETTING(NAME, Double, settings.NAME)
+    sensors_write_transmitters(w, true);
 
-    w.Key("magic");
-    w.String(MAGIC);
-
-    STORE_SETTING_I(wifi_mode)
-    STORE_SETTING_S(ap_ssid)
-    STORE_SETTING_S(ap_psk)
-    STORE_SETTING_S(client_ssid)
-    STORE_SETTING_S(client_psk)
-    STORE_SETTING_I(wifi_channel)
-
-    STORE_SETTING_B(output_usb)
-    STORE_SETTING_I(usb_baud_rate)
-
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    STORE_SETTING_B(input_usb)
-    STORE_SETTING_I(rs422_1_baud_rate)
-    STORE_SETTING_I(rs422_2_baud_rate)
-
-    STORE_SETTING_B(input_nmea_pypilot)
-    STORE_SETTING_B(input_nmea_signalk)
-    STORE_SETTING_B(input_nmea_client)
-    STORE_SETTING_B(input_nmea_server)
-    STORE_SETTING_B(input_signalk)
-#endif
-        
-    STORE_SETTING_B(output_nmea_pypilot)
-    STORE_SETTING_B(output_nmea_signalk)
-    STORE_SETTING_B(output_nmea_tcp_client)
-    STORE_SETTING_B(output_nmea_tcp_server)
-    STORE_SETTING_B(output_signalk)
-
-    STORE_SETTING_S(nmea_tcp_client_addr)
-    STORE_SETTING_I(nmea_tcp_client_port)
-    STORE_SETTING_I(nmea_tcp_server_port)
-
-    // forwarding data
-    STORE_SETTING_B(forward_nmea_serial_to_serial)
-    STORE_SETTING_B(forward_nmea_serial_to_wifi)
-    STORE_SETTING_B(compensate_wind_with_accelerometer)
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    STORE_SETTING_B(compute_true_wind_from_gps)
-    STORE_SETTING_B(compute_true_wind_from_water)
-#endif
-        
-    //display
-#ifdef CONFIG_IDF_TARGET_ESP32S3
-    STORE_SETTING_B(use_360)
-    STORE_SETTING_B(use_fahrenheit)
-    STORE_SETTING_B(use_inHg)
-    STORE_SETTING_B(use_depth_ft)
-    STORE_SETTING_S(lat_lon_format)
-    STORE_SETTING_B(invert)
-    STORE_SETTING_S(color_scheme)
-    STORE_SETTING_I(contrast)
-    STORE_SETTING_I(backlight)
-    STORE_SETTING_I(buzzer_volume)
-    
-    STORE_SETTING_B(show_status)
-    STORE_SETTING_I(rotation)
-    STORE_SETTING_I(mirror)
-    STORE_SETTING_S(power_button)
-
-    STORE_SETTING_S(enabled_pages)
-    STORE_SETTING_I(cur_page)
-
-    // alarms
-    STORE_SETTING_B(anchor_alarm)
-    STORE_SETTING_F(anchor_lat)
-    STORE_SETTING_F(anchor_lon)
-    STORE_SETTING_I(anchor_alarm_distance)
-
-    STORE_SETTING_B(course_alarm)
-    STORE_SETTING_I(course_alarm_course)
-    STORE_SETTING_I(course_alarm_error)
-        
-    STORE_SETTING_B(gps_speed_alarm)
-    STORE_SETTING_I(gps_min_speed_alarm_knots)
-    STORE_SETTING_I(gps_max_speed_alarm_knots)
-
-    STORE_SETTING_B(wind_speed_alarm)
-    STORE_SETTING_I(wind_min_speed_alarm_knots)
-    STORE_SETTING_I(wind_max_speed_alarm_knots)
-
-    STORE_SETTING_B(water_speed_alarm)
-    STORE_SETTING_I(water_min_speed_alarm_knots)
-    STORE_SETTING_I(water_max_speed_alarm_knots)
-
-    STORE_SETTING_B(weather_alarm_pressure)
-    STORE_SETTING_I(weather_alarm_min_pressure)
-    STORE_SETTING_B(weather_alarm_pressure_rate)
-    STORE_SETTING_I(weather_alarm_pressure_rate_value)
-    STORE_SETTING_B(weather_alarm_lightning)
-    STORE_SETTING_I(weather_alarm_lightning_distance)
-
-    STORE_SETTING_B(depth_alarm)
-    STORE_SETTING_I(depth_alarm_min)
-    STORE_SETTING_I(depth_alarm_rate)
-    STORE_SETTING_I(depth_alarm_rate_value)
-
-    STORE_SETTING_B(pypilot_alarm_noconnection)
-    STORE_SETTING_B(pypilot_alarm_fault)
-    STORE_SETTING_B(pypilot_alarm_no_imu)
-    STORE_SETTING_B(pypilot_alarm_no_motor_controller)
-    STORE_SETTING_B(pypilot_alarm_lost_mode)
-#endif
-
-    // mdns
-    STORE_SETTING_S(pypilot_addr)
-    STORE_SETTING_S(signalk_addr)
-    STORE_SETTING_I(signalk_port)
-
-    // transmitters
-    w.Key("transmitters");
-    void wireless_write_transmitters(rapidjson::Writer<rapidjson::StringBuffer> &writer, bool info);
-    sensors_write_transmitters(w, false);
-
-    w.EndObject();
-
-    return s;
-}
-
-static bool settings_store_suffix(std::string suffix="")
-{
-    printf("SETTINGS STORE %s\n", suffix.c_str());
-    rapidjson::StringBuffer s = settings_store_doc();
-    return settings_write(s.GetString(), s.GetSize(), suffix);
-}
-
-static esp_err_t spiffs_mount_format_on_fail(void) {
-    esp_vfs_spiffs_conf_t conf = {
-        .base_path = "/spiffs",
-        .partition_label = NULL,
-        .max_files = 5,
-        .format_if_mount_failed = true
-    };
-
-    esp_err_t err = esp_vfs_spiffs_register(&conf);
-    ESP_LOGW(TAG, "register returned: %s", esp_err_to_name(err));
-    return err;
-}
-
-void settings_load()
-{
-#ifndef __linux__
-    ESP_ERROR_CHECK(spiffs_mount_format_on_fail());
-#endif    
-
-    if (settings_load_suffix())
-        settings_store_suffix(".bak");
-    else {
-        settings_load_suffix(".bak");
-        settings_store();
+    rapidjson::Document doc;
+    if(doc.Parse(s.GetString()).HasParseError() || !doc.IsObject()) {
+        ESP_LOGE(TAG, "settings_keys fail to parse doc");
+        return false;
     }
 
-#if 0
-    nvs_handle_t version_handle;
-    if(nvs_open("version", NVS_READONLY, &version_handle) == ESP_OK) {
-        nvs_get_u8(version_handle, "hw_version", &hw_version);
-        nvs_close(version_handle);
+    for (auto& l : doc.GetObject()) {
+        if(!l.value.IsObject()) {
+            ESP_LOGE(TAG, "field in transmitters not object");
+            return false;
+        }
+
+        const auto &t = l.value.GetObject();
+        if(t.HasMember(mac.c_str())) {
+            rapidjson::Value &w = t[mac.c_str()];
+            if(key == "")
+                return read_field(output, w);
+            else {
+                if(w.IsObject() && w.HasMember(key.c_str())) {
+                    if(type)
+                        *type = l.name.GetString();
+                    return read_field(output, w[key.c_str()]);
+                } else {
+                    output = "invalid/corrupted transmitter key object";
+                    return false;
+                }
+            }
+        }
     }
 
-    printf("Hardware Version: %d\n", hw_version);
-    if(hw_version != 1) { // power
-        gpio_hold_dis((gpio_num_t)14);
-        pinMode(14, OUTPUT);  // 422 power
-        digitalWrite(14, 1);  // enable 422 for now?  disable if settings disable it
-    }
-#endif
-}
-
-void settings_store()
-{
-    settings_store_suffix();
+    output = "mac not found";
+    return false;
 }

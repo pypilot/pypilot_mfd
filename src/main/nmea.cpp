@@ -10,6 +10,7 @@
 
 #include <math.h>
 
+#include <esp_log.h>
 #include <esp_timer.h>
 #include <lwip/sockets.h>
 #include <errno.h>
@@ -22,6 +23,8 @@
 #include "history.h"
 #include "serial.h"
 #include "wireless.h"
+
+#define TAG "nmea"
 
 static uint8_t checksum(const char *buf, int len=-1)
 {
@@ -362,7 +365,7 @@ struct ClientSock
     void close() {
         if(!sock)
             return;
-        printf("nmea close client\n");
+        ESP_LOGI(TAG, "nmea close client");
         ::close(sock);
         sock = 0;
         data = "";
@@ -385,7 +388,7 @@ static void close_server() {
     if(!server_sock)
         return;
 
-    printf("close nmea server %d\n", server_sock);
+    ESP_LOGI(TAG, "close nmea server %d", server_sock);
     for(int i=0; i<(sizeof clients)/(sizeof *clients); i++)
         clients[i].close();
     shutdown(server_sock, SHUT_RDWR);
@@ -409,7 +412,7 @@ static void connect_client(ClientSock &client, std::string addr, int port)
         return;
 
     sockaddr_in dest_addr;
-    printf("try connect %d %s\n", port, addr.c_str());
+    ESP_LOGI(TAG, "try connect %d %s", port, addr.c_str());
     dest_addr.sin_addr.s_addr = inet_addr(addr.c_str());
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(port);
@@ -417,7 +420,7 @@ static void connect_client(ClientSock &client, std::string addr, int port)
                 
     client.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (client.sock < 0) {
-        printf("Unable to create socket: errno %d", errno);
+        ESP_LOGW(TAG, "Unable to create socket: errno %d", errno);
         client.sock = 0;
         return;
     }
@@ -427,11 +430,11 @@ static void connect_client(ClientSock &client, std::string addr, int port)
                 
     int err = connect(client.sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in));
     if (err != 0 && errno != EINPROGRESS) {
-        printf("Socket unable to connect: errno %d\n", errno);
+        ESP_LOGE(TAG, "Socket unable to connect: errno %d\n", errno);
         client.close();
     }
 
-    printf("nmea client connected to %s:%d %d %d\n", addr.c_str(), port, err, errno);
+    ESP_LOGI(TAG, "nmea client connected to %s:%d %d %d", addr.c_str(), port, err, errno);
     client.addr = addr;
     client.port = port;
     client.time = t0;
@@ -446,7 +449,7 @@ static void connect_server()
     if(server_sock)
         return;
 
-    printf("nmea connect server\n");
+    ESP_LOGI(TAG, "nmea connect server");
     int addr_family = AF_INET;
     int ip_protocol = 0;
 
@@ -460,7 +463,7 @@ static void connect_server()
 
     server_sock = socket(addr_family, SOCK_STREAM, ip_protocol);
     if (server_sock < 0) {
-        printf("unable to create server socket\n");
+        ESP_LOGE(TAG, "unable to create server socket");
         server_sock = 0;
         return;
     }
@@ -469,14 +472,14 @@ static void connect_server()
 
     int err = bind(server_sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     if (err != 0) {
-        printf("Socket unable to bind: errno %d\n", errno);
+        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
         close_server();
         return;
     }
 
     err = listen(server_sock, 1);
     if (err != 0) {
-        printf("Error occurred during listen: errno %d\n", errno);
+        ESP_LOGE(TAG, "Error occurred during listen: errno %d", errno);
         close_server();
         return;
     }
@@ -484,7 +487,7 @@ static void connect_server()
 
     fcntl(server_sock, F_SETFL, fcntl(server_sock, F_GETFL, 0) | O_NONBLOCK);
 
-    printf("nmea server setup %d\n", server_sock);
+    ESP_LOGI(TAG, "nmea server setup %d", server_sock);
 }
 
 static bool poll_client(ClientSock &c, bool input)
@@ -496,9 +499,9 @@ static bool poll_client(ClientSock &c, bool input)
         int ret = recv(c.sock, buf, sizeof buf - 1, 0);
         if(ret < 0) {
             if(errno != EAGAIN) {
-                printf("client recv error %d %d\n", c.sock, errno);
+                ESP_LOGE(TAG, "client recv error %d %d", c.sock, errno);
                 if(errno == 113) {
-                    printf("ERROR 113, restart??\n");
+                    ESP_LOGE(TAG, "ERROR 113, restart??");
                     //ESP.restart();
                 }
                 c.close();
@@ -508,7 +511,7 @@ static bool poll_client(ClientSock &c, bool input)
             buf[ret] = '\0';
             if(input) {
                 if(c.data.length() > 4096) {
-                    printf("client socket overflow!!!!!!!!\n");
+                    ESP_LOGE(TAG, "client socket overflow!!!!!!!!");
                     c.data = "";
                 }
                 c.data += std::string(buf);
@@ -545,7 +548,7 @@ static void accept_server()
     if (sock < 0) {
         if(errno == EAGAIN)
             return;
-        printf("Unable to accept connection: errno %d\n", errno);
+        ESP_LOGW(TAG, "Unable to accept connection: errno %d", errno);
         close_server();
         return;
     }
@@ -557,7 +560,7 @@ static void accept_server()
             break;
         i++;
         if(i >= (sizeof clients) / (sizeof *clients)) {
-            printf("too many tcp clients\n");
+            ESP_LOGW(TAG, "too many tcp clients");
             close(sock);
             return;
         }
@@ -576,7 +579,7 @@ static void accept_server()
     if (source_addr.ss_family == PF_INET)
         inet_ntoa_r(((struct sockaddr_in *)&source_addr)->sin_addr, addr_str, sizeof(addr_str) - 1);
 
-    printf("nmea socket accepted %d %d ip address: %s\n", i, sock, addr_str);
+    ESP_LOGI(TAG, "nmea socket accepted %d %d ip address: %s", i, sock, addr_str);
 
     clients[i].sock = sock;
     clients[i].time = esp_timer_get_time();
@@ -594,10 +597,10 @@ static void poll_server()
 
 void nmea_poll()
 {
-    if(!force_wifi_ap_mode &&
-       settings.wifi_mode != WIFI_MODE_AP &&
+    if(!force_wifi_ap_mode && // wifi changed, disconnect everything
+       settings.wifi_mode != "ap" &&
        !wifi_connected) {
-        //printf("not conn %d\n", server_sock);
+        //ESP_LOGI(TAG, "not conn %d", server_sock);
         close_server();
         nmea_tcp_client.close();
         nmea_pypilot_client.close();
@@ -644,7 +647,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
 
     int ret = send(c.sock, buf, strlen(buf), 0);
     if(ret < 0) {
-        printf("errno %d\n", errno);
+        ESP_LOGE(TAG, "write_nmea_client errno %d", errno);
 
         if(errno == EAGAIN) {
             // timeout
@@ -654,7 +657,7 @@ static void write_nmea_client(ClientSock &c, const char *buf)
     } if(ret > 0) // for now dont worry about "short" writes
         return;
         
-    printf("nmea socket closed %d\n", ret);
+    ESP_LOGI(TAG, "nmea socket closed %dn", ret);
     c.close();
 }
 

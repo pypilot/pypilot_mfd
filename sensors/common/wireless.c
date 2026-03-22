@@ -19,6 +19,8 @@
 #include "settings.h"
 #include "web.h"
 
+#include "version.h"
+
 uint64_t wireless_ap_enabled;
 dns_server_handle_t dns_handle;
 
@@ -29,6 +31,16 @@ esp_now_peer_info_t chip;
 typedef struct {
     uint16_t id;             // packet identifier
 } packet_unlock_t;
+
+static uint32_t packet_count;
+
+#define INFO_ID 0xC9D2
+typedef struct __attribute__((packed)) {
+    uint16_t id;
+    uint16_t packet_count;
+    uint32_t runtime;
+    uint8_t sw_version, hw_version;
+} packet_info_t;
 
 #if 0
 uint16_t crc16(const uint8_t *data_p, int length)
@@ -220,8 +232,23 @@ void wireless_send_data(uint8_t *packet, int len)
 {
     const uint8_t *peer_addr = chip.peer_addr;
     esp_err_t result = esp_now_send(peer_addr, packet, len);
+    packet_count++;
 
     if (result == ESP_OK) {
+        static uint64_t last_info;
+        uint64_t t = esp_timer_get_time();
+        if(t-last_info > 5e6) {
+            last_info = t;
+            packet_info_t info = {
+                .id = INFO_ID,
+                .packet_count = packet_count,
+                .runtime = esp_timer_get_time() / 1e6,
+                .sw_version = SW_VERSION,
+                .hw_version = HW_VERSION
+            };
+            esp_now_send(peer_addr, (uint8_t*)&info, sizeof info);
+        }
+        
         //printf("Success\n");
         return;
     } else if (result == ESP_ERR_ESPNOW_NOT_INIT)

@@ -6,7 +6,11 @@
 # version 3 of the License, or (at your option) any later version.  
 */
 
-var canvas = document.getElementById('canvas');
+function gei(id) {
+    return document.getElementById(id);
+}
+
+var canvas = gei('canvas');
 const ctx = canvas.getContext('2d');
 
 var websocket;
@@ -36,20 +40,20 @@ function onOpen(event) {
 function onClose(event) {
     console.log('Connection closed');
     setTimeout(initWebSocket, init_timeout*1000);
-    init_timeout*=2;
-    if(init_timeout > 10)
-        init_timeout = 10;
+    init_timeout++;
+    if(init_timeout > 3)
+        init_timeout = 3;
 }
 
 function handleOffsetChange(e) {
     let mac = e.getAttribute('data-mac');
-    msg = {transmitters: {wind: {[mac]: {'offset': e.value}}}};
+    msg = {transmitters: {wind: {[mac]: {offset: Number(e.value)}}}};
     websocket.send(JSON.stringify(msg));
 }
 
 function handlePositionChange(e) {
     let mac = e.getAttribute('data-mac');
-    msg = {transmitters: {wind: {[mac]: {'position': e.value}}}};
+    msg = {transmitters: {wind: {[mac]: {position: e.value}}}};
     websocket.send(JSON.stringify(msg));
 }
 
@@ -101,7 +105,7 @@ function toBool(v) {
 }
 
 function setElementValue(name, value) {
-    let el = document.getElementById(name);
+    let el = gei(name);
     if(!el)
         return;
     
@@ -110,20 +114,17 @@ function setElementValue(name, value) {
     if (tag === "input") {
         const type = (el.type || "").toLowerCase();
 
-        if (type === "checkbox") {
+        if (type === "checkbox")
             el.checked = toBool(value);
-        } else {
+        else
             el.value = value ?? "";
-        }
-    } else if (tag === "textarea" || tag === "select") {
+    } else if (tag === "textarea" || tag === "select")
         el.value = value ?? "";
-    } else {
+    else
         el.textContent = value ?? "";
-    }
 }
 
 function onMessage(event) {
-    //console.log(event.data);
     var data = event.data;
 
     var msg = JSON.parse(data);
@@ -131,18 +132,23 @@ function onMessage(event) {
         onWindMessage(msg['wind']);
 
     if('wifi_networks' in msg) {
-        let el = document.getElementById(name);
-        if(el) {
-            networks = msg['wifi_networks']
-            for(var network in networks) {
-                let row = table.insertRow(1);
-                row.insertCell(-1).innerText = network['ssid'];
-                row.insertCell(-1).innerText = network['channel'];
-                row.insertCell(-1).innerText = network['rssi'];
-                row.insertCell(-1).innerText = network['encryption'];
-                
-            }
-        }
+        let table = gei('wifi_networks_table');
+        let list = gei('ssids_list');
+        if(table === null || list === null)
+            return;
+        networks = msg['wifi_networks']
+        table.innerHTML = '<th>ssid</th><th>channel<th><th>rssi</th><th>encryption</th>';
+        list.innerHTML = '';
+        for (const n of networks) {
+            const row = table.insertRow();
+            row.innerHTML = `
+        <td>${n.ssid}</td>
+        <td>${n.channel}</td>
+        <td>${n.rssi}</td>
+        <td>${n.encryption}</td>
+    `;
+            list.innerHTML += `<option value="${n.ssid}">`
+        }        
     }
 
     if('transmitters' in msg)
@@ -159,14 +165,19 @@ function onWindMessage(msg) {
     // message just updates active display
     if('direction' in msg) {
         let dirt = msg['direction'] === null ? '---' : msg['direction'].toFixed(1);
-        document.getElementById('wind_direction').innerText = dirt;
-        document.getElementById('wind_knots').innerText = msg['knots'].toFixed(2);
-        render(msg['direction'], msg['knots']);
-        return;
+        gei('wind_direction').innerText = dirt;
     }
+    if('knots' in msg)
+        gei('wind_knots').innerText = msg['knots'].toFixed(2);
+
+    if('accel' in msg)
+        gei('wind_accel').innerText = `x=${msg['accel']['x']} y=${msg['accel']['y']} z=${msg['accel']['z']}`;
+    
+    if('direction' in msg && 'knots' in msg)
+        render(msg['direction'], msg['knots']);
 }
 
-function onTransmitters(msg) {
+function onTransmittersWind(msg) {
     function inp(mac, v) {
         var options = '';
         for(o of ['Primary', 'Secondary', 'Port', 'Starboard', 'Ignored'])
@@ -178,26 +189,38 @@ function onTransmitters(msg) {
         return '<input type="number" data-mac="' + mac +
             '" min="0" max="360" step="2" value="0" onchange="handleOffsetChange(this)">';
     }
-    
-    var table = document.getElementById('wind_sensors_table');
+
+    var table = gei('wind_sensors_table');
     //mac Position Offset Direction Speed Latency
     for (var mac in msg) {
         let v = msg[mac];
         if(!(mac in wind_sensors)) {
             let row = table.insertRow(1);
-            row.insertCell(-1).innerText = mac;
-            row.insertCell(-1).innerHTML = inp(mac, v['position']);
-            row.insertCell(-1).innerHTML = dir(mac, v['offset']);
-            row.insertCell(-1);
-            row.insertCell(-1);
-            row.insertCell(-1);
-            row.insertCell(-1).innerHTML = "<input class='button' type='button' style='width: 100%' value='Unlock' onclick='on_unlock_sensor(" + mac + ")'>";
+            row.innerHTML = '<td></td>'.repeat(10);
+            row.cells[0].innerText = mac;
+            row.cells[1].innerHTML = inp(mac, v['position']);
+            row.cells[2].innerHTML = dir(mac, v['offset']);
+            row.cells[9].innerHTML = "<input class='button' type='button' style='width: 100%' value='ap' onclick='on_ap_sensor(\"" + mac + "\")'>";
             wind_sensors[mac] = row;
         }
         let row = wind_sensors[mac];
-        row.cells[3].innerText = (v['direction'] === null) ? '---' : v['direction'].toFixed(1);
-        row.cells[4].innerText = v['knots'].toFixed(2) + 'kt';
-        row.cells[5].innerText = v['dt'] + 'ms';
+
+        if('position' in v)
+            row.cells[1].querySelector('select').value = v['position']
+        if('offset' in v)
+            row.cells[2].querySelector('input').value = v['offset']
+        if('direction' in v)
+            row.cells[3].innerText = (v['direction'] === null) ? '---' : v['direction'].toFixed(1);
+        if('knots' in v)
+            row.cells[4].innerText = v['knots'].toFixed(2) + 'kt';
+        if('dt' in v)
+            row.cells[5].innerText = v['dt'] + 'ms';
+        if('rate' in v)
+            row.cells[6].innerText = v['rate'] + 'hz';
+        if('packet_loss' in v)
+            row.cells[7].innerText = v['packet_loss'] + '%';
+        if('runtime' in v)
+            row.cells[8].innerText = v['runtime'] + 's';
     }
 
     // remove any sensors we no longer receive
@@ -208,19 +231,31 @@ function onTransmitters(msg) {
         }
 }
 
-function on_wifi_mode() {
-    var mode = gei('wifi_mode').value;
-    document.getElementById('wifi_ap').style.display = (mode == 'ap') ? 'grid' : 'none';
-    document.getElementById('wifi_client').style.display = (mode == 'client') ? 'grid' : 'none';
+function onTransmitters(msg) {
+    if('wind' in msg)
+        onTransmittersWind(msg['wind']);
 }
 
-function gei(id) {
-    return document.getElementById(id);
+function on_wifi_mode() {
+    var mode = gei('wifi_mode').value;
+    gei('wifi_ap').style.display = (mode == 'ap') ? 'grid' : 'none';
+    gei('wifi_client').style.display = (mode == 'client') ? 'grid' : 'none';
 }
 
 function fields(ids) {
     return Object.fromEntries(
-        ids.map(id => [id, gei(id).value])
+        ids.map(id => {
+            const el = gei(id);
+
+            let value;
+            if (el.type === "checkbox") {
+                value = el.checked;   // true / false
+            } else {
+                value = el.value;
+            }
+
+            return [id, value];
+        })
     );
 }
 
@@ -234,25 +269,30 @@ function on_wifi_settings() {
 }
 
 function on_display_data() {
-    post(['input_usb', 'output_usb', 'usb_baud_rate', 'rs422_1_baud_rate', 'rs422_2_baud_rate',
-          'input_nmea_pypilot', 'output_nmea_pypilot', 'input_nmea_signalk', 'output_nmea_signalk',
-          'input_nmea_tcp_client', 'output_nmea_tcp_client', 'input_nmea_tcp_server', 'output_nmea_tcp_server',
-          'input_signalk', 'output_signalk',
-          'forward_nmea_serial_to_serial', 'forward_nmea_serial_to_wifi',
-          'compensate_wind_with_accelerometer', 'compute_true_wind_from_gps',
-          'compute_true_wind_from_water_speed', 'nmea_tcp_client_addr',
-          'nmea_tcp_client_port', 'nmea_tcp_server_port']);
+    post(['output_usb', 'usb_baud_rate',
+          'input_nmea_pypilot', 'output_nmea_pypilot',
+          //'input_nmea_signalk', 'output_nmea_signalk',
+          'input_nmea_tcp_client', 'output_nmea_tcp_client', 'nmea_tcp_client_addr',
+          'nmea_tcp_client_port',
+          'input_nmea_tcp_server', 'output_nmea_tcp_server',
+          'nmea_tcp_server_port',
+          //'input_signalk', 'output_signalk',
+          'forward_nmea_serial_to_wifi',
+          'compensate_wind_with_accelerometer',
+          ]);
+
+    //'input_usb'
+    //'compute_true_wind_from_gps',          'compute_true_wind_from_water_speed'
+    //'forward_nmea_serial_to_serial',
+    //'rs422_1_baud_rate', 'rs422_2_baud_rate',
 }
 
 function cmd(cmd) {
-    if (typeof cmd === "string")
-        cmd = {cmd : true};
-
     msg = {command : cmd};
     websocket.send(JSON.stringify(msg));
 }
 
-function on_unlock_sensor(mac) {
+function on_ap_sensor(mac) {
     alert('Connect directly to the sensor wireless access point to configure the sensor.');
-    cmd({unlock_sensor: mac})
+    cmd("transmitters " + mac + " ap")
 }

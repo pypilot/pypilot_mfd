@@ -466,13 +466,13 @@ struct position_text_display : public text_display {
             s = (v < 0) ? "W" : "E";
         v = fabsf(v);
         std::string str;
-        if (settings.lat_lon_format == "degrees")
+        if (settings.lat_lon_format.get() == "degrees")
             str = float_to_str(v, 6);
         else {
             float i;
             float f = modff(v, &i) * 60;
             str = float_to_str(i, 0) + ",";
-            if (settings.lat_lon_format == "seconds") {
+            if (settings.lat_lon_format.get() == "seconds") {
                 f = modff(f, &i) * 60;
                 str += float_to_str(i, 0) + "," + float_to_str(f, 2);
             } else
@@ -2134,7 +2134,7 @@ bool display_toggle(bool on) {
         digitalWrite(BACKLIGHT_PIN, HIGH);
     } else {
         if(!ledcDetach(BACKLIGHT_PIN))
-            printf("Ledc detach1 failed\n");
+            ESP_LOGE(TAG, "Ledc detach1 failed\n");
             
         pinMode(BACKLIGHT_PIN, OUTPUT);  // strap for display
         digitalWrite(BACKLIGHT_PIN, 0);
@@ -2429,5 +2429,5 @@ void display_poll() {
 
     draw_send_buffer();
     uint32_t t4 = millis();
-//    printf("render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
+    ESP_LOGI(TAG, "render took %ld %ld %ld %ld\n", t1-t0, t2-t1, t3-t2, t4-t3);
 }

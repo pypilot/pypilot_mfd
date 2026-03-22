@@ -78,9 +78,17 @@ uint64_t mac_as_int(const uint8_t *mac_addr)
     uint64_t r = 0;
     for(int i=0; i<6; i++) {
         r<<=8;
-        r |= mac_addr[i];
+        r |= mac_addr[5-i];
     }
     return r;
+}
+
+void int_as_mac(uint8_t *mac_addr, uint64_t r)
+{
+    for(int i=0; i<6; i++) {
+        mac_addr[i] = r & 0xff;
+        r>>=8;
+    }
 }
 
 uint64_t mac_str_to_int(std::string mac)
@@ -99,10 +107,8 @@ uint64_t mac_str_to_int(std::string mac)
 std::string mac_int_to_str(uint64_t r)
 {
     uint8_t mac_addr[6] = {0};
-    for(int i=0; i<6; i++) {
-        mac_addr[5-i] = r & 0xff;
-        r>>=8;
-    }
+    int_as_mac(mac_addr, r);
+
     char macStrt[18];
     snprintf(macStrt, sizeof(macStrt), "%02x:%02x:%02x:%02x:%02x:%02x",
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);

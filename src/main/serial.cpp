@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include <string>
+#include <sstream>
 #include <unordered_set>
 
 #include <esp_timer.h>
@@ -19,11 +20,15 @@
 #include "wireless.h"
 #include "serial.h"
 #include "nmea.h"
-
+#include "web.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -35,7 +40,11 @@
 #warning "portGET_RUN_TIME_COUNTER_VALUE not defined"
 #endif
 
-#define CTAG "cpu"
+#define TAG "serial"
+
+// TODO: fix these
+void settings_read(rapidjson::Document &s);
+std::string value_to_string(const rapidjson::Value& v);
 
 typedef struct {
     TaskHandle_t handle;
@@ -73,24 +82,23 @@ void print_task_cpu_usage(uint32_t sample_ms)
     uint32_t ta = 0;
 
     if (take_snapshot(&a, &na, &ta) != 0) {
-        ESP_LOGW(CTAG, "runtime stats not available (check menuconfig options)");
+        printf("runtime stats not available (check menuconfig options)");
         return;
     }
 
     uint32_t dt_total = ta;
     if (dt_total == 0) dt_total = 1; // avoid divide-by-zero if timer resolution is coarse
 
-    ESP_LOGI(CTAG, "%-16s %10s %8s", "Task", "ticks", "percent");
+    printf("%-16s %10s %8s", "Task", "ticks", "percent");
     // percent = task_delta / total_delta * 100
     for (UBaseType_t i = 0; i < na; i++) {
         uint32_t dt = a[i].runTime;
         uint32_t pct_x10 = (uint32_t)((uint64_t)dt * 1000ULL / (uint64_t)dt_total); // 0.1% units
-        ESP_LOGI(CTAG, "%-16s %10" PRIu32 " %6" PRIu32 ".%01" PRIu32 "%%",
+        printf("%-16s %10" PRIu32 " %6" PRIu32 ".%01" PRIu32 "%%",
                  a[i].name, dt, pct_x10 / 10, pct_x10 % 10);
     }
 }
 
-#define MTAG "mem"
 typedef struct {
     const char *name;
     uint32_t caps;   // heap capability flags
@@ -108,13 +116,13 @@ static void print_region(const char *name, uint32_t caps)
 
     double used_pct = (total > 0) ? (100.0 * (double)used / (double)total) : 0.0;
 
-    ESP_LOGI(MTAG, "%-14s total=%7u  used=%7u  free=%7u  used=%5.1f%%  largest_free=%7u",
-             name,
-             (unsigned)total,
-             (unsigned)used,
-             (unsigned)freeb,
-             used_pct,
-             (unsigned)info.largest_free_block);
+    printf("%-14s total=%7u  used=%7u  free=%7u  used=%5.1f%%  largest_free=%7u",
+           name,
+           (unsigned)total,
+           (unsigned)used,
+           (unsigned)freeb,
+           used_pct,
+           (unsigned)info.largest_free_block);
 }
 
 void meminfo_print_heap(void)
@@ -128,15 +136,15 @@ void meminfo_print_heap(void)
         // You can add others like MALLOC_CAP_EXEC, MALLOC_CAP_DEFAULT, etc.
     };
 
-    ESP_LOGI(MTAG, "---- Heap by region ----");
+    printf("---- Heap by region ----");
     for (size_t i = 0; i < sizeof(regions)/sizeof(regions[0]); i++)
         print_region(regions[i].name, regions[i].caps);
 
     // Overall (all heaps combined)
     size_t free_heap = esp_get_free_heap_size();
     size_t min_free  = esp_get_minimum_free_heap_size(); // "minimum ever" free heap
-    ESP_LOGI(MTAG, "---- Overall ----");
-    ESP_LOGI(MTAG, "free_heap=%u  min_ever_free_heap=%u",
+    printf("---- Overall ----");
+    printf("free_heap=%u  min_ever_free_heap=%u",
              (unsigned)free_heap, (unsigned)min_free);
 }
 
@@ -152,13 +160,13 @@ void meminfo_print_all_task_stack_hwm(void)
     uint32_t total_run_time = 0;
     UBaseType_t got = uxTaskGetSystemState(st, n, &total_run_time);
 
-    ESP_LOGI(MTAG, "---- Stack HWM (all tasks) ---- runtime: %ul", total_run_time);
+    printf("---- Stack HWM (all tasks) ---- runtime: %lu", total_run_time);
     for (UBaseType_t i = 0; i < got; i++) {
         size_t free_bytes = (size_t)st[i].usStackHighWaterMark * sizeof(StackType_t);
-        ESP_LOGI(MTAG, "%-16s min_ever_free=%6u bytes  prio=%u",
-                 st[i].pcTaskName,
-                 (unsigned)free_bytes,
-                 (unsigned)st[i].uxCurrentPriority);
+        printf("%-16s min_ever_free=%6u bytes  prio=%u",
+               st[i].pcTaskName,
+               (unsigned)free_bytes,
+               (unsigned)st[i].uxCurrentPriority);
     }
 }
 
@@ -168,60 +176,166 @@ static void mem()
     meminfo_print_all_task_stack_hwm(); // all tasks (optional)
 }
 
-static void cli_process_line(std::string cmd, int uart) {
-    if(cmd == "help") {
+static bool is_hex_digit(char c)
+{
+    return (c >= '0' && c <= '9') ||
+           (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
+}
+
+static bool is_valid_mac(const std::string& mac)
+{
+    if (mac.size() != 17)
+        return false;
+
+    for (int i = 0; i < 17; i++) {
+        if ((i % 3) == 2) {
+            if (mac[i] != ':')
+                return false;
+        } else {
+            if (!is_hex_digit(mac[i]))
+                return false;
+        }
+    }
+    return true;
+}
+
+static std::vector<std::string> split_ws(const std::string& s)
+{
+    std::vector<std::string> out;
+    std::istringstream iss(s);
+    std::string tok;
+    while (iss >> tok)
+        out.push_back(tok);
+    return out;
+}
+
+void process_transmitters(const std::vector<std::string> &args) {
+    switch(args.size()) {
+    case 1:
+        printf("%s\n", settings_get_string("transmitters").c_str());
+        break;
+    case 2:
+        if (args[1] == "help") {
+            printf("\nUsage: transmitters <mac> [ap, key, key=value]\n");
+            printf("list all transmitters (alias for get transmitters)\n");
+            printf(">> transmitters\n");
+            printf("list specific transmitter by mac address\n");
+            printf(">> transmitters d0:ef:76:68:b1:b8\n");
+            printf("enable access point (connect directly via browser)\n");
+            printf(">> transmitters d0:ef:76:68:b1:b8 ap\n");
+            printf("get a setting\n");
+            printf(">> transmitters d0:ef:76:68:b1:b8 position\n");
+            printf("modify settings\n");
+            printf(">> transmitters d0:ef:76:68:b1:b8 position primary\n\n");
+        } else {
+            if (!is_valid_mac(args[1])) {
+                printf("Invalid MAC address: %s\n", args[1].c_str());
+                printf("Try: transmitters help\n");
+            } else {
+                // transmitters <mac>
+                std::string out;
+                settings_get_transmitter(args[1], "", out);
+                printf("%s\n", out.c_str());
+            }
+        } break;
+    case 3:
+        // transmitters <mac> <action>
+        if (args[2] == "ap")
+            wireless_unlock_channel(args[1]);
+        else {
+            std::string out;
+            settings_get_transmitter(args[1], args[2], out);
+            printf("%s\n", out.c_str());
+        }
+        break;
+    case 4: {
+        std::string mac = args[1], key = args[2], value = args[3], out, type;
+        if(settings_get_transmitter(mac, key, out, &type)) {
+            char buf[256];
+            snprintf(buf, sizeof buf, "{\"%s\":{\"%s\":{\"%s\":\"%s\"}}}",
+                     type.c_str(), mac.c_str(), key.c_str(), value.c_str());
+            
+            rapidjson::Document doc;
+            if(doc.Parse(buf).HasParseError()) {
+                ESP_LOGE(TAG, "settings_keys fail to parse doc");
+            } else {
+                void sensors_read_transmitters(const rapidjson::Value &t);
+                sensors_read_transmitters(doc);
+                settings_store();
+            }
+        } else
+            printf("invalid key, try 'transmitters %s'", args[1].c_str());
+    } break;
+    default:
+        printf("Too many arguments\n");
+        printf("Try: transmitters help\n");
+    }
+}
+
+void serial_process_line(const std::string &cmd) {
+    auto args = split_ws(cmd);
+    if(args.size() == 0) {
+        printf("> ");
+        fflush(stdout);
+        return;
+    }
+
+    if(args.size() == 1 && args[0] == "help") {
         printf("Commands:\n");
-        printf("default -- make all settings and reboot device\n");
+        printf("default -- reset all settings\n");
         printf("list -- list settings\n");
         printf("get key -- show value of setting\n");
-        printf("set key=value -- update setting\n");
+        printf("set key value -- update setting\n");
         printf("mem -- print memory info\n");
         printf("cpu -- print cpu info\n");
-        printf("sensors help -- show sensors commands\n");
+        printf("scan_wifi -- scan wireless networks\n");
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+        printf("display_auto -- automatically enable relevant display pages\n");
+#endif
+        printf("transmitters help -- show transmitters commands\n");
         printf("reboot -- reboot device\n");
-    } else if(cmd == "default") {
+    } else if(args.size() == 1 && args[0] == "default")
         settings_reset();
-        printf("settings file removed, defaults will be after reset\n");
-    } else if(cmd == "reboot") {
+    else if(args.size() == 1 && args[0] == "reboot")
         abort();
-    } else if (cmd.rfind("sensors", 0) == 0) {  // starts with "sensors "
-        // TODO: list sensors, unlock sensors, set primary/secondary etc
-        printf("not yet implmented\n");
-    } else if (cmd.rfind("set ", 0) == 0) {  // starts with "set "
-        std::string rest = cmd.substr(4);
+    else if(args[0] == "transmitters")
+        process_transmitters(args);
+    else if (args.size() == 3 && args[0] == "set") {  // starts with "set "
+        std::string name  = args[1];
+        if(name == "transmitters")
+            printf("do not use set on transmitters, use transmitter command\n");
+        else {
+            std::string value = args[2];
 
-        size_t eq = rest.find('=');
-        if (eq == std::string::npos) {
-            printf("Error: expected name=value\n");
-            return;
+            printf("set '%s' = '%s'\n", name.c_str(), value.c_str());
+            std::unordered_set<std::string> keys = settings_keys();
+            if(keys.find(name) == keys.end()) {
+                ESP_LOGE(TAG, "invalid key: %s\n", name.c_str());
+                printf("try 'list'\n");
+            } else if(!settings_set_value(name, value))
+                printf("failed to set '%s'='%s'\n", name.c_str(), value.c_str());
         }
-
-        std::string name  = rest.substr(0, eq);
-        std::string value = rest.substr(eq + 1);
-
-        printf("set '%s' = '%s'\n", name.c_str(), value.c_str());
-        std::unordered_set<std::string> keys = settings_keys();
-        if(keys.find(name) == keys.end()) {
-            printf("invalid key: %s", name.c_str());
-            printf("try 'list'");
-        } else if(!settings_set_value(name, value))
-            printf("failed to set '%s'='%s'\n", name.c_str(), value.c_str());
-    } else if (cmd.rfind("get ", 0) == 0) {  // starts with "set "
-        std::string name = cmd.substr(4);
-
-        printf("get '%s'\n", name.c_str());
-        std::string value = settings_get_value(name);
+    } else if (args[0] == "get") {  // starts with "set "
+        std::string value = settings_get_string(args[1]);
         printf("%s\n", value.c_str());
-    } else if(cmd == "list") {
-        std::unordered_set<std::string> keys = settings_keys();
-        printf("possible settings include:\n");
-        for(auto it = keys.begin(); it != keys.end(); it++)
-            printf("%s\n", it->c_str());
-    } else if(cmd == "mem")
+    } else if(args[0] == "list")
+        settings_list();
+    else if(args[0] == "mem")
         mem();
-    else if(cmd == "cpu")
+    else if(args[0] == "scan_wifi") {
+        web_clear_websockets();
+            
+        printf("scanning...\n");
+        wireless_scan_networks();
+    }
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    else if(args[0] == "display_auto")
+        display_auto();
+#endif
+    else if(args[0] == "cpu")
         print_task_cpu_usage(1000);
-    else if(cmd == "") // ignore empty
+    else if(args[0] == "") // ignore empty
         ;
     else {
         printf("unknown command: %s\n", cmd.c_str());
@@ -252,11 +366,19 @@ struct SerialLinebuffer {
             for(int i=start; i<buf.length(); i++) {
                 char c = buf[i];
                 if (c == '\n' || c == '\r') {
-                    std::string data = buf.substr(0, i);
+                    std::string data = buf.substr(0, i+1);
                     buf = buf.substr(i+1);
                     if (data.empty())
                         continue;
                     return data;
+                }
+                if (c == '\b' || c == 127) {
+                    if(i > 0)
+                        buf.erase(i-1, 2);
+                    else
+                        buf.erase(i, 1);
+                    i--;
+                    continue;
                 }
             }
             if(buf.length() > 256)
@@ -273,7 +395,8 @@ struct SerialLinebuffer {
             if(line[0] != '$') {
                 if(usecli) {
                     lastcli_t0 = esp_timer_get_time();
-                    cli_process_line(line, uart);
+                    printf("\n");
+                    serial_process_line(line);
                 }
                 continue;
             }
@@ -284,8 +407,10 @@ struct SerialLinebuffer {
 #endif
 
             line += "\r\n";
+#ifdef CONFIG_IDF_TARGET_ESP32S3
             if(settings.forward_nmea_serial_to_serial)
                 nmea_write_serial_internal(line.c_str(), uart);
+#endif
             if(settings.forward_nmea_serial_to_wifi)
                 nmea_write_wifi(line.c_str());
         }
@@ -293,9 +418,9 @@ struct SerialLinebuffer {
 
     void write(const char *buf) {
         if(lastcli_t0 != 0) {
-            // prevent serial output within 10 seconds of commandline interface command
+            // prevent serial output within 20 seconds of commandline interface command
             uint64_t t0 = esp_timer_get_time();
-            if(t0 - lastcli_t0 < 10e6)
+            if(t0 - lastcli_t0 < 20e6)
                 return;
         }
         uart_write_bytes(uart, buf, strlen(buf));
@@ -316,13 +441,27 @@ SerialLinebuffer Serial2Buffer(Serial2, RS422_DATA);
 void serial_setup()
 {
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_0, 2048, 0, 0, NULL, 0));
+
+    const uart_port_t uart_num = UART_NUM_0;
+    int baud = settings.usb_baud_rate;
+    if(baud != 38400)
+        baud = 115200;
+
+    uart_config_t uart_config = {};
+    uart_config.baud_rate = baud;
+    uart_config.data_bits = UART_DATA_8_BITS;
+    uart_config.parity = UART_PARITY_DISABLE;
+    uart_config.stop_bits = UART_STOP_BITS_1;
+    uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+
+    // Configure UART parameters
+    ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
 #ifdef CONFIG_IDF_TARGET_ESP32S3
     //    Serial0.begin(settings.usb_baud_rate);
     //    Serial0.setTimeout(0);
     bool any;
 
     // usb host serial here
-    
     Serial0.end();
     if(settings.input_usb || settings.output_usb) {
         Serial0.begin(settings.usb_baud_rate);

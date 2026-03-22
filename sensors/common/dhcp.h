@@ -6,4 +6,12 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void dhcp_set_captiveportal_url(void);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif

@@ -13,6 +13,7 @@ float resolv(float angle, float mid=0);
 void distance_bearing(float lat1, float lon1, float lat2, float lon2, float *dist, float *brg);
 
 uint64_t mac_as_int(const uint8_t *mac_addr);
+void int_as_mac(uint8_t *mac_addr, uint64_t r);
 uint64_t mac_str_to_int(std::string mac);
 std::string mac_int_to_str(uint64_t i);
 

@@ -10,6 +10,11 @@ void sensors_wind_update(uint8_t mac[6], float dir, float knots, float paccel_x,
 void sensors_water_update(uint8_t mac[6], float speed, float depth, float temperature);
 void sensors_air_update(uint8_t mac[6], float pressure, float rel_humidity, float temperature, float air_quality, float battery_voltage);
 void sensors_lightning_update(uint8_t mac[6], float distance);
+void sensors_info_update(uint8_t mac[6], uint32_t runtime, uint32_t packet_count);
+
+enum sensor_position {PRIMARY, SECONDARY, PORT, STARBOARD, IGNORED};
+
+sensor_position wireless_str_position(const std::string &p);
 
 extern float lpwind_dir, wind_knots;
 extern float accel_x, accel_y, accel_z;

@@ -18,6 +18,8 @@
 #include "utils.h"
 #include "sensors.h"
 
+#define TAG "display"
+
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite dsp = TFT_eSprite(&tft);
 
@@ -48,13 +50,13 @@ bool display_data_get(display_item_e item, float &value, std::string &source, ui
 void display_setup() {
     tft.init();
 
-    printf("free=%u largest=%u\n",
+    ESP_LOGI(TAG, "free=%u largest=%u",
            heap_caps_get_free_size(MALLOC_CAP_8BIT),
            heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 
     dsp.createSprite(tft.width(), tft.height()); // big RAM use
 
-    printf("free=%u largest=%u\n",
+    ESP_LOGI(TAG, "free=%u largest=%u",
            heap_caps_get_free_size(MALLOC_CAP_8BIT),
            heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     
@@ -124,7 +126,7 @@ void display_poll()
         nyp = (yp + 15 * nyp) / 16;
         xp = xc + nxp - 31, yp = yc + nyp - 20;
 
-        snprintf(buf, sizeof buf, "%03d", (int)lpwind_dir);
+        snprintf(buf, sizeof buf, "%03d", (int)roundf(lpwind_dir));
 
         dsp.fillTriangle(coords[0][0], coords[0][1], coords[1][0], coords[1][1], coords[2][0], coords[2][1], WHITE);
 
@@ -134,7 +136,7 @@ void display_poll()
     float iknots;
     float iknotf = 10 * modff(wind_knots, &iknots);
 
-    snprintf(buf, sizeof buf, "%02d.%d", (int)iknots, (int)iknotf);
+    snprintf(buf, sizeof buf, "%02d.%d", (int)iknots, (int)roundf(iknotf));
     dsp.drawString(buf, 0, 150, 6);
 
     float roll = rad2deg(atan2(accel_x, accel_z));

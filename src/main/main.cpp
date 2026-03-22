@@ -20,9 +20,7 @@
 #include "esp_system.h"
 #include <esp_ota_ops.h>
 
-///
 #include "driver/i2c.h"
-///
 
 #include "Arduino.h"
 
@@ -43,7 +41,6 @@
 #include "alarm.h"
 #include "history.h"
 #include "extio.h"
-
 
 extern "C" void app_main(void)
 {    
@@ -91,6 +88,7 @@ extern "C" void app_main(void)
     printf("accel_setup_done, %ld\n", millis());
     
     settings_load();
+    settings_store();
     printf("settings_load_done, %ld\n", millis());
     
     serial_setup();
@@ -110,7 +108,7 @@ extern "C" void app_main(void)
     // if we woke up to log data (power save) just do that for 5 seconds
     // then go back to sleep
     if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER &&
-       settings.power_button == "powersave") {
+       settings.power_button.get() == "powersave") {
         printf("woke into power save loop\n");
         while(!keys_pwr_pressed()) {
             serial_poll();

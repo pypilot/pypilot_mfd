@@ -486,13 +486,11 @@ struct menu_choice_item : public menu_item_setting
 
 struct menu_choice : public menu
 {
-    menu_choice(std::string label, std::vector<std::string> choices, std::string &setting)
+    menu_choice(std::string label, SettingsChoice &choice)
         : menu(label) {
-        for(int i=0; i<choices.size(); i++) {
-            add_item(new menu_choice_item(choices[i], setting));
-            if(choices[i] == setting)
-                position = i;
-        }
+        for(int i=0; i<choice.choices.size(); i++)
+            add_item(new menu_choice_item(choice.choices[i], choice.get()));
+        position = choice.choice;
     }
 };
 
@@ -544,8 +542,7 @@ void menu_setup()
     settings_menu->add_item(new menu_item_bool("use fahrenheit", settings.use_fahrenheit));
     settings_menu->add_item(new menu_item_bool("use in Hg", settings.use_inHg));
     settings_menu->add_item(new menu_item_bool("use depth ft", settings.use_depth_ft));
-    std::vector<std::string> fmts{"degrees", "minutes", "seconds"};
-    settings_menu->add_menu(new menu_choice("lat/lon format", fmts, settings.lat_lon_format));
+    settings_menu->add_menu(new menu_choice("lat/lon format", settings.lat_lon_format));
 
     menu *display = new menu("Display");
     display->add_item(new menu_item_int(display, "Backlight", settings.backlight, 0, 20, 1));
@@ -553,8 +550,7 @@ void menu_setup()
 #ifdef CONFIG_IDF_TARGET_ESP32
     display->add_item(new menu_item_bool("Invert", settings.invert));
 #else
-    std::vector<std::string> schemes{"default", "light", "sky", "mars"};
-    display->add_menu(new menu_choice("Color Scheme", schemes, settings.color_scheme));
+    display->add_menu(new menu_choice("Color Scheme", settings.color_scheme));
 #endif
     display->add_item(new menu_item_int(display, "Buzzer Volume", settings.buzzer_volume, 0, 10, 1));
     //display->add_item(new menu_item_bool("Mirror", settings.mirror));

@@ -126,3 +126,22 @@ form {
     min-width: 50px;
   }
 }
+
+.combo {
+  position: relative;
+  display: inline-block;
+}
+
+.combo input {
+  padding-right: 24px;
+}
+
+.combo::after {
+  content: "▼";
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 12px;
+}
