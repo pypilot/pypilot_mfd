@@ -27,7 +27,7 @@ dns_server_handle_t dns_handle;
 // Global copy of chip
 esp_now_peer_info_t chip;
 
-#define UNLOCK_ID 0x1B21
+#define ACCESS_POINT_ID 0x1B21
 typedef struct {
     uint16_t id;             // packet identifier
 } packet_unlock_t;
@@ -151,7 +151,7 @@ static void on_espnow_data(const esp_now_recv_info_t *recv_info, const uint8_t *
     }
 
     packet_unlock_t *packet = (packet_unlock_t*)data;
-    if(packet->id != UNLOCK_ID)
+    if(packet->id != ACCESS_POINT_ID)
         printf("ID mismatch\n");
 
     enable_ap(1);

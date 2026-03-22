@@ -41,9 +41,6 @@ struct esp_now_data_t {
 volatile uint8_t rb_start, rb_end;
 volatile SemaphoreHandle_t esp_now_sem;
 
-// Global copy of chip
-static esp_now_peer_info_t chip;
-
 // crc is not really needed with espnow, however it adds a layer of protection against code changes
 #define WIND_ID 0xB179
 
@@ -81,7 +78,7 @@ struct lightning_uv_packet_t {
     uint16_t visible;
 } __attribute__((packed));
 
-#define UNLOCK_ID 0x1B21
+#define ACCESS_POINT_ID 0x1B21
 struct unlock_packet_t {
     uint16_t id;             // packet identifier
 };
@@ -122,18 +119,10 @@ static void on_espnow_data(const esp_now_recv_info *recv_info, const uint8_t *da
 }
 
 // Init ESP Now with fallback
-static void InitESPNow(int channel) {
-    ESP_LOGI(TAG, "InitESPNow %d", channel);
-    memset(&chip, 0, sizeof(chip));
-    for (int ii = 0; ii < 6; ++ii)
-        chip.peer_addr[ii] = (uint8_t)0xff;
-    chip.channel = channel;
-    if (chip.channel > 12)
-        chip.channel = 1;
+static void InitESPNow() {
+    ESP_LOGI(TAG, "InitESPNow %d", settings.wifi_channel);
+    esp_wifi_set_channel(settings.wifi_channel, WIFI_SECOND_CHAN_NONE);
 
-    chip.encrypt = 0;
-
-    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
     if (esp_now_init() == ESP_OK) {
         ESP_LOGI(TAG, "ESPNow Init Success");
     } else {
@@ -145,13 +134,6 @@ static void InitESPNow(int channel) {
     // Once ESPNow is successfully Init, we will register for recv CB to
     // get recv packer info.
     esp_now_register_recv_cb(on_espnow_data);
-
-    // chip not paired, attempt pair
-    esp_err_t addStatus = esp_now_add_peer(&chip);
-    if (addStatus != ESP_OK) {
-        ESP_LOGE(TAG, "ESP-NOW pair fail: %d", addStatus);
-        return;
-    }
 }
 
 static void connect_handler(void* arg, esp_event_base_t event_base,
@@ -350,7 +332,7 @@ static void setup_wifi(void)
         esp_wifi_disconnect();
     }
 
-    InitESPNow(settings.wifi_channel);
+    InitESPNow();
 
     signalk_discovered = 0;
     pypilot_discovered = 0;
@@ -530,28 +512,31 @@ static void receive_esp_now() {
 }
 
 bool wireless_unlock_channel(const std::string &mac) {
-    if(!sensors_have_mac(mac))
+    if(!sensors_have_mac(mac)) {
+        ESP_LOGE(TAG, "cannot unlock undetected sensor %s", mac.c_str());
         return false;
+    }
     
-    ESP_LOGI(TAG, "unlock sensor %s", mac.c_str());
+    ESP_LOGI(TAG, "enable access point for sensor %s", mac.c_str());
 
     uint64_t peer_addr_int = mac_str_to_int(mac);
     uint8_t peer_addr[6];
     int_as_mac(peer_addr, peer_addr_int);
 
     unlock_packet_t packet;
-    packet.id = UNLOCK_ID;
+    packet.id = ACCESS_POINT_ID;
 
     if (!esp_now_is_peer_exist(peer_addr)) {
+        ESP_LOGI(TAG, "adding espnow peer %s", mac.c_str());
         esp_now_peer_info_t peer = {};
         memcpy(peer.peer_addr, peer_addr, 6);
         peer.channel = settings.wifi_channel;
-        peer.ifidx = WIFI_IF_STA;
+        peer.ifidx = settings.wifi_mode == "ap" ? WIFI_IF_AP : WIFI_IF_STA;
         peer.encrypt = false;
         ESP_ERROR_CHECK( esp_now_add_peer(&peer) );
     }
 
-    esp_err_t result = esp_now_send((const uint8_t*)peer_addr, (uint8_t *)&packet, sizeof(packet));
+    esp_err_t result = esp_now_send(peer_addr, (uint8_t *)&packet, sizeof(packet));
     if (result != ESP_OK)
         printf("Send failed Status: %d\n", result);
 

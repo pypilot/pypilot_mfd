@@ -293,6 +293,6 @@ function cmd(cmd) {
 }
 
 function on_ap_sensor(mac) {
-    alert('Connect directly to the sensor wireless access point to configure the sensor.');
     cmd("transmitters " + mac + " ap")
+    alert('Look for the access point and connect directly to the sensor.');
 }

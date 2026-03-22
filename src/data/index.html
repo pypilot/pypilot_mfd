@@ -6,6 +6,19 @@
 <body>
   <div class='container'>
     <div class='box'>
+      <h2>Wind Sensors</h2>
+      <div class='col2-grid'>
+        <canvas width='128' height='128' id='canvas'></canvas>
+        <div class='col3-grid'>
+          <span>Wind Direction</span><span id='wind_direction'>N/A</span><span>Degrees</span>
+          <span>Wind Speed</span><span id='wind_knots'>N/A</span><span>Knots</span>
+          <span>Accel</span><span id='wind_accel'>N/A</span><span>G</span>
+        </div>
+      </div>
+      <table style='width: 90%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th><th>Rate</th><th>Packet Loss</th><th>Runtime</th><th>AP</th></tr></table>
+    </div>
+
+    <div class='box'>
       <h2>WIFI Network Configuration</h2>
         <div class='col2-grid'>
           <span>Wireless Mode</span>
@@ -43,20 +56,7 @@
           <input class='button' type='button' value='Submit' onclick='on_wifi_settings()'>
         </div>
     </div>
-
-    <div class='box'>
-      <h2>Wind Sensors</h2>
-      <div class='col2-grid'>
-        <canvas width='128' height='128' id='canvas'></canvas>
-        <div class='col3-grid'>
-          <span>Wind Direction</span><span id='wind_direction'>N/A</span><span>Degrees</span>
-          <span>Wind Speed</span><span id='wind_knots'>N/A</span><span>Knots</span>
-          <span>Accel</span><span id='wind_accel'>N/A</span><span>G</span>
-        </div>
-      </div>
-      <table style='width: 90%;' id='wind_sensors_table'><tr><th>MAC</th><th>Position</th><th>Offset</th><th>Direction</th><th>Speed</th><th>Latency</th><th>Rate</th><th>Packet Loss</th><th>Runtime</th><th>AP</th></tr></table>
-    </div>
-
+    
     <div class='box'>
       <h2>Data Configuration</h2>
       <div class='col2-grid'>
