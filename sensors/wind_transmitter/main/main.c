@@ -284,7 +284,7 @@ void loop()
     jitter += 7400;
     jitter %= 4000;
 
-    uint64_t te = ts + period;// + jitter - 2000;
+    uint64_t te = ts + period + jitter - 2000;
     for(;;) {
         uint64_t tx = esp_timer_get_time();
         if (tx >= te)

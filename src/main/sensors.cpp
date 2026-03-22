@@ -142,7 +142,7 @@ struct transmitters {
         if (macs.size() == 1)
             // if there are no known transmitters assign it as primary
             wt.position = PRIMARY;
-        if (!isnan(dir)) {
+        if (!isnan(dir) || !cur_primary) {
             if ((wt.position == PRIMARY) || (wt.position == SECONDARY && !cur_primary) || (wt.position == PORT && (dir > 200 && dir < 340)) || (wt.position == STARBOARD && (dir > 20 && dir < 160)))
                 cur_primary = mac_int;
         }

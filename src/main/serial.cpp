@@ -361,7 +361,7 @@ bool serial_process_line(const std::string buf) {
             } else
                 return command.exec(args);
         }
-    printf("command not found!\n");
+    printf("command not found, try 'help'\n");
     return false;
 }
 
