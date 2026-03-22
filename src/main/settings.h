@@ -191,10 +191,9 @@ void settings_reset();
 void settings_store();
 void settings_load();
 
-
 std::unordered_set<std::string> settings_keys();
 void settings_list();
-std::string settings_get_string(const std::string &key);
+bool settings_get_string(const std::string &key, std::string &result);
 
 bool settings_set_value(const std::string &key, const std::string &value);
 bool settings_get_transmitter(const std::string &mac, const std::string &key, std::string &output, std::string *type=0);

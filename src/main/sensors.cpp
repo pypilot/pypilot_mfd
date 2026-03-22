@@ -157,9 +157,20 @@ struct transmitters {
         return wt;
     }
 
+    std::unordered_set<std::string> get_macs() {
+        std::unordered_set<std::string> ret;
+        for(auto &maci : macs)
+            ret.insert(mac_int_to_str(maci.first));
+        return ret;
+    }
+    
+    bool have_mac(uint64_t mac_int) {
+        return macs.find(mac_int) != macs.end();
+    }
+    
     void info(uint8_t mac[6], uint32_t runtime, uint32_t packet_count) {
         uint64_t mac_int = mac_as_int(mac);
-        if(macs.find(mac_int) == macs.end())
+        if(!have_mac(mac_int))
             return;
         
         T& wt = macs[mac_int];
@@ -463,4 +474,22 @@ void sensors_info_update(uint8_t mac[6], uint32_t runtime, uint32_t packet_count
     air_transmitters.info(mac, runtime, packet_count);
     water_transmitters.info(mac, runtime, packet_count);
     lightning_uv_transmitters.info(mac, runtime, packet_count);
+}
+
+bool sensors_have_mac(const std::string &mac) {
+    uint64_t mac_int = mac_str_to_int(mac);
+    return wind_transmitters.have_mac(mac_int) ||
+        air_transmitters.have_mac(mac_int) ||
+        water_transmitters.have_mac(mac_int) ||
+        lightning_uv_transmitters.have_mac(mac_int);
+}
+
+std::unordered_set<std::string> sensors_macs() {
+    std::unordered_set<std::string> macs;
+    macs.merge(wind_transmitters.get_macs());
+    macs.merge(air_transmitters.get_macs());
+    macs.merge(water_transmitters.get_macs());
+    macs.merge(lightning_uv_transmitters.get_macs());
+
+    return macs;
 }

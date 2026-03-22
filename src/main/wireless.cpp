@@ -356,8 +356,11 @@ static void setup_wifi(void)
     pypilot_discovered = 0;
 }
 
-void wireless_scan_networks()
+void wireless_scan()
 {
+    web_clear_websockets();
+    printf("scanning...\n");
+    
     ESP_ERROR_CHECK(esp_now_deinit());
     ESP_ERROR_CHECK(esp_wifi_stop());
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -526,7 +529,10 @@ static void receive_esp_now() {
     }
 }
 
-void wireless_unlock_channel(const std::string &mac) {
+bool wireless_unlock_channel(const std::string &mac) {
+    if(!sensors_have_mac(mac))
+        return false;
+    
     ESP_LOGI(TAG, "unlock sensor %s", mac.c_str());
 
     uint64_t peer_addr_int = mac_str_to_int(mac);
@@ -548,6 +554,8 @@ void wireless_unlock_channel(const std::string &mac) {
     esp_err_t result = esp_now_send((const uint8_t*)peer_addr, (uint8_t *)&packet, sizeof(packet));
     if (result != ESP_OK)
         printf("Send failed Status: %d\n", result);
+
+    return true;
 }
 
 void wireless_poll() {

@@ -125,11 +125,11 @@ void mdns_setup()
 #endif
     TaskHandle_t xHandle = NULL;
     xTaskCreate(query_mdns_task,       /* Function that implements the task. */
-                    "mdns_thread",          /* Text name for the task. */
-                    2048,      /* Stack size in words, not bytes. */
-                    ( void * ) 0,    /* Parameter passed into the task. */
-                    tskIDLE_PRIORITY,/* Priority at which the task is created. */
-                    &xHandle );     
+                "mdns_thread",          /* Text name for the task. */
+                2048,      /* Stack size in words, not bytes. */
+                ( void * ) 0,    /* Parameter passed into the task. */
+                tskIDLE_PRIORITY,/* Priority at which the task is created. */
+                &xHandle );     
 
     if(mdns_service_add(NULL, "http", "tcp", 80, NULL, 0))
         printf("Error starting mDNS\n");

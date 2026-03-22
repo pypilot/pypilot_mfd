@@ -91,7 +91,7 @@ void int_as_mac(uint8_t *mac_addr, uint64_t r)
     }
 }
 
-uint64_t mac_str_to_int(std::string mac)
+uint64_t mac_str_to_int(const std::string &mac)
 {
     int data[6] = {0};
     if(sscanf(mac.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", data+0, data+1, data+2, data+3, data+4, data+5) != 6)

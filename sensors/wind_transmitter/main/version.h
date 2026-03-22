@@ -6,7 +6,5 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-void serial_setup();
-void serial_poll();
-void serial_write_nmea(const char *buf);
-bool serial_process_line(const std::string cmd);
+#define SW_VERSION 1
+#define HW_VERSION 1

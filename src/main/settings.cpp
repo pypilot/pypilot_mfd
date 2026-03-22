@@ -400,16 +400,16 @@ void settings_list() {
     }
 }
 
-std::string settings_get_string(const std::string &key) {
+bool settings_get_string(const std::string &key, std::string &result) {
     rapidjson::Document s;
     if(!settings_parse(s))
-        return "";
+        return false;
+
     if(!s.HasMember(key.c_str()))
-        return "<unset>";
-    std::string x;
-    if(read_field(x, s[key.c_str()]))
-        return x;
-    return "";
+        return false;
+
+    read_field(result, s[key.c_str()]);
+    return true;
 }
 
 static bool set_bool(rapidjson::Value& v, const std::string& s) {
