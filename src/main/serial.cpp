@@ -36,6 +36,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_event.h"
 #include "esp_heap_caps.h"
 
 // This macro is what FreeRTOS uses for runtime stats
@@ -149,6 +151,63 @@ static void mem()
     meminfo_print_all_task_stack_hwm(); // all tasks (optional)
 }
 
+static void print_netif_info(esp_netif_t *netif)
+{
+    if (!netif) {
+        printf("%s: netif is null\n", name);
+        return;
+    }
+
+    esp_netif_ip_info_t ip;
+    esp_err_t err = esp_netif_get_ip_info(netif, &ip);
+    if (err != ESP_OK) {
+        printf("%s: esp_netif_get_ip_info failed: %s\n", name, esp_err_to_name(err));
+        return;
+    }
+
+    printf("wifi mode : %s\n", settings.wifi_mode.c_str());
+    printf("  ip      : " IPSTR "\n", IP2STR(&ip.ip));
+    printf("  netmask : " IPSTR "\n", IP2STR(&ip.netmask));
+    printf("  gateway : " IPSTR "\n", IP2STR(&ip.gw));
+    printf("  up      : %s\n", esp_netif_is_netif_up(netif) ? "yes" : "no");
+    printf("  rx bytes: %" PRIu64 "\n", wireless_rx_bytes);
+    printf("  tx bytes: %" PRIu64 "\n", wireless_tx_bytes);
+}
+
+static void net()
+{
+    if(settings.wifi_mode == "ap") {
+        esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+        print_netif_info(ap_netif);
+    } else {
+        esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        print_netif_info(sta_netif);
+    }
+}
+
+static void uptime()
+{
+    uint64_t t = esp_timer_get_time();
+
+    float seconds = t / 1e6;
+    int minutes = seconds / 60;
+    if(minutes > 0) {
+        seconds -= minutes*60;
+        int hours = minutes / 60;
+        if(hours > 0) {
+            minutes -= hours*60;
+            int days = hours / 24;
+            if(days > 0) {
+                hours -= days*24;
+                printf("%dd ", days);
+            }
+            printf("%dh ", hours);
+        }   
+        printf("%dm ", minutes);
+    }
+    printf("%.3fs\n", seconds);
+}
+
 static bool is_hex_digit(char c)
 {
     return (c >= '0' && c <= '9') ||
@@ -233,7 +292,7 @@ static bool transmitters_exec(arg_list &args) {
     switch(args.size()) {
     case 1: {
         std::string value;
-        if(!settings_get_string("transmitters", value))
+        if(!settings_get_transmitter("", "", value))
             return false;
         printf("%s\n", value.c_str());
     } return true;
@@ -334,12 +393,14 @@ static const command commands[] = {
     {"help",   "print this help message",      help,              NULL, NULL},
     {"list", "list settings",                  settings_list,     NULL, NULL},
     {"mem",    "print memory info",            mem,               NULL, NULL},
+    {"net",    "print network info",           net,               NULL, NULL},
     {"reboot", "reboot device",                abort,             NULL, NULL},
     {"scan_wifi", "scan wireless networks",    wireless_scan,     NULL, NULL},
     {"set", "set a setting",                   NULL, set_exec, get_completion},
     {"settings_reset", "reset settings",       settings_reset,    NULL, NULL},
     {"transmitters", "configure transmitters", NULL, transmitters_exec,
-    transmitters_completion},
+         transmitters_completion},
+    {"uptime",    "how long since booted",     uptime,            NULL, NULL},
 };
 
 static void help() {
@@ -438,6 +499,10 @@ struct SerialLinebuffer {
 
         std::string ret = line;
         linenoiseFree(line);
+
+        if(ret.empty())
+            lastcli_t0 = esp_timer_get_time();
+
         return ret;
     }
 

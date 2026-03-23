@@ -203,6 +203,19 @@ static void wifi_event_handler(void *arg,
     }
 }
 
+uint64_t wireless_rx_bytes = 0, wireless_tx_bytes = 0;
+
+static void tx_rx_event_handler(void *arg, esp_event_base_t event_base,
+                                int32_t event_id, void *event_data)
+{
+    ip_event_tx_rx_t *e = (ip_event_tx_rx_t *)event_data;
+
+    if (e->dir == ESP_NETIF_TX)
+        wireless_tx_bytes += e->len;
+    else if (e->dir == ESP_NETIF_RX)
+        wireless_rx_bytes += e->len;
+}
+
 static void wifi_global_init(void)
 {
     static bool wifi_initialized = false;
@@ -229,6 +242,17 @@ static void wifi_global_init(void)
     esp_netif_create_default_wifi_sta();
     esp_netif_create_default_wifi_ap();
 
+    esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_t *ap_netif  = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+
+    if (sta_netif)
+        esp_netif_tx_rx_event_enable(sta_netif);
+    if (ap_netif)
+        esp_netif_tx_rx_event_enable(ap_netif);
+
+    esp_event_handler_register(IP_EVENT, IP_EVENT_TX_RX,
+                               &tx_rx_event_handler, nullptr);
+    
     wifi_initialized = true;
 }
 
@@ -244,7 +268,7 @@ static void setup_wifi(void)
     wifi_global_init();
 
 #ifndef CONFIG_IDF_TARGET_ESP32S3
-    force_wifi_ap_mode = 1;
+    //    force_wifi_ap_mode = 1;
 #endif
 
     ESP_ERROR_CHECK(esp_now_deinit());
@@ -309,15 +333,16 @@ static void setup_wifi(void)
         if (settings.wifi_channel > 0) {
             sta_cfg.sta.channel = settings.wifi_channel;
             sta_cfg.sta.scan_method = WIFI_FAST_SCAN;
-
+#if 0
             wifi_country_t myWiFi = {
                 .cc = {'X', 'X', 'X'},
                 .schan = settings.wifi_channel,
                 .nchan = 1,
-                .max_tx_power = 0,
+                .max_tx_power = 20,
                 .policy = WIFI_COUNTRY_POLICY_MANUAL
             };
             ESP_ERROR_CHECK(esp_wifi_set_country(&myWiFi));
+#endif
         }
 
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));

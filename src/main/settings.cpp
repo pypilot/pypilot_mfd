@@ -501,6 +501,11 @@ bool settings_get_transmitter(const std::string &mac, const std::string &key, st
 
     sensors_write_transmitters(w, true);
 
+    if(mac.empty()) {
+        output = s.GetString();
+        return true;
+    }
+    
     rapidjson::Document doc;
     if(doc.Parse(s.GetString()).HasParseError() || !doc.IsObject()) {
         ESP_LOGE(TAG, "settings_keys fail to parse doc");

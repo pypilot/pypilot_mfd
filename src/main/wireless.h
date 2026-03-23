@@ -6,9 +6,6 @@
  * version 3 of the License, or (at your option) any later version.
  */
 
-extern int wireless_message_count;
-extern bool wifi_connected;
-
 void wireless_scan();
 void wireless_program_channel();
 bool wireless_unlock_channel(const std::string &mac);
@@ -16,3 +13,7 @@ bool wireless_unlock_channel(const std::string &mac);
 void wireless_toggle_mode();
 void wireless_setup();
 void wireless_poll();
+
+extern int wireless_message_count;
+extern bool wifi_connected;
+extern uint64_t wireless_rx_bytes, wireless_tx_bytes;
