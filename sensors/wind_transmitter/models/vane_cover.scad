@@ -1,7 +1,7 @@
 $fn = 240;
 
 bearing_d = 22.3;
-shaft_d = 8;
+shaft_d = 8.2;
 
 h = 7;
 h1 = 5;
@@ -19,11 +19,15 @@ polygon([[bearing_d/2  , 0],
          [shaft_d/2+t1,   h],
          [shaft_d/2+t1+1, h],
          [shaft_d/2+t1+1, 1.5],
-         [bearing_d/2-t1, 1.5],
-         [bearing_d/2-t1, h1],
+         [bearing_d/2-t1-.5, 1.5],
+         [bearing_d/2-t1+.5, h1+.5],
          [bearing_d/2, h1],
-         [bearing_d/2+1.2, h1],
-         [bearing_d/2+1.2, 3],
+         [bearing_d/2+1.2, h1+1],
+         [9.5, h1+6.2],
+         [10.2, h1+6.5],
+         [12, h1+4],
+         [bearing_d/2+2.7, h1],
+         [bearing_d/2+3.2, 3],
          [bearing_d/2, 3]
     ]);
 }
@@ -31,15 +35,15 @@ polygon([[bearing_d/2  , 0],
 p = h1+t2;
 module maze2() {
     r1 = bearing_d/2+1.2;
-    arc = [for (i=[18:90]) [r1*cos(90-i), .6*r1*sin(90-i)+h1+t2]];
+    arc = [for (i=[18:30]) [r1*cos(90-i), .8*r1*sin(90-i)+h1+t2]];
 polygon(concat(
     [//[bearing_d/2, 7],
-     [bearing_d/2-t1-t2, p],
+     [bearing_d/2-t1-t2-1, p+6],
+     [bearing_d/2-t1-t2+1, p+1.5],
      [bearing_d/2-t1-t2, 1.5+t2],
      [shaft_d/2+1+t1+t2, 1.5+t2],
      [shaft_d/2+1+t1+t2, h+t2],
-     [shaft_d/2, h+t2],
-     [shaft_d/2, h+2],
+     [shaft_d/2, h+t2+2],
     ]
     //);
     , arc));
@@ -51,11 +55,11 @@ module drain() {
 }
 
 
-if(0) {
+if(1) {
     maze1();
     maze2();
 } else {
- if(0)
+ if(1)
 rotate_extrude()
     maze1();
 if(1)    
@@ -63,13 +67,13 @@ translate([40, 0, 0])
     difference() {
         rotate_extrude()
             maze2();
-        cylinder(r=shaft_d/2, h=2*h);
+        cylinder(r=shaft_d/2, h=2*h+2);
         for(i=[0:3]) {
             rotate(360/3*i+60)
             translate([shaft_d/2+2,0,h+1])
                 drain();
         }
-        translate([0,0,h+4])
+        translate([0,0,h+6])
         rotate([0,90,0])
         cylinder(r=key_r, h=bearing_d/2);
     }
